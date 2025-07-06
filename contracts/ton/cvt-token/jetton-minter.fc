@@ -1,0 +1,218 @@
+#include "imports/stdlib.fc";
+#include "imports/jetton-utils.fc";
+#include "imports/op-codes.fc";
+
+;; ChronosToken (CVT) Jetton Minter Contract
+;; Based on the TEP-0074 standard for fungible tokens on TON
+
+;; Storage TL-B:
+;; storage#_ total_supply:Coins admin_address:MsgAddress content:^Cell jetton_wallet_code:^Cell 
+;;           time_lock_end_time:UInt64 burn_rate_bp:UInt16 = Storage;
+
+(int, slice, cell, cell, int, int) load_data() {
+  var ds = get_data().begin_parse();
+  return (
+    ds~load_coins(),  ;; total_supply
+    ds~load_msg_addr(), ;; admin_address
+    ds~load_ref(), ;; content
+    ds~load_ref(), ;; jetton_wallet_code
+    ds~load_uint(64), ;; time_lock_end_time
+    ds~load_uint(16)   ;; burn_rate_bp (basis points, 1 bp = 0.01%)
+  );
+}
+
+() save_data(int total_supply, slice admin_address, cell content, cell jetton_wallet_code, int time_lock_end_time, int burn_rate_bp) impure {
+  set_data(begin_cell()
+    .store_coins(total_supply)
+    .store_slice(admin_address)
+    .store_ref(content)
+    .store_ref(jetton_wallet_code)
+    .store_uint(time_lock_end_time, 64)
+    .store_uint(burn_rate_bp, 16)
+    .end_cell());
+}
+
+cell calculate_jetton_wallet_init_code(slice owner_address) {
+  cell wallet_data = begin_cell()
+      .store_coins(0) ;; balance
+      .store_slice(my_address()) ;; root_address
+      .store_slice(owner_address) ;; owner_address
+      .store_uint(0, 1) ;; revoked
+      .store_dict(null()) ;; custom_payload
+      .store_uint(0, 64) ;; wallet_code
+      .end_cell();
+      
+  return begin_cell()
+          .store_ref(jetton_wallet_code)
+          .store_ref(wallet_data)
+          .end_cell();
+}
+
+slice calculate_jetton_wallet_address(cell state_init) {
+  return begin_cell()
+          .store_uint(4, 3)
+          .store_int(workchain, 8)
+          .store_uint(cell_hash(state_init), 256)
+          .end_cell()
+          .begin_parse();
+}
+
+() mint_tokens(slice to_address, int amount, cell jetton_wallet_code, slice admin_address) impure {
+  cell state_init = calculate_jetton_wallet_init_code(to_address);
+  slice to_wallet_address = calculate_jetton_wallet_address(state_init);
+  var msg = begin_cell()
+    .store_uint(0x18, 6)
+    .store_slice(to_wallet_address)
+    .store_coins(amount)
+    .store_uint(4 + 2 + 1, 1 + 4 + 4 + 64 + 32 + 1 + 1 + 1)
+    .store_ref(state_init)
+    .store_ref(begin_cell().store_uint(op::internal_transfer(), 32)
+                         .store_uint(0, 64)
+                         .store_coins(amount)
+                         .store_slice(my_address())
+                         .store_slice(to_address)
+                         .store_coins(0)
+                         .store_uint(0, 1)
+                         .end_cell());
+  send_raw_message(msg.end_cell(), 1); ;; pay transfer fees separately, revert on errors
+}
+
+() recv_internal(int msg_value, cell in_msg_full, slice in_msg_body) impure {
+  if (in_msg_body.slice_empty?()) { ;; ignore empty messages
+    return ();
+  }
+  
+  slice cs = in_msg_full.begin_parse();
+  int flags = cs~load_uint(4);
+  
+  if (flags & 1) { ;; handle bounced messages
+    return ();
+  }
+  
+  slice sender_address = cs~load_msg_addr();
+  cs~load_msg_addr(); ;; skip dst
+  cs~load_coins(); ;; skip value
+  cs~skip_bits(1); ;; skip extracurrency collection
+  cs~load_coins(); ;; skip ihr_fee
+  int fwd_fee = cs~load_coins(); ;; we use message fwd_fee for calculation
+  
+  int op = in_msg_body~load_uint(32);
+  int query_id = in_msg_body~load_uint(64);
+  
+  (int total_supply, slice admin_address, cell content, cell jetton_wallet_code, int time_lock_end_time, int burn_rate_bp) = load_data();
+  
+  if (op == op::mint()) {
+    throw_unless(73, equal_slices(sender_address, admin_address));
+    slice to_address = in_msg_body~load_msg_addr();
+    int amount = in_msg_body~load_coins();
+    int forward_ton_amount = in_msg_body~load_coins();
+    
+    throw_unless(74, amount > 0);
+    throw_unless(75, msg_value > forward_ton_amount);
+    
+    mint_tokens(to_address, amount, jetton_wallet_code, admin_address);
+    save_data(total_supply + amount, admin_address, content, jetton_wallet_code, time_lock_end_time, burn_rate_bp);
+    
+    return ();
+  }
+  
+  if (op == op::burn_notification()) {
+    int jetton_amount = in_msg_body~load_coins();
+    slice from_address = in_msg_body~load_msg_addr();
+    throw_unless(74, jetton_amount > 0);
+    
+    save_data(total_supply - jetton_amount, admin_address, content, jetton_wallet_code, time_lock_end_time, burn_rate_bp);
+    
+    ;; if query_id is not 0, then send a message back
+    if (query_id != 0) {
+      var msg = begin_cell()
+        .store_uint(0x10, 6) ;; nobounce
+        .store_slice(from_address)
+        .store_coins(0)
+        .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+        .store_uint(op::excesses(), 32)
+        .store_uint(query_id, 64);
+      send_raw_message(msg.end_cell(), 2 + 64);
+    }
+    
+    return ();
+  }
+  
+  if (op == op::change_admin()) {
+    throw_unless(73, equal_slices(sender_address, admin_address));
+    slice new_admin_address = in_msg_body~load_msg_addr();
+    save_data(total_supply, new_admin_address, content, jetton_wallet_code, time_lock_end_time, burn_rate_bp);
+    return ();
+  }
+  
+  if (op == op::change_content()) {
+    throw_unless(73, equal_slices(sender_address, admin_address));
+    cell new_content = in_msg_body~load_ref();
+    save_data(total_supply, admin_address, new_content, jetton_wallet_code, time_lock_end_time, burn_rate_bp);
+    return ();
+  }
+  
+  if (op == op::set_burn_rate()) {
+    throw_unless(73, equal_slices(sender_address, admin_address));
+    int new_burn_rate_bp = in_msg_body~load_uint(16);
+    ;; Maximum burn rate is 5% (500 basis points)
+    throw_unless(76, new_burn_rate_bp <= 500);
+    save_data(total_supply, admin_address, content, jetton_wallet_code, time_lock_end_time, new_burn_rate_bp);
+    return ();
+  }
+  
+  if (op == op::update_time_lock()) {
+    throw_unless(73, equal_slices(sender_address, admin_address));
+    int new_time_lock_end_time = in_msg_body~load_uint(64);
+    ;; New time lock must be in the future
+    throw_unless(77, new_time_lock_end_time > now());
+    save_data(total_supply, admin_address, content, jetton_wallet_code, new_time_lock_end_time, burn_rate_bp);
+    return ();
+  }
+
+  ;; Process discovery messages
+  if (op == op::get_jetton_data()) {
+    var response = begin_cell()
+            .store_uint(op::jetton_data(), 32)
+            .store_uint(query_id, 64)
+            .store_coins(total_supply)
+            .store_slice(admin_address)
+            .store_ref(content)
+            .store_uint(time_lock_end_time, 64)
+            .store_uint(burn_rate_bp, 16)
+            .store_uint(1, 8); ;; custom parameters included
+    
+    send_raw_message(response.end_cell(), 64);
+    return ();
+  }
+  
+  throw(0xffff); ;; If the message is not processed
+}
+
+;; Get methods
+
+(int, int, slice, cell, cell) get_jetton_data() method_id {
+  (int total_supply, slice admin_address, cell content, cell jetton_wallet_code, int time_lock_end_time, int burn_rate_bp) = load_data();
+  return (total_supply, -1, admin_address, content, jetton_wallet_code);
+}
+
+(int) get_burn_rate() method_id {
+  (int total_supply, slice admin_address, cell content, cell jetton_wallet_code, int time_lock_end_time, int burn_rate_bp) = load_data();
+  return (burn_rate_bp);
+}
+
+(int) get_time_lock_end_time() method_id {
+  (int total_supply, slice admin_address, cell content, cell jetton_wallet_code, int time_lock_end_time, int burn_rate_bp) = load_data();
+  return (time_lock_end_time);
+}
+
+slice get_wallet_address(slice owner_address) method_id {
+  (int total_supply, slice admin_address, cell content, cell jetton_wallet_code, int time_lock_end_time, int burn_rate_bp) = load_data();
+  cell state_init = calculate_jetton_wallet_init_code(owner_address);
+  return calculate_jetton_wallet_address(state_init);
+}
+
+(int, int) get_cvt_data() method_id {
+  (int total_supply, slice admin_address, cell content, cell jetton_wallet_code, int time_lock_end_time, int burn_rate_bp) = load_data();
+  return (burn_rate_bp, time_lock_end_time);
+}

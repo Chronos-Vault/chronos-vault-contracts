@@ -1,0 +1,24 @@
+{
+  "timestamp": "2025-05-11T18:59:18.832Z",
+  "ethereum": {
+    "vault": "0xad283c52d822bcfb1a64ea89375b57f4ba9e74cb",
+    "token": "0xb37255a705e95ef1870d5c601313e387d267dfde",
+    "bridge": "0x78ad4f21bb082c5bf20a0f84ee3b4d9fa7f30649",
+    "network": "sepolia"
+  },
+  "ton": {
+    "vault": "EQiVU0hizNsHqqY4OpxicQHva0jxO5LGovkjWszoRS5uvQ",
+    "token": "EQjPkGSKFrZaw9zKuFheouloRsuj8Q9G4-HKvXbBkagjDd",
+    "bridge": "EQygggZ1OAabipxMWhoubYd78habRcp2drO55Fo8TGUlbB",
+    "network": "testnet"
+  },
+  "solana": {
+    "vault": "7va69VBveDrnZA5ezS4DRUL7AM2CqzUEvfHEBPL4wRA2",
+    "token": "aMoyohzfzq3gje4moZphvTBAGSxfELfyik9r9qFAPmZj",
+    "bridge": "ZNZeVxsm5cfdp9jnFUPGTaF6o2dCN3dSRzPtovdxZazG",
+    "network": "devnet"
+  },
+  "config": {
+    "securityLevel": "ENHANCED"
+  }
+}

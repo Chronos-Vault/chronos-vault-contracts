@@ -1,0 +1,33 @@
+;; Operation codes for CVT Jetton
+
+int op::transfer() asm "0x0f8a7ea5 PUSHINT";
+int op::transfer_notification() asm "0x7362d09c PUSHINT";
+int op::internal_transfer() asm "0x178d4519 PUSHINT";
+int op::excesses() asm "0xd53276db PUSHINT";
+int op::burn() asm "0x595f07bc PUSHINT";
+int op::burn_notification() asm "0x7bdd97de PUSHINT";
+int op::mint() asm "0xedebcaf1 PUSHINT";
+
+int op::time_lock() asm "0x36e56eb4 PUSHINT"; ;; Custom CVT operation for locking tokens
+int op::update_time_lock() asm "0x41dcb5c3 PUSHINT"; ;; Custom CVT operation for updating time lock
+int op::set_burn_rate() asm "0x1a0b9d51 PUSHINT"; ;; Custom CVT operation for setting burn rate
+int op::change_admin() asm "0x0f474d03 PUSHINT"; ;; Change admin address
+int op::change_content() asm "0x1a0f9a83 PUSHINT"; ;; Change token content
+
+int op::get_jetton_data() asm "0x13a3a1d9 PUSHINT"; ;; Query for jetton data
+int op::jetton_data() asm "0x1ba8bc74 PUSHINT"; ;; Jetton data response
+
+;; Staking operations
+int op::stake() asm "0x12d4e256 PUSHINT"; ;; Stake tokens
+int op::unstake() asm "0xf42cdf41 PUSHINT"; ;; Unstake tokens
+int op::claim_rewards() asm "0xa36a37fe PUSHINT"; ;; Claim staking rewards
+int op::update_thresholds() asm "0x2734a892 PUSHINT"; ;; Update tier thresholds
+int op::update_reward_rate() asm "0x5474a6ec PUSHINT"; ;; Update reward rate
+int op::update_min_lock_time() asm "0xa76d7b3c PUSHINT"; ;; Update minimum lock time
+int op::change_owner() asm "0x768a50b2 PUSHINT"; ;; Change contract owner
+
+;; Buyback operations
+int op::execute_buyback() asm "0x21d35642 PUSHINT"; ;; Execute buyback and burn
+int op::request_tokens() asm "0x7a9a3566 PUSHINT"; ;; Request tokens from treasury
+int op::tokens_received() asm "0x903c2e83 PUSHINT"; ;; Notification of tokens received
+int op::change_treasury() asm "0x82a598f7 PUSHINT"; ;; Change treasury address

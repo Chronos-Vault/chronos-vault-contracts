@@ -1,0 +1,332 @@
+Choose Your Vault Type
+Select the type of vault that best fits your security needs
+Back to My Vaults
+All Vaults Include Premium Features
+
+Every vault type includes our revolutionary technologies, making Chronos Vault the most secure solution in the world - accessible to everyone, with no blockchain knowledge required.
+
+Triple-Chain Security
+Distributes security across Ethereum, Solana, and TON for unmatched protection
+Cross-Chain Compatibility
+Store and access your assets across multiple blockchain networks
+Flexible Payment Options
+Pay with CVT tokens, TON, ETH, SOL, or BTC with staking discounts
+Vault Categories
+
+Specialized Vaults
+Advanced vault types with unique security features and specialized functionality
+
+• AI Intent Inheritance
+• Geolocation Access Control
+• Smart Contract Automation
+• NFT-Powered Access
+• Dynamic Security Adaptation
+Advanced Security
+Enhanced protection with multiple verification layers and distributed security
+
+• Multi-Signature Authorization
+• Biometric Verification
+• Cross-Chain Security
+Basic Time Vaults
+Simple and reliable time-locked storage with essential security features
+
+• Standard Time-Lock Vault
+• Advanced Time Scheduling
+• Owner & Beneficiary Controls
+Select Your Vault Type
+
+Explore our 16 specialized vault types with unique features and security levels
+
+👑
+Sovereign Fortress Vault™
+Ultimate all-in-one vault with supreme security & flexibility
+
+Triple-Chain
+Zero-Knowledge
+Advanced Security
+Quantum-Resistant
+Security
+5/5
+Complexity
+3/5
+Key Features:
+
+Adaptive Multi-Layered Security
+Quantum-Resistant Encryption
+Triple-Chain Protection System
+Instant Disaster Recovery
+Flexible Access Control Systems
+Customizable Security Protocols
+Intuitive Ownership Management
+Selected
+🔐
+Multi-Signature Vault
+Our advanced implementation with Triple-Chain security
+
+Triple-Chain
+Zero-Knowledge
+Advanced Security
+Quantum-Resistant
+Security
+5/5
+Complexity
+3/5
+Key Features:
+
+Triple-Chain verification
+Hardware key authentication
+Advanced transaction signing
+Biometric security options
+👆
+Biometric
+Secure with fingerprint or facial recognition
+
+Triple-Chain
+Zero-Knowledge
+Advanced Security
+Security
+4/5
+Complexity
+2/5
+Key Features:
+
+Fingerprint verification
+Facial recognition options
+Multi-factor authentication
+Tamper-proof security
+⏱️
+Advanced Time-Lock
+Schedule complex time-based unlocking
+
+Triple-Chain
+Zero-Knowledge
+Advanced Security
+Security
+4/5
+Complexity
+3/5
+Key Features:
+
+Scheduled unlocking periods
+Multiple time conditions
+Calendar-based scheduling
+Emergency override options
+📍
+Geolocation
+Access only from specific locations
+
+Triple-Chain
+Zero-Knowledge
+Advanced Security
+Security
+4/5
+Complexity
+3/5
+Key Features:
+
+Location-based access
+Multiple safe zones
+GPS verification
+Travel permissions
+⛓️
+Cross-Chain Verification
+Verify assets across multiple blockchains
+
+Triple-Chain
+Zero-Knowledge
+Advanced Security
+Quantum-Resistant
+Security
+5/5
+Complexity
+4/5
+Key Features:
+
+Triple-Chain Security
+Cross-chain verification protocols
+Multi-network validation
+Unified security monitoring
+📜
+Smart Contract
+Automated rules and conditions
+
+Triple-Chain
+Zero-Knowledge
+Advanced Security
+Security
+4/5
+Complexity
+5/5
+Key Features:
+
+Conditional access rules
+Automated actions
+Event-based triggers
+Custom logic implementation
+📊
+Dynamic
+Adapt to market or user behavior
+
+Triple-Chain
+Zero-Knowledge
+Advanced Security
+Security
+4/5
+Complexity
+5/5
+Key Features:
+
+Behavioral adaptability
+Market response strategies
+Self-adjusting security
+Custom security settings
+🖼️
+NFT-Powered
+Use NFTs as access keys to your vault
+
+Triple-Chain
+Zero-Knowledge
+Advanced Security
+Security
+4/5
+Complexity
+3/5
+Key Features:
+
+NFT access verification
+Transferable vault access
+Digital collectible integration
+NFT-based permissions
+🛡️
+Unique Security
+Enhanced security with custom protocols
+
+Triple-Chain
+Zero-Knowledge
+Advanced Security
+Quantum-Resistant
+Security
+5/5
+Complexity
+4/5
+Key Features:
+
+Zero-Knowledge Privacy Layer
+Military-grade encryption
+Quantum-resistant protocols
+Custom security combinations
+🧠
+AI Intent Inheritance
+Natural language inheritance planning
+
+Triple-Chain
+Zero-Knowledge
+Advanced Security
+Quantum-Resistant
+Security
+5/5
+Complexity
+3/5
+Key Features:
+
+Express intent in plain language
+AI-powered smart contract generation
+Conditional inheritance rules
+Adaptable to complex real-world scenarios
+📦
+Time-Locked Memory Vault
+Digital assets with multimedia memories
+
+Triple-Chain
+Zero-Knowledge
+Advanced Security
+Security
+4/5
+Complexity
+3/5
+Key Features:
+
+Combined assets and personal media
+Photos, videos and messages storage
+Synchronized unlocking on future date
+Perfect for gifts and personal time capsules
+🔐
+Quantum-Resistant
+Progressive security that scales with value
+
+Triple-Chain
+Zero-Knowledge
+Advanced Security
+Quantum-Resistant
+Security
+5/5
+Complexity
+4/5
+Key Features:
+
+Auto-scaling security tiers
+Post-quantum cryptography
+Value-based security enforcement
+Adaptive security protocols
+🧩
+Cross-Chain Fragment Vault
+Splits your assets across multiple blockchains
+
+Triple-Chain
+Zero-Knowledge
+Advanced Security
+Quantum-Resistant
+Security
+5/5
+Complexity
+5/5
+Key Features:
+
+Asset splitting across chains
+Multiple blockchain storage
+Fragmented recovery system
+Protection from single-chain failures
+🌎
+Location-Time Restricted Vault
+Access only at specific locations during set times
+
+Triple-Chain
+Zero-Knowledge
+Advanced Security
+Quantum-Resistant
+Security
+5/5
+Complexity
+4/5
+Key Features:
+
+Dual verification: location + time window
+Physical presence requirement
+Scheduled access periods
+Perfect for location-sensitive business assets
+💎
+Investment Discipline Vault
+Prevents emotional selling during market volatility
+
+Triple-Chain
+Zero-Knowledge
+Advanced Security
+Security
+4/5
+Complexity
+3/5
+Key Features:
+
+Programmable exit conditions
+Market event-based triggers
+Time-locked investment periods
+Protection from panic-selling
+Sovereign Fortress™ Security
+Configure quantum-resistant security protocols for your vault
+
+Configure Security
+Triple-Chain Security Architecture
+Distributes your vault security across Ethereum, Solana, and TON blockchains
+Default for all vaults
+* Selection required to continue
+Continue with Sovereign Fortress Vault™

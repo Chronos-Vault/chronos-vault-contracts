@@ -1,0 +1,38 @@
+;; Utility functions for Jetton implementation
+
+;; Calculate the initial code for a user's jetton wallet
+cell calculate_jetton_wallet_init(slice owner_address, slice jetton_master_address) {
+  ;; Define workchain for wallets
+  set_workchain(0);
+  
+  ;; Get the wallet code from the master
+  cell wallet_code = begin_cell().store_uint(0, 32).store_slice(jetton_master_address).end_cell();
+  
+  ;; Initialize wallet data cell
+  cell wallet_data = begin_cell()
+      .store_uint(0, 32) ;; balance = 0
+      .store_slice(jetton_master_address)
+      .store_slice(owner_address)
+      .store_dict(null()) ;; empty dict for locked tokens
+      .end_cell();
+      
+  return begin_cell()
+          .store_ref(wallet_code)
+          .store_ref(wallet_data)
+          .end_cell();
+}
+
+;; Calculate the address of a user's jetton wallet
+slice calculate_jetton_wallet_address(cell state_init) {
+  return begin_cell()
+          .store_uint(4, 3) ;; addr_std$10 without anycast
+          .store_int(workchain, 8) ;; workchain_id
+          .store_uint(cell_hash(state_init), 256) ;; address hash
+          .end_cell()
+          .begin_parse();
+}
+
+;; Calculate a user's jetton wallet address from their TON address
+slice calculate_user_jetton_wallet_address(slice owner_address, slice jetton_master_address) {
+  return calculate_jetton_wallet_address(calculate_jetton_wallet_init(owner_address, jetton_master_address));
+}
