@@ -356,7 +356,7 @@ int verify_quantum_signature(
 ## 🐛 Security Disclosure
 
 ### Reporting Security Issues
-- **Email**: security@chronosvault.org
+- **Email**: chronosvault@chronosvault.org
 - **PGP Key**: Available on request
 - **Bug Bounty**: Up to $100,000 for critical vulnerabilities
 - **Disclosure Policy**: 90-day responsible disclosure
@@ -372,7 +372,7 @@ int verify_quantum_signature(
 ### Technical Support
 - **Issues**: [GitHub Issues](https://github.com/Chronos-Vault/chronos-vault-contracts/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/Chronos-Vault/chronos-vault-contracts/discussions)
-- **Email**: contracts@chronosvault.org
+- **Email**: chronosvault@chronosvault.org
 
 ### Documentation
 - **API Reference**: [contracts.chronosvault.org](https://contracts.chronosvault.org)
