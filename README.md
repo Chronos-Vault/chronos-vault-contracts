@@ -249,10 +249,6 @@ npm run test:security
 - **Cross-Chain Protocol**: Trail of Bits ✅
 
 ### Audit Reports
-- [Ethereum Audit Report](audits/ethereum-consensys-2024.pdf)
-- [Solana Audit Report](audits/solana-soteria-2024.pdf)
-- [TON Audit Report](audits/ton-certik-2024.pdf)
-- [Cross-Chain Audit Report](audits/cross-chain-trail-of-bits-2024.pdf)
 
 ### Security Measures
 - **Reentrancy Protection**: All state changes before external calls
