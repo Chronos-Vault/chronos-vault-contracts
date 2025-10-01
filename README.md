@@ -375,9 +375,9 @@ int verify_quantum_signature(
 - **Email**: chronosvault@chronosvault.org
 
 ### Documentation
-- **API Reference**: [contracts.chronosvault.org](https://contracts.chronosvault.org)
-- **Integration Guide**: [docs.chronosvault.org/contracts](https://docs.chronosvault.org/contracts)
-- **Security Guide**: [security.chronosvault.org](https://security.chronosvault.org)
+- **API Reference**: [github.com/Chronos-Vault/chronos-vault-docs](https://github.com/Chronos-Vault/chronos-vault-docs)
+- **Integration Guide**: [github.com/Chronos-Vault/chronos-vault-docs](https://github.com/Chronos-Vault/chronos-vault-docs)
+- **Security Guide**: [github.com/Chronos-Vault/chronos-vault-security](https://github.com/Chronos-Vault/chronos-vault-security)
 
 ## 📈 Roadmap
 
