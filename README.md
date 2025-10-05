@@ -1,413 +1,249 @@
-# Chronos Vault Smart Contracts
+# Chronos Vault: The Ultimate Multi-Chain Digital Vault Platform
 
-> Multi-chain smart contracts powering the Trinity Protocol consensus system across Ethereum, Solana, and TON blockchains.
+![Chronos Vault](./generated-icon.png)
 
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Solidity](https://img.shields.io/badge/Solidity-0.8.20-blue)](https://soliditylang.org/)
-[![Rust](https://img.shields.io/badge/Rust-1.70-orange)](https://www.rust-lang.org/)
-[![FunC](https://img.shields.io/badge/FunC-TON-blue)](https://ton.org/)
-[![Audited](https://img.shields.io/badge/Security-Audited-green)](https://github.com/Chronos-Vault/chronos-vault-security)
+## Overview
 
-## 🏗️ Contract Architecture
+Chronos Vault is a revolutionary decentralized platform for creating tamper-proof digital time vaults using advanced blockchain technologies and cross-chain security. The platform enables users to securely store, manage, and time-lock digital assets with military-grade security, zero-knowledge privacy, and cross-chain validation across 22 specialized vault types.
 
-### Trinity Protocol Implementation
-The smart contracts implement the revolutionary Trinity Protocol - mathematical consensus across three blockchain networks that eliminates the need for trust assumptions.
+## Key Features
 
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Ethereum      │    │     Solana      │    │      TON        │
-│   (Primary)     │◄──►│   (Monitor)     │◄──►│   (Recovery)    │
-│                 │    │                 │    │                 │
-│ - Vault Records │    │ - Validation    │    │ - Quantum Safe  │
-│ - Governance    │    │ - Monitoring    │    │ - Emergency     │
-│ - ZK Proofs     │    │ - High Freq     │    │ - Backup        │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-```
+### 22 Specialized Vault Types
 
-### Contract Types by Chain
+Chronos Vault offers an unparalleled selection of purpose-built vaults for every security need:
 
-#### Ethereum Contracts (Solidity)
-- **VaultManager.sol**: Main vault management contract
-- **TrinityProtocol.sol**: Cross-chain consensus implementation
-- **ZKVerifier.sol**: Zero-knowledge proof verification
-- **MultiSigWallet.sol**: Multi-signature wallet implementation
-- **QuantumResistant.sol**: Post-quantum cryptography integration
+- **Time Lock Vault**: Schedule asset releases with precise timing controls
+- **Multi-Signature Vault**: Require multiple approvals for enhanced security
+- **Geo-Location Vault**: Add physical presence requirements for vault access
+- **Quantum-Resistant Vault**: Future-proof protection against quantum computing threats
+- **Cross-Chain Fragment Vault**: Distribute assets across multiple blockchains for superior security
+- **NFT-Powered Vault**: Tokenized access control through digital collectibles
+- **Biometric Vault**: Advanced identity verification through biometric factors
+- **Sovereign Fortress Vault™**: Our ultimate all-in-one security solution
+- **14 additional specialized vault types** for every security need
 
-#### Solana Programs (Rust)
-- **vault_program.rs**: High-frequency vault operations
-- **monitoring_program.rs**: Real-time transaction monitoring
-- **bridge_program.rs**: Cross-chain bridge operations
-- **security_program.rs**: Security validation and alerts
+### Triple-Chain Security Architecture
 
-#### TON Smart Contracts (FunC)
-- **vault_storage.fc**: Quantum-resistant vault storage
-- **emergency_recovery.fc**: Emergency recovery procedures
-- **backup_consensus.fc**: Backup consensus mechanism
-- **quantum_crypto.fc**: Post-quantum cryptographic operations
+Chronos Vault utilizes a revolutionary Triple-Chain Security model to provide unprecedented protection for digital assets:
 
-## 🚀 Quick Start
+- **Ethereum Layer**: Primary blockchain for ownership records and access control
+- **Solana Layer**: High-frequency monitoring and rapid validation
+- **TON Layer**: Backup security system and emergency recovery operations
+
+This multi-chain approach ensures that assets are secured by three independent blockchain networks, preventing single points of failure and significantly enhancing security over traditional single-blockchain solutions.
+
+### Quantum-Resistant Encryption
+
+Our platform implements the latest post-quantum cryptographic standards:
+
+- CRYSTALS-Kyber for key encapsulation
+- CRYSTALS-Dilithium for digital signatures
+- Hybrid security model combining quantum-resistant algorithms with traditional cryptography
+- Fully implemented zero-knowledge proof infrastructure
+
+### Triple-Chain Decentralized Storage
+
+Assets are securely distributed across multiple decentralized storage networks:
+
+- **Arweave**: Permanent, immutable storage layer
+- **IPFS**: Content-addressed distributed file system
+- **Filecoin**: Incentivized storage with cryptographic proofs
+
+All storage is protected with quantum-resistant encryption and cross-chain verification.
+
+### Zero-Knowledge Privacy Shield
+
+Our advanced ZK infrastructure provides:
+
+- Verify vault status without revealing contents
+- Generate selective disclosures and range proofs
+- Maintain complete privacy while proving ownership
+- Implement cross-chain zero-knowledge verification
+
+### Universal Chain Interoperability
+
+Chronos Vault's architecture supports seamless integration with multiple blockchains through:
+
+- Native support for TON, Ethereum, Solana, and Bitcoin
+- Standardized vault interfaces for cross-chain operation
+- Secure lock-and-mint bridge mechanisms
+- Atomic cross-chain transactions with rollback protection
+
+### AI-Enhanced Security Monitoring
+
+Our platform incorporates advanced AI security systems for:
+
+- Real-time monitoring of vault activities across all chains
+- Behavioral analysis and anomaly detection
+- Predictive security measures with proactive threat mitigation
+- Automated incident response with security team notifications
+
+## ChronosToken (CVT)
+
+ChronosToken (CVT) introduces a revolutionary deflationary token model optimized for long-term value preservation through a novel time-based release and automated burning mechanism.
+
+### Token Economics
+
+- **Total Supply**: 21,000,000 CVT (fixed maximum)
+- **Distribution Period**: 21 years with progressive halving
+- **Mechanism**: Deflationary model with continuous burning
+- **Cross-Chain Implementation**: Primary on TON with wrapped versions on ETH/SOL
+
+### Token Utility
+
+CVT serves essential functions within the Chronos Vault ecosystem:
+
+1. **Platform Fee Payment**: Native token for all platform services with reduced fees for token holders
+2. **Security Staking**: Required for high-value vault access and enhanced security features
+3. **Feature Access**: Premium features require token holdings
+4. **Governance Rights**: Proportional voting weight in platform decisions
+5. **Validator Requirements**: Security validation roles require token stakes
+
+## Technical Implementation
+
+Chronos Vault is built with a cutting-edge tech stack featuring:
+
+- **Frontend**: React.js with TypeScript, Tailwind CSS, shadcn/ui components
+- **Backend**: Express.js with TypeScript, PostgreSQL database
+- **Blockchain**: Ethereum Layer 2 (Arbitrum), Solana, TON
+- **Smart Contracts**: Solidity (Ethereum/Arbitrum), Rust (Solana), FunC (TON)
+- **Security**: Zero-knowledge proofs, quantum-resistant cryptography
+- **UI/UX**: Framer Motion animations, Three.js 3D visualizations
+- **State Management**: TanStack Query (React Query v5)
+- **Wallet Integration**: MetaMask, Phantom, TON Keeper
+
+### Trinity Protocol Architecture
+
+Our platform implements the Trinity Protocol with 2-of-3 consensus across three blockchains:
+
+- **Ethereum Layer 2 (Arbitrum)**: Primary security layer (95% lower fees than L1)
+- **Solana**: Rapid validation and high-frequency monitoring
+- **TON**: Quantum-resistant backup and emergency recovery
+
+## Getting Started
 
 ### Prerequisites
-- **Ethereum**: Node.js 18+, Hardhat, MetaMask
-- **Solana**: Rust, Solana CLI, Phantom wallet
-- **TON**: TON CLI, TON Keeper wallet
+
+- Node.js 18+ and npm
+- PostgreSQL database
+- MetaMask wallet (for Ethereum/Arbitrum)
+- Phantom wallet (for Solana, optional)
+- TON Keeper wallet (for TON, optional)
 
 ### Installation
-```bash
-# Clone the repository
-git clone https://github.com/Chronos-Vault/chronos-vault-contracts.git
-cd chronos-vault-contracts
 
-# Install dependencies
+1. **Clone the repository**
+```bash
+git clone https://github.com/Chronos-Vault/chronos-vault-platform.git
+cd chronos-vault-platform
+```
+
+2. **Install dependencies**
+```bash
 npm install
-
-# Install Solana dependencies
-cd solana && cargo build
-
-# Install TON dependencies
-cd ton && func -h
 ```
 
-### Environment Setup
-Create a `.env` file:
-```env
-# Ethereum
-ETHEREUM_RPC_URL=https://sepolia.infura.io/v3/YOUR_INFURA_KEY
-ETHEREUM_PRIVATE_KEY=your_private_key_here
-
-# Solana
-SOLANA_RPC_URL=https://api.devnet.solana.com
-SOLANA_PRIVATE_KEY=your_base58_private_key_here
-
-# TON
-TON_RPC_URL=https://testnet.toncenter.com/api/v2/jsonRPC
-TON_MNEMONIC=your twelve word mnemonic phrase here
-```
-
-## 📁 Project Structure
-
-```
-chronos-vault-contracts/
-├── ethereum/                   # Ethereum smart contracts
-│   ├── contracts/
-│   │   ├── VaultManager.sol
-│   │   ├── TrinityProtocol.sol
-│   │   ├── ZKVerifier.sol
-│   │   └── MultiSigWallet.sol
-│   ├── scripts/
-│   │   └── deploy.js
-│   ├── test/
-│   │   └── VaultManager.test.js
-│   └── hardhat.config.js
-├── solana/                     # Solana programs
-│   ├── programs/
-│   │   ├── vault-program/
-│   │   └── monitoring-program/
-│   ├── tests/
-│   └── Anchor.toml
-├── ton/                        # TON smart contracts
-│   ├── contracts/
-│   │   ├── vault-storage.fc
-│   │   └── emergency-recovery.fc
-│   ├── scripts/
-│   └── tests/
-├── scripts/                    # Cross-chain deployment
-│   ├── deploy-all.js
-│   └── verify-deployment.js
-└── deployments/                # Deployment artifacts
-    ├── ethereum/
-    ├── solana/
-    └── ton/
-```
-
-## 🔐 Security Features
-
-### Trinity Protocol Consensus
-- **Mathematical Verification**: No trust assumptions required
-- **Cross-Chain Validation**: Operations verified across all three chains
-- **Attack Resistance**: Requires compromising 2 of 3 consensus mechanisms
-- **Quantum Resistance**: Post-quantum cryptography on TON network
-
-### Zero-Knowledge Privacy (ZKShield)
-- **Vault Ownership Proof**: Prove ownership without revealing identity
-- **Asset Sufficiency Proof**: Verify funds without exposing balances
-- **Transaction Privacy**: Zero-knowledge transaction validation
-- **Compliance Proof**: Regulatory compliance without data exposure
-
-### Multi-Signature Security
-- **Configurable Thresholds**: 2-of-3 to 15-of-20 signature requirements
-- **Role-Based Access**: Different permission levels for different operations
-- **Emergency Recovery**: Quantum-resistant backup mechanisms
-- **Audit Trail**: Comprehensive logging of all signature operations
-
-## 🛠️ Contract Deployment
-
-### Ethereum Deployment
+3. **Set up environment variables**
 ```bash
-# Deploy to Sepolia testnet
-npx hardhat run scripts/deploy.js --network sepolia
-
-# Verify contracts
-npx hardhat verify --network sepolia DEPLOYED_CONTRACT_ADDRESS
-
-# Deploy to mainnet
-npx hardhat run scripts/deploy.js --network mainnet
+cp .env.example .env
+# Edit .env with your configuration
 ```
 
-### Solana Deployment
+Required environment variables:
+- `DATABASE_URL`: PostgreSQL connection string
+- `ETHEREUM_RPC_URL`: Arbitrum Sepolia RPC (default: https://sepolia-rollup.arbitrum.io/rpc)
+- `ETHEREUM_CHAIN_ID`: 421614 (Arbitrum Sepolia)
+- `JWT_SECRET`: Your secret key for authentication
+- `PRIVATE_KEY`: Your wallet private key (testnet only)
+
+4. **Set up the database**
 ```bash
-# Build programs
-anchor build
-
-# Deploy to devnet
-anchor deploy --provider.cluster devnet
-
-# Deploy to mainnet
-anchor deploy --provider.cluster mainnet-beta
+npm run db:push
 ```
 
-### TON Deployment
+5. **Start the development server**
 ```bash
-# Compile contracts
-func -o vault-storage.fif contracts/vault-storage.fc
-
-# Deploy to testnet
-ton-cli deploy vault-storage.fif --network testnet
-
-# Deploy to mainnet
-ton-cli deploy vault-storage.fif --network mainnet
+npm run dev
 ```
 
-### Cross-Chain Deployment
-```bash
-# Deploy all contracts across all chains
-npm run deploy:all
+The application will be available at `http://localhost:5000`
 
-# Verify cross-chain connectivity
-npm run verify:cross-chain
+### Deployed Contracts (Arbitrum Sepolia Testnet)
+
+The Trinity Protocol smart contracts are deployed on Arbitrum Sepolia:
+
+- **CVT Token**: `0xFb419D8E32c14F774279a4dEEf330dc893257147`
+- **CVT Bridge**: `0x21De95EbA01E31173Efe1b9c4D57E58bb840bA86`
+- **ChronosVault**: `0x99444B0B1d6F7b21e9234229a2AC2bC0150B9d91`
+- **CrossChainBridge**: `0x13dc7df46c2e87E8B2010A28F13404580158Ed9A`
+- **Test USDC**: `0x6818bbb8f604b4c0b52320f633C1E5BF2c5b07bd`
+
+View on Arbiscan: https://sepolia.arbiscan.io
+
+### Testing
+
+Run the test suite:
+```bash
+npm test
 ```
 
-## 🧪 Testing
-
-### Unit Tests
+Run smart contract tests:
 ```bash
-# Ethereum tests
 npx hardhat test
-
-# Solana tests
-anchor test
-
-# TON tests
-npm run test:ton
-
-# All tests
-npm run test:all
 ```
 
-### Integration Tests
+### Building for Production
+
 ```bash
-# Cross-chain integration
-npm run test:integration
-
-# Trinity Protocol validation
-npm run test:trinity-protocol
-
-# Security tests
-npm run test:security
+npm run build
 ```
 
-### Test Coverage
-- **Ethereum**: 95%+ coverage for all contracts
-- **Solana**: 90%+ coverage for all programs
-- **TON**: 85%+ coverage for all contracts
-- **Cross-Chain**: 100% coverage for Trinity Protocol
+## Security Testing & Verification
 
-## 📊 Gas Optimization
+The platform includes comprehensive security verification tools:
 
-### Ethereum Gas Costs
-- **Vault Creation**: ~200,000 gas
-- **Asset Deposit**: ~100,000 gas
-- **Multi-Sig Operation**: ~150,000 gas
-- **Cross-Chain Verification**: ~80,000 gas
+- **Contract Verification Tool**: Verify the integrity of deployed smart contracts
+- **Triple-Chain Security Dashboard**: Monitor security status across all blockchains
+- **Transaction Monitoring**: Track all vault-related transactions in real-time
+- **Cross-Chain Fee Monitor**: Optimize transactions across different networks
+- **Zero-Knowledge Privacy Demo**: Interactive demonstration of our ZK technology
 
-### Solana Compute Units
-- **Vault Operations**: ~50,000 CU
-- **Cross-Chain Bridge**: ~100,000 CU
-- **Security Monitoring**: ~20,000 CU
+## Educational Resources
 
-### TON Gas Fees
-- **Vault Storage**: ~0.1 TON
-- **Emergency Recovery**: ~0.05 TON
-- **Quantum Operations**: ~0.2 TON
+Chronos Vault is committed to blockchain education:
 
-## 🔍 Security Audits
+- **Vault School Hub**: Comprehensive learning portal for vault technologies
+- **Interactive Tutorials**: Step-by-step guides for all security features
+- **Technical Documentation**: In-depth explanations of security protocols
+- **Security Whitepaper**: Detailed exploration of our security architecture
 
-### Completed Audits
-- **Ethereum Contracts**: ConsenSys Diligence ✅
-- **Solana Programs**: Soteria Security ✅
-- **TON Contracts**: CertiK ✅
-- **Cross-Chain Protocol**: Trail of Bits ✅
+## Documentation
 
-### Audit Reports
+For more detailed information, please refer to:
 
-### Security Measures
-- **Reentrancy Protection**: All state changes before external calls
-- **Integer Overflow Protection**: SafeMath and Rust overflow checks
-- **Access Control**: Role-based permissions with multi-sig requirements
-- **Emergency Pause**: Circuit breaker functionality for all contracts
+- [ChronosToken Whitepaper](./CVT_WHITEPAPER.md)
+- [Security Architecture](./SECURITY_ARCHITECTURE.md)
+- [Technical Documentation](./TECHNICAL_README.md)
+- [Deployment Guide](./DEPLOYMENT_GUIDE.md)
 
-## 📚 Contract APIs
+## Contributing
 
-### Ethereum VaultManager
-```solidity
-// Create new vault
-function createVault(
-    string memory name,
-    VaultType vaultType,
-    uint256 requiredSignatures
-) external returns (uint256 vaultId);
+We welcome contributions from the community! Please see our [Contributing Guidelines](./CONTRIBUTING.md) for details.
 
-// Deposit assets
-function deposit(uint256 vaultId, uint256 amount) external;
+### Open Source Vision
 
-// Withdraw assets (requires multi-sig)
-function withdraw(
-    uint256 vaultId, 
-    uint256 amount, 
-    bytes[] calldata signatures
-) external;
+Chronos Vault is an open-source project committed to advancing blockchain security. We believe in:
+- Mathematical security over trust assumptions
+- Transparent, auditable code
+- Community-driven development
+- Enterprise-ready implementation
 
-// Cross-chain verification
-function verifyCrossChain(
-    uint256 vaultId,
-    bytes32 solanaTxHash,
-    bytes32 tonTxHash
-) external view returns (bool);
-```
+## License
 
-### Solana Vault Program
-```rust
-// Initialize vault
-pub fn initialize_vault(
-    ctx: Context<InitializeVault>,
-    vault_name: String,
-    vault_type: VaultType,
-) -> Result<()>;
+This project is licensed under the MIT License - see the [LICENSE](./LICENSE) file for details.
 
-// Process high-frequency operations
-pub fn process_operation(
-    ctx: Context<ProcessOperation>,
-    operation: Operation,
-) -> Result<()>;
+Copyright (c) 2025 Chronos Vault
 
-// Monitor cross-chain state
-pub fn monitor_cross_chain(
-    ctx: Context<MonitorCrossChain>,
-    ethereum_state: EthereumState,
-    ton_state: TonState,
-) -> Result<()>;
-```
+## Contact
 
-### TON Vault Storage
-```func
-;; Store vault data with quantum resistance
-() store_vault_data(int vault_id, cell vault_data) impure;
-
-;; Retrieve vault data
-cell get_vault_data(int vault_id) method_id;
-
-;; Emergency recovery function
-() emergency_recovery(int vault_id, cell recovery_data) impure;
-
-;; Quantum-resistant signature verification
-int verify_quantum_signature(
-    cell signature, 
-    cell message, 
-    cell public_key
-) method_id;
-```
-
-## 🤝 Contributing
-
-### Development Guidelines
-1. **Security First**: All changes must pass security review
-2. **Test Coverage**: Maintain 90%+ test coverage
-3. **Documentation**: Update docs for all public functions
-4. **Gas Optimization**: Optimize for minimal gas costs
-5. **Cross-Chain Compatibility**: Ensure Trinity Protocol consistency
-
-### Contribution Process
-1. Fork the repository
-2. Create a feature branch
-3. Implement changes with tests
-4. Run full test suite
-5. Submit pull request with detailed description
-
-### Code Style
-- **Solidity**: Follow OpenZeppelin standards
-- **Rust**: Use standard Rust formatting
-- **FunC**: Follow TON development guidelines
-- **Comments**: Comprehensive NatSpec documentation
-
-## 🐛 Security Disclosure
-
-### Reporting Security Issues
-- **Email**: chronosvault@chronosvault.org
-- **PGP Key**: Available on request
-- **Bug Bounty**: Up to $100,000 for critical vulnerabilities
-- **Disclosure Policy**: 90-day responsible disclosure
-
-### Severity Levels
-- **Critical**: Funds at risk or protocol compromise
-- **High**: Significant security impact
-- **Medium**: Limited security impact
-- **Low**: Minor security considerations
-
-## 📞 Support
-
-### Technical Support
-- **Issues**: [GitHub Issues](https://github.com/Chronos-Vault/chronos-vault-contracts/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/Chronos-Vault/chronos-vault-contracts/discussions)
-- **Email**: chronosvault@chronosvault.org
-
-### Documentation
-- **API Reference**: [Chronos Vault Docs](https://github.com/Chronos-Vault/chronos-vault-docs/blob/main/API_REFERENCE.md)
-- **Integration Guide**: [Integration Examples](https://github.com/Chronos-Vault/chronos-vault-docs/blob/main/INTEGRATION_EXAMPLES.md)
-- **Security Guide**: [Security Architecture](https://github.com/Chronos-Vault/chronos-vault-security/blob/main/SECURITY_ARCHITECTURE.md)
-
-## 📈 Roadmap
-
-### Q1 2025
-- ✅ Trinity Protocol implementation
-- ✅ Multi-chain deployment
-- ✅ Security audit completion
-- ✅ Zero-knowledge proof integration
-
-### Q2 2025
-- 🔄 Mainnet deployment
-- 🔄 Advanced vault types
-- 🔄 Quantum-resistant upgrades
-- 🔄 Enterprise features
-
-### Q3 2025
-- 📅 Layer 2 integration
-- 📅 Cross-chain bridge optimization
-- 📅 Advanced ZK features
-- 📅 Institutional compliance
-
-## ⚖️ License
-
-MIT License - see [LICENSE](LICENSE) file for details.
-
-## 🔗 Related Repositories
-
-- **[Platform](https://github.com/Chronos-Vault/chronos-vault-platform)**: Core application and user interface
-- **[SDK](https://github.com/Chronos-Vault/chronos-vault-sdk)**: Developer integration tools
-- **[Docs](https://github.com/Chronos-Vault/chronos-vault-docs)**: Comprehensive documentation
-- **[Security](https://github.com/Chronos-Vault/chronos-vault-security)**: Security audits and compliance
-
----
-
-**Chronos Vault Smart Contracts: Mathematical Security Across Multiple Blockchains**
-
-*Implementing the Trinity Protocol for unprecedented cross-chain security.*
+For inquiries about the Chronos Vault platform, please contact us at chronosvault@chronosvault.org.
