@@ -8,7 +8,7 @@ import {
   Sender, 
   SendMode, 
   toNano 
-} from 'ton-core';
+} from '@ton/core';
 
 // Define contract interface types
 export type VaultConfig = {
