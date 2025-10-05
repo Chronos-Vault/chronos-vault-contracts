@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
@@ -80,6 +80,25 @@ contract CrossChainBridgeV1 is ReentrancyGuard {
         ChainProof[3] chainProofs; // Ethereum, Solana, TON proofs
         uint8 validProofCount; // Must be >= 2 for execution
         mapping(uint8 => bool) chainVerified; // Per-chain verification status
+    }
+    
+    struct OperationView {
+        bytes32 id;
+        address user;
+        OperationType operationType;
+        string sourceChain;
+        string destinationChain;
+        address tokenAddress;
+        uint256 amount;
+        uint256 fee;
+        uint256 timestamp;
+        OperationStatus status;
+        bytes32 targetTxHash;
+        bool prioritizeSpeed;
+        bool prioritizeSecurity;
+        uint256 slippageTolerance;
+        ChainProof[3] chainProofs;
+        uint8 validProofCount;
     }
     
     // Mapping from operation ID to Operation
@@ -450,8 +469,26 @@ contract CrossChainBridgeV1 is ReentrancyGuard {
      * @param operationId ID of the operation
      * @return operation Operation details
      */
-    function getOperation(bytes32 operationId) external view operationExists(operationId) returns (Operation memory) {
-        return operations[operationId];
+    function getOperation(bytes32 operationId) external view operationExists(operationId) returns (OperationView memory) {
+        Operation storage op = operations[operationId];
+        return OperationView({
+            id: op.id,
+            user: op.user,
+            operationType: op.operationType,
+            sourceChain: op.sourceChain,
+            destinationChain: op.destinationChain,
+            tokenAddress: op.tokenAddress,
+            amount: op.amount,
+            fee: op.fee,
+            timestamp: op.timestamp,
+            status: op.status,
+            targetTxHash: op.targetTxHash,
+            prioritizeSpeed: op.prioritizeSpeed,
+            prioritizeSecurity: op.prioritizeSecurity,
+            slippageTolerance: op.slippageTolerance,
+            chainProofs: op.chainProofs,
+            validProofCount: op.validProofCount
+        });
     }
     
     /**
