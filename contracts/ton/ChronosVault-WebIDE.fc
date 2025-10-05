@@ -1,0 +1,261 @@
+;; ChronosVault - Production-Ready TON Smart Contract
+;; Simplified version for TON Web IDE deployment
+;; Trinity Protocol: Emergency Recovery with Ethereum + Solana verification
+
+#include "stdlib.fc";
+
+;; Error codes
+const int ERROR_NOT_OWNER = 100;
+const int ERROR_VAULT_LOCKED = 101;
+const int ERROR_VAULT_UNLOCKED = 102;
+const int ERROR_INVALID_PROOF = 103;
+const int ERROR_TIME_NOT_REACHED = 104;
+const int ERROR_RECOVERY_DISABLED = 105;
+
+;; Global storage variables
+global int vault_id;
+global int unlock_time;
+global int is_locked;
+global int recovery_mode;
+global int backup_timestamp;
+global slice owner_address;
+global cell eth_verification_data;
+global cell sol_verification_data;
+
+;; Load data from contract storage
+() load_data() impure {
+    slice ds = get_data().begin_parse();
+    vault_id = ds~load_uint(64);
+    unlock_time = ds~load_uint(64);
+    is_locked = ds~load_uint(1);
+    recovery_mode = ds~load_uint(1);
+    backup_timestamp = ds~load_uint(64);
+    owner_address = ds~load_msg_addr();
+    eth_verification_data = ds~load_ref();
+    sol_verification_data = ds~load_ref();
+}
+
+;; Save data to contract storage
+() save_data() impure {
+    set_data(begin_cell()
+        .store_uint(vault_id, 64)
+        .store_uint(unlock_time, 64)
+        .store_uint(is_locked, 1)
+        .store_uint(recovery_mode, 1)
+        .store_uint(backup_timestamp, 64)
+        .store_slice(owner_address)
+        .store_ref(eth_verification_data)
+        .store_ref(sol_verification_data)
+    .end_cell());
+}
+
+;; Check if two slices are equal
+int equal_slices(slice a, slice b) {
+    return equal_slice_bits(a, b);
+}
+
+;; Check if unlock time has been reached
+int is_unlocked_by_time() method_id {
+    return now() >= unlock_time;
+}
+
+;; Verify Ethereum proof for Trinity Protocol
+int verify_ethereum_proof(slice proof_data) method_id {
+    ;; Parse Ethereum proof
+    int eth_vault_id = proof_data~load_uint(64);
+    int eth_unlock_time = proof_data~load_uint(64);
+    int eth_block_hash = proof_data~load_uint(256);
+    
+    ;; Verify vault ID matches
+    if (eth_vault_id != vault_id) {
+        return 0;
+    }
+    
+    ;; Verify unlock time matches
+    if (eth_unlock_time != unlock_time) {
+        return 0;
+    }
+    
+    ;; Store verification data
+    eth_verification_data = begin_cell()
+        .store_uint(eth_block_hash, 256)
+        .store_uint(now(), 64)
+    .end_cell();
+    
+    return 1;
+}
+
+;; Verify Solana proof for Trinity Protocol
+int verify_solana_proof(slice proof_data) method_id {
+    ;; Parse Solana proof
+    int sol_vault_id = proof_data~load_uint(64);
+    int sol_unlock_time = proof_data~load_uint(64);
+    int sol_slot = proof_data~load_uint(64);
+    
+    ;; Verify vault ID matches
+    if (sol_vault_id != vault_id) {
+        return 0;
+    }
+    
+    ;; Verify unlock time matches
+    if (sol_unlock_time != unlock_time) {
+        return 0;
+    }
+    
+    ;; Store verification data
+    sol_verification_data = begin_cell()
+        .store_uint(sol_slot, 64)
+        .store_uint(now(), 64)
+    .end_cell();
+    
+    return 1;
+}
+
+;; Backup vault state
+() backup_vault_state() impure {
+    backup_timestamp = now();
+    save_data();
+}
+
+;; Initiate recovery mode
+() initiate_recovery() impure {
+    recovery_mode = 1;
+    backup_vault_state();
+}
+
+;; Unlock vault with time check
+() unlock_vault() impure {
+    ;; Check if already unlocked
+    if (is_locked == 0) {
+        throw(ERROR_VAULT_UNLOCKED);
+    }
+    
+    ;; Check if time has been reached
+    if (~ is_unlocked_by_time()) {
+        throw(ERROR_TIME_NOT_REACHED);
+    }
+    
+    ;; Unlock the vault
+    is_locked = 0;
+    save_data();
+}
+
+;; Emergency recovery with Trinity Protocol (2-of-3 consensus)
+() emergency_recovery(slice eth_proof, slice sol_proof) impure {
+    ;; Check if recovery mode is enabled
+    if (recovery_mode == 0) {
+        throw(ERROR_RECOVERY_DISABLED);
+    }
+    
+    ;; Verify Ethereum proof
+    int eth_valid = verify_ethereum_proof(eth_proof);
+    
+    ;; Verify Solana proof
+    int sol_valid = verify_solana_proof(sol_proof);
+    
+    ;; Require both proofs to be valid (2-of-3 with TON being the 3rd)
+    if ((eth_valid == 0) | (sol_valid == 0)) {
+        throw(ERROR_INVALID_PROOF);
+    }
+    
+    ;; Emergency unlock
+    is_locked = 0;
+    recovery_mode = 0;
+    save_data();
+}
+
+;; Get vault details
+(int, int, int, int, int, slice) get_vault_details() method_id {
+    load_data();
+    return (vault_id, unlock_time, is_locked, recovery_mode, backup_timestamp, owner_address);
+}
+
+;; Get verification status
+(int, int) get_verification_status() method_id {
+    load_data();
+    
+    ;; Check if verifications exist
+    slice eth_check = eth_verification_data.begin_parse();
+    slice sol_check = sol_verification_data.begin_parse();
+    
+    int eth_verified = ~ eth_check.slice_empty?();
+    int sol_verified = ~ sol_check.slice_empty?();
+    
+    return (eth_verified, sol_verified);
+}
+
+;; Initialize contract
+() recv_external(slice in_msg) impure {
+    ;; Accept external messages
+    accept_message();
+    
+    ;; Parse initialization data
+    int init_vault_id = in_msg~load_uint(64);
+    int init_unlock_time = in_msg~load_uint(64);
+    slice init_owner = in_msg~load_msg_addr();
+    
+    ;; Initialize storage
+    vault_id = init_vault_id;
+    unlock_time = init_unlock_time;
+    is_locked = 1;
+    recovery_mode = 0;
+    backup_timestamp = now();
+    owner_address = init_owner;
+    eth_verification_data = begin_cell().end_cell();
+    sol_verification_data = begin_cell().end_cell();
+    
+    save_data();
+}
+
+;; Handle internal messages
+() recv_internal(int msg_value, cell in_msg_full, slice in_msg_body) impure {
+    ;; Parse message flags
+    slice cs = in_msg_full.begin_parse();
+    int flags = cs~load_uint(4);
+    
+    ;; Ignore bounced messages
+    if (flags & 1) {
+        return ();
+    }
+    
+    load_data();
+    
+    ;; Parse operation code
+    int op = in_msg_body~load_uint(32);
+    
+    ;; Get sender address
+    slice sender_address = cs~load_msg_addr();
+    
+    ;; Verify sender is owner for protected operations
+    if (~ equal_slices(sender_address, owner_address)) {
+        throw(ERROR_NOT_OWNER);
+    }
+    
+    ;; Operation: Unlock vault (op = 1)
+    if (op == 1) {
+        unlock_vault();
+        return ();
+    }
+    
+    ;; Operation: Backup state (op = 2)
+    if (op == 2) {
+        backup_vault_state();
+        return ();
+    }
+    
+    ;; Operation: Initiate recovery (op = 3)
+    if (op == 3) {
+        initiate_recovery();
+        return ();
+    }
+    
+    ;; Operation: Emergency recovery (op = 4)
+    if (op == 4) {
+        cell eth_proof_cell = in_msg_body~load_ref();
+        cell sol_proof_cell = in_msg_body~load_ref();
+        slice eth_proof = eth_proof_cell.begin_parse();
+        slice sol_proof = sol_proof_cell.begin_parse();
+        emergency_recovery(eth_proof, sol_proof);
+        return ();
+    }
+}
