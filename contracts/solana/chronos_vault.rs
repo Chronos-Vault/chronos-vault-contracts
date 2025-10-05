@@ -23,7 +23,7 @@ entrypoint!(process_instruction);
 pub mod id {
     use solana_program::declare_id;
     // This is a placeholder for the program ID, which would be generated during deployment
-    declare_id!("ChronoSVauLt111111111111111111111111111111111");
+    declare_id!("ChronoSVauLt11111111111111111111111111111111");
 }
 
 /// Instruction types supported by the Chronos Vault program
