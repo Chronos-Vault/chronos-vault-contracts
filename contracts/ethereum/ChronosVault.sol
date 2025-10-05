@@ -3,7 +3,8 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
@@ -27,7 +28,7 @@ import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
  * 2. Enhanced - Requires access key and authorized retrievers
  * 3. Maximum - Adds cross-chain verification and multi-signature requirements
  */
-contract ChronosVault is ERC4626, ReentrancyGuard {
+contract ChronosVault is ERC4626, Ownable, ReentrancyGuard {
     using Math for uint256;
     using ECDSA for bytes32;
 
@@ -123,7 +124,7 @@ contract ChronosVault is ERC4626, ReentrancyGuard {
     
     event VaultCreated(address indexed creator, uint256 unlockTime, uint8 securityLevel);
     event VaultUnlocked(address indexed retriever, uint256 unlockTime);
-    event CrossChainAddressAdded(string blockchain, string address);
+    event CrossChainAddressAdded(string blockchain, string chainAddress);
     event SecurityLevelChanged(uint8 oldLevel, uint8 newLevel);
     event VerificationProofUpdated(bytes32 proof, uint256 timestamp);
     event AssetDeposited(address indexed from, uint256 amount);
@@ -172,6 +173,7 @@ contract ChronosVault is ERC4626, ReentrancyGuard {
     ) 
         ERC20(_name, _symbol)
         ERC4626(_asset)
+        Ownable(msg.sender)
     {
         require(_unlockTime > block.timestamp, "Unlock time must be in the future");
         require(_securityLevel >= 1 && _securityLevel <= 5, "Security level must be 1-5");
@@ -381,14 +383,6 @@ contract ChronosVault is ERC4626, ReentrancyGuard {
     }
     
     /**
-     * @dev TRINITY PROTOCOL: Metadata is IMMUTABLE after deployment
-     * No human can change vault metadata once created
-     */
-    function getMetadata() external view returns (VaultMetadata memory) {
-        return metadata;
-    }
-    
-    /**
      * @dev TRINITY PROTOCOL: Merkle root computation for mathematical verification
      * @param leaf The leaf node hash
      * @param proof Array of proof hashes
@@ -520,7 +514,11 @@ contract ChronosVault is ERC4626, ReentrancyGuard {
     
     /**
      * @dev Get the vault's metadata
-     * @return Complete metadata structure
+     * @return name Vault name
+     * @return description Vault description
+     * @return tags Vault tags
+     * @return contentHash Content hash
+     * @return isPublic Public visibility flag
      */
     function getMetadata() external view returns (
         string memory name,
@@ -544,24 +542,6 @@ contract ChronosVault is ERC4626, ReentrancyGuard {
      */
     function checkIfUnlocked() external view returns (bool) {
         return isUnlocked || block.timestamp >= unlockTime;
-    }
-    
-    /**
-     * @dev Check if an address is authorized to retrieve assets
-     * @param _address Address to check
-     * @return True if authorized
-     */
-    function isAuthorizedRetriever(address _address) external view returns (bool) {
-        return authorizedRetrievers[_address] || _address == owner();
-    }
-    
-    /**
-     * @dev Verify an access key
-     * @param _accessKey Access key to verify
-     * @return True if valid
-     */
-    function verifyAccessKey(string memory _accessKey) external view returns (bool) {
-        return keccak256(abi.encodePacked(_accessKey)) == accessKeyHash;
     }
     
     // =========== Multi-Signature Functions ===========
