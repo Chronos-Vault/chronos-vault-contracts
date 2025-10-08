@@ -1,6 +1,7 @@
 #!/bin/bash
 
-# Deploy Chronos Vault to Testnets
+# Deploy Chronos Vault V3 to Testnets
+# Trinity Protocol: Arbitrum L2 (Primary), Solana (Monitor), TON (Backup)
 # This script handles the deployment of all smart contracts to their respective testnets
 
 # Set colors for better readability
@@ -32,7 +33,7 @@ check_required_env() {
 }
 
 # Required environment variables
-check_required_env ETHEREUM_PRIVATE_KEY TON_API_KEY SOLANA_RPC_URL ETHEREUM_RPC_URL
+check_required_env PRIVATE_KEY TON_API_KEY SOLANA_RPC_URL ARBITRUM_RPC_URL
 
 # Install required dependencies
 echo -e "\n${BLUE}Installing dependencies...${NC}"
