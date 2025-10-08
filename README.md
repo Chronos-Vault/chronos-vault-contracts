@@ -1,5 +1,34 @@
 # Chronos Vault Smart Contracts
 
+
+## V3 Deployment (October 8, 2025)
+
+Latest V3 contracts deployed to Arbitrum Sepolia:
+
+| Contract | Address | Features |
+|----------|---------|----------|
+| CrossChainBridgeV3 | [`0x39601883CD9A115Aba0228fe0620f468Dc710d54`](https://sepolia.arbiscan.io/address/0x39601883CD9A115Aba0228fe0620f468Dc710d54) | Circuit breaker, 500% volume spike detection |
+| CVTBridgeV3 | [`0x00d02550f2a8Fd2CeCa0d6b7882f05Beead1E5d0`](https://sepolia.arbiscan.io/address/0x00d02550f2a8Fd2CeCa0d6b7882f05Beead1E5d0) | Circuit breaker, 20% sig failure detection |
+| EmergencyMultiSig | [`0xFafCA23a7c085A842E827f53A853141C8243F924`](https://sepolia.arbiscan.io/address/0xFafCA23a7c085A842E827f53A853141C8243F924) | 2-of-3 multi-sig, 48h time-lock |
+
+### V3 Features
+- **Circuit Breakers**: Auto-pause on anomaly detection
+- **Emergency Controls**: 2-of-3 multi-sig with time-lock
+- **Auto-Recovery**: 2-4 hour automatic system restoration
+
+### Deploy V3
+```bash
+# Set environment
+export PRIVATE_KEY=your_private_key
+export ARBITRUM_RPC_URL=https://sepolia-rollup.arbitrum.io/rpc
+
+# Deploy
+./deploy-v3.sh
+```
+
+See `v3-deployment.json` for complete deployment details.
+
+
 Smart contract implementations for the Chronos Vault multi-chain digital asset vault platform.
 
 ## Overview
