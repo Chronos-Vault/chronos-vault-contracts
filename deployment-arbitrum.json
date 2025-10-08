@@ -3,27 +3,54 @@
   "chainId": 421614,
   "deployer": "0x66e5046D136E82d17cbeB2FfEa5bd5205D962906",
   "trinityProtocol": {
+    "version": "V3",
     "consensus": "2-of-3",
     "chains": [
-      "Ethereum Layer 2 (Arbitrum)",
-      "Solana",
-      "TON"
+      "Arbitrum L2 (Primary)",
+      "Solana (Monitor)",
+      "TON (Backup)"
     ],
-    "threshold": 2
+    "threshold": 2,
+    "deploymentDate": "2025-10-08T00:00:00.000Z"
   },
   "contracts": {
     "CVTToken": "0xFb419D8E32c14F774279a4dEEf330dc893257147",
-    "CVTBridge": "0x21De95EbA01E31173Efe1b9c4D57E58bb840bA86",
-    "TestUSDC": "0x6818bbb8f604b4c0b52320f633C1E5BF2c5b07bd",
     "ChronosVault": "0x99444B0B1d6F7b21e9234229a2AC2bC0150B9d91",
-    "CrossChainBridgeV1": "0x13dc7df46c2e87E8B2010A28F13404580158Ed9A"
+    "CrossChainBridgeV1": "0x13dc7df46c2e87E8B2010A28F13404580158Ed9A",
+    "CVTBridgeV1": "0x21De95EbA01E31173Efe1b9c4D57E58bb840bA86",
+    "CrossChainBridgeV3": "0x39601883CD9A115Aba0228fe0620f468Dc710d54",
+    "CVTBridgeV3": "0x00d02550f2a8Fd2CeCa0d6b7882f05Beead1E5d0",
+    "EmergencyMultiSig": "0xFafCA23a7c085A842E827f53A853141C8243F924"
+  },
+  "v3Features": {
+    "circuitBreakers": {
+      "CrossChainBridgeV3": {
+        "volumeSpike": "500%",
+        "failedProofRate": "20%",
+        "autoRecoveryTime": "4 hours"
+      },
+      "CVTBridgeV3": {
+        "volumeSpike": "500%",
+        "failedSigRate": "20%",
+        "autoRecoveryTime": "2 hours"
+      }
+    },
+    "emergencyControls": {
+      "requiredSignatures": "2-of-3",
+      "timeLock": "48 hours",
+      "controller": "IMMUTABLE"
+    }
   },
   "parameters": {
     "bridgeFee": "0.001 ETH (0.1%)",
     "minBridgeAmount": "10 CVT",
-    "vaultUnlockTime": "2026-10-05T11:29:22.000Z",
-    "securityLevel": "2 (Standard Trinity)"
+    "securityLevel": "ENHANCED (2-of-3 Trinity)"
   },
-  "timestamp": "2025-10-05T11:29:24.560Z",
-  "blockExplorer": "https://sepolia.arbiscan.io"
+  "timestamp": "2025-10-08T00:00:00.000Z",
+  "blockExplorer": "https://sepolia.arbiscan.io",
+  "verification": {
+    "CrossChainBridgeV3": "https://sepolia.arbiscan.io/address/0x39601883CD9A115Aba0228fe0620f468Dc710d54#code",
+    "CVTBridgeV3": "https://sepolia.arbiscan.io/address/0x00d02550f2a8Fd2CeCa0d6b7882f05Beead1E5d0#code",
+    "EmergencyMultiSig": "https://sepolia.arbiscan.io/address/0xFafCA23a7c085A842E827f53A853141C8243F924#code"
+  }
 }
