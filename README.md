@@ -119,6 +119,25 @@ npx hardhat test
 - Emergency recovery mechanisms on TON blockchain
 - Testnet deployment for thorough testing before mainnet
 
+
+
+## 🚀 Latest Deployments (Arbitrum Sepolia)
+
+### Circuit Breaker V2 Contracts
+
+| Contract | Address | Status |
+|----------|---------|--------|
+| **CrossChainBridgeV2** | `0xe331a4390C3a5E43BA646210b63e09B64E8289e7` | ✅ Deployed |
+| **CVTBridgeV2** | `0xdB7F6cCf57D6c6AA90ccCC1a510589513f28cb83` | ✅ Deployed |
+
+**Features:**
+- 🛡️ 500% volume spike trigger
+- 🔒 20% failure rate threshold
+- ⏰ Auto-recovery after time-lock
+- 🚫 100% trustless (no owner roles)
+
+[View on Arbiscan](https://sepolia.arbiscan.io)
+
 ## License
 
 MIT License - see [LICENSE](LICENSE) file for details
