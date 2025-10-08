@@ -1,15 +1,18 @@
 {
-  "timestamp": "2025-05-11T18:59:18.832Z",
-  "ethereum": {
-    "vault": "0xad283c52d822bcfb1a64ea89375b57f4ba9e74cb",
-    "token": "0xb37255a705e95ef1870d5c601313e387d267dfde",
-    "bridge": "0x78ad4f21bb082c5bf20a0f84ee3b4d9fa7f30649",
-    "network": "sepolia"
+  "timestamp": "2025-10-08T00:00:00.000Z",
+  "arbitrum": {
+    "vault": "0x99444B0B1d6F7b21e9234229a2AC2bC0150B9d91",
+    "token": "0xFb419D8E32c14F774279a4dEEf330dc893257147",
+    "bridge": "0x39601883CD9A115Aba0228fe0620f468Dc710d54",
+    "bridgeV3": "0x39601883CD9A115Aba0228fe0620f468Dc710d54",
+    "cvtBridgeV3": "0x00d02550f2a8Fd2CeCa0d6b7882f05Beead1E5d0",
+    "emergencyMultiSig": "0xFafCA23a7c085A842E827f53A853141C8243F924",
+    "network": "arbitrum-sepolia",
+    "chainId": 421614
   },
   "ton": {
-    "vault": "EQiVU0hizNsHqqY4OpxicQHva0jxO5LGovkjWszoRS5uvQ",
-    "token": "EQjPkGSKFrZaw9zKuFheouloRsuj8Q9G4-HKvXbBkagjDd",
-    "bridge": "EQygggZ1OAabipxMWhoubYd78habRcp2drO55Fo8TGUlbB",
+    "vault": "EQDJAnXDPT-NivritpEhQeP0XmG20NdeUtxgh4nUiWH-DF7M",
+    "bridge": "EQAOJxa1WDjGZ7f3n53JILojhZoDdTOKWl6h41_yOWX3v0tq",
     "network": "testnet"
   },
   "solana": {
@@ -19,6 +22,8 @@
     "network": "devnet"
   },
   "config": {
-    "securityLevel": "ENHANCED"
+    "securityLevel": "ENHANCED",
+    "trinityProtocol": "2-of-3",
+    "version": "V3"
   }
 }
