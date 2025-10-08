@@ -13,7 +13,7 @@ import { CrossChainBridgeService } from '../../client/src/services/CrossChainBri
 import { TripleChainSecurityService } from '../../client/src/services/TripleChainSecurityService';
 
 // Test wallet addresses for different chains
-const TEST_ETHEREUM_ADDRESS = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266';
+const TEST_ARBITRUM_ADDRESS = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266';
 const TEST_TON_ADDRESS = 'EQAvDfYmkVV2zFXzC0Hs2e2RGWJyMXHpnMTXH4jnI2W3AwLb';
 const TEST_SOLANA_ADDRESS = 'ChronoSVauLt111111111111111111111111111111111';
 
@@ -32,20 +32,20 @@ describe('Cross-Chain Bridge Integration', () => {
   });
 
   describe('Asset Transfers Across Chains', () => {
-    it('should initiate a transfer from Ethereum to TON', async () => {
+    it('should initiate a transfer from Arbitrum L2 to TON', async () => {
       const transferResult = await bridgeService.initiateTransfer({
-        sourceChain: BlockchainType.ETHEREUM,
+        sourceChain: BlockchainType.ARBITRUM,
         targetChain: BlockchainType.TON,
         amount: 1.5,
         assetType: 'CVT',
-        senderAddress: TEST_ETHEREUM_ADDRESS,
+        senderAddress: TEST_ARBITRUM_ADDRESS,
         recipientAddress: TEST_TON_ADDRESS,
       });
 
       expect(transferResult).to.exist;
       expect(transferResult.transactionId).to.be.a('string');
       expect(transferResult.status).to.equal('pending');
-      expect(transferResult.sourceChain).to.equal(BlockchainType.ETHEREUM);
+      expect(transferResult.sourceChain).to.equal(BlockchainType.ARBITRUM);
       expect(transferResult.targetChain).to.equal(BlockchainType.TON);
     });
 
@@ -69,11 +69,11 @@ describe('Cross-Chain Bridge Integration', () => {
     it('should track the status of a cross-chain transfer', async () => {
       // First create a transaction to track
       const transferResult = await bridgeService.initiateTransfer({
-        sourceChain: BlockchainType.ETHEREUM,
+        sourceChain: BlockchainType.ARBITRUM,
         targetChain: BlockchainType.SOLANA,
         amount: 0.5,
         assetType: 'CVT',
-        senderAddress: TEST_ETHEREUM_ADDRESS,
+        senderAddress: TEST_ARBITRUM_ADDRESS,
         recipientAddress: TEST_SOLANA_ADDRESS,
       });
 
@@ -102,13 +102,13 @@ describe('Cross-Chain Bridge Integration', () => {
   describe('Atomic Swaps Between Chains', () => {
     it('should initiate an atomic swap between Ethereum and TON', async () => {
       const swapResult = await bridgeService.initiateAtomicSwap({
-        initiatorChain: BlockchainType.ETHEREUM,
+        initiatorChain: BlockchainType.ARBITRUM,
         responderChain: BlockchainType.TON,
         initiatorAsset: 'ETH',
         responderAsset: 'TON',
         initiatorAmount: 0.1,
         responderAmount: 10,
-        initiatorAddress: TEST_ETHEREUM_ADDRESS,
+        initiatorAddress: TEST_ARBITRUM_ADDRESS,
         responderAddress: TEST_TON_ADDRESS,
         timelock: 3600 // 1 hour timelock
       });
@@ -122,13 +122,13 @@ describe('Cross-Chain Bridge Integration', () => {
     it('should track the complete lifecycle of an atomic swap', async () => {
       // Create a new swap
       const swapResult = await bridgeService.initiateAtomicSwap({
-        initiatorChain: BlockchainType.ETHEREUM,
+        initiatorChain: BlockchainType.ARBITRUM,
         responderChain: BlockchainType.SOLANA,
         initiatorAsset: 'ETH',
         responderAsset: 'SOL',
         initiatorAmount: 0.05,
         responderAmount: 1,
-        initiatorAddress: TEST_ETHEREUM_ADDRESS,
+        initiatorAddress: TEST_ARBITRUM_ADDRESS,
         responderAddress: TEST_SOLANA_ADDRESS,
         timelock: 3600
       });
@@ -156,7 +156,7 @@ describe('Cross-Chain Bridge Integration', () => {
       expect(redeemedStatus.status).to.equal('redeemed');
 
       // Simulate initiator redemption (completing the swap)
-      await bridgeService.redeemAtomicSwap(swapId, TEST_ETHEREUM_ADDRESS, secret);
+      await bridgeService.redeemAtomicSwap(swapId, TEST_ARBITRUM_ADDRESS, secret);
       
       const completedStatus = await bridgeService.getAtomicSwapStatus(swapId);
       expect(completedStatus.status).to.equal('completed');
@@ -166,13 +166,13 @@ describe('Cross-Chain Bridge Integration', () => {
       // Create a swap with a very short timelock
       const swapResult = await bridgeService.initiateAtomicSwap({
         initiatorChain: BlockchainType.TON,
-        responderChain: BlockchainType.ETHEREUM,
+        responderChain: BlockchainType.ARBITRUM,
         initiatorAsset: 'TON',
         responderAsset: 'ETH',
         initiatorAmount: 5,
         responderAmount: 0.025,
         initiatorAddress: TEST_TON_ADDRESS,
-        responderAddress: TEST_ETHEREUM_ADDRESS,
+        responderAddress: TEST_ARBITRUM_ADDRESS,
         timelock: 1 // 1 second timelock for testing
       });
 
@@ -194,11 +194,11 @@ describe('Cross-Chain Bridge Integration', () => {
     it('should verify a cross-chain transfer with the security service', async () => {
       // First create a transfer
       const transferResult = await bridgeService.initiateTransfer({
-        sourceChain: BlockchainType.ETHEREUM,
+        sourceChain: BlockchainType.ARBITRUM,
         targetChain: BlockchainType.TON,
         amount: 1.0,
         assetType: 'CVT',
-        senderAddress: TEST_ETHEREUM_ADDRESS,
+        senderAddress: TEST_ARBITRUM_ADDRESS,
         recipientAddress: TEST_TON_ADDRESS,
       });
 
@@ -207,12 +207,12 @@ describe('Cross-Chain Bridge Integration', () => {
       // Verify the transfer using security service
       const verificationResult = await securityService.verifyTransaction(
         txId,
-        BlockchainType.ETHEREUM,
+        BlockchainType.ARBITRUM,
         BlockchainType.TON
       );
 
       expect(verificationResult.verified).to.be.true;
-      expect(verificationResult.primaryChain).to.equal(BlockchainType.ETHEREUM);
+      expect(verificationResult.primaryChain).to.equal(BlockchainType.ARBITRUM);
       expect(verificationResult.verificationChains).to.include(BlockchainType.TON);
     });
 
@@ -220,12 +220,12 @@ describe('Cross-Chain Bridge Integration', () => {
       // Generate proof on source chain
       const proofResult = await securityService.generateCrossChainProof(
         TEST_TX_ID,
-        BlockchainType.ETHEREUM,
-        TEST_ETHEREUM_ADDRESS
+        BlockchainType.ARBITRUM,
+        TEST_ARBITRUM_ADDRESS
       );
 
       expect(proofResult.proofId).to.be.a('string');
-      expect(proofResult.sourceChain).to.equal(BlockchainType.ETHEREUM);
+      expect(proofResult.sourceChain).to.equal(BlockchainType.ARBITRUM);
       expect(proofResult.proof).to.be.a('string');
 
       // Verify the proof on target chain
@@ -242,11 +242,11 @@ describe('Cross-Chain Bridge Integration', () => {
     it('should detect and report tampered cross-chain transactions', async () => {
       // First create a valid transfer
       const transferResult = await bridgeService.initiateTransfer({
-        sourceChain: BlockchainType.ETHEREUM,
+        sourceChain: BlockchainType.ARBITRUM,
         targetChain: BlockchainType.SOLANA,
         amount: 0.75,
         assetType: 'CVT',
-        senderAddress: TEST_ETHEREUM_ADDRESS,
+        senderAddress: TEST_ARBITRUM_ADDRESS,
         recipientAddress: TEST_SOLANA_ADDRESS,
       });
 
@@ -261,7 +261,7 @@ describe('Cross-Chain Bridge Integration', () => {
       // Verify the tampered transaction (should fail verification)
       const verificationResult = await securityService.verifyTransaction(
         txId,
-        BlockchainType.ETHEREUM,
+        BlockchainType.ARBITRUM,
         BlockchainType.SOLANA
       );
 
@@ -280,11 +280,11 @@ describe('Cross-Chain Bridge Integration', () => {
         timestamp: Date.now()
       };
 
-      // Send message from Ethereum to Solana
+      // Send message from Arbitrum L2 to Solana
       const messageResult = await bridgeService.sendCrossChainMessage(
-        BlockchainType.ETHEREUM,
+        BlockchainType.ARBITRUM,
         BlockchainType.SOLANA,
-        TEST_ETHEREUM_ADDRESS,
+        TEST_ARBITRUM_ADDRESS,
         TEST_SOLANA_ADDRESS,
         message
       );
@@ -300,7 +300,7 @@ describe('Cross-Chain Bridge Integration', () => {
 
       expect(receivedMessage.content).to.deep.equal(message);
       expect(receivedMessage.verified).to.be.true;
-      expect(receivedMessage.sourceChain).to.equal(BlockchainType.ETHEREUM);
+      expect(receivedMessage.sourceChain).to.equal(BlockchainType.ARBITRUM);
       expect(receivedMessage.targetChain).to.equal(BlockchainType.SOLANA);
     });
   });
@@ -313,13 +313,13 @@ describe('Cross-Chain Bridge Integration', () => {
         type: 'lock',
         amount: 10.0,
         duration: 30 * 24 * 60 * 60, // 30 days in seconds
-        owner: TEST_ETHEREUM_ADDRESS
+        owner: TEST_ARBITRUM_ADDRESS
       };
 
       // Execute the operation on primary chain (Ethereum)
       const primaryResult = await securityService.executeVaultOperation(
         vaultId,
-        BlockchainType.ETHEREUM,
+        BlockchainType.ARBITRUM,
         operation
       );
 
@@ -334,7 +334,7 @@ describe('Cross-Chain Bridge Integration', () => {
 
       expect(verificationResult.consistent).to.be.true;
       expect(verificationResult.verifiedChains).to.have.length(3);
-      expect(verificationResult.verifiedChains).to.include(BlockchainType.ETHEREUM);
+      expect(verificationResult.verifiedChains).to.include(BlockchainType.ARBITRUM);
       expect(verificationResult.verifiedChains).to.include(BlockchainType.TON);
       expect(verificationResult.verifiedChains).to.include(BlockchainType.SOLANA);
     });
@@ -345,13 +345,13 @@ describe('Cross-Chain Bridge Integration', () => {
       const operation = {
         type: 'update_beneficiary',
         beneficiary: TEST_SOLANA_ADDRESS,
-        owner: TEST_ETHEREUM_ADDRESS
+        owner: TEST_ARBITRUM_ADDRESS
       };
 
       // Execute on primary chain
       const primaryResult = await securityService.executeVaultOperation(
         vaultId,
-        BlockchainType.ETHEREUM,
+        BlockchainType.ARBITRUM,
         operation
       );
 
@@ -379,12 +379,12 @@ describe('Cross-Chain Bridge Integration', () => {
       const operation = {
         type: 'withdraw',
         amount: 1.0,
-        owner: TEST_ETHEREUM_ADDRESS
+        owner: TEST_ARBITRUM_ADDRESS
       };
 
       const primaryResult = await securityService.executeVaultOperation(
         vaultId,
-        BlockchainType.ETHEREUM,
+        BlockchainType.ARBITRUM,
         operation
       );
 
@@ -406,7 +406,7 @@ describe('Cross-Chain Bridge Integration', () => {
       const recoveryResult = await securityService.recoverChainConsistency(
         vaultId,
         primaryResult.operationId,
-        BlockchainType.ETHEREUM // Use Ethereum as source of truth
+        BlockchainType.ARBITRUM // Use Ethereum as source of truth
       );
 
       expect(recoveryResult.success).to.be.true;
