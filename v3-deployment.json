@@ -1,0 +1,88 @@
+{
+  "version": "V3",
+  "deploymentDate": "2025-10-08T00:00:00.000Z",
+  "networks": {
+    "arbitrum": {
+      "network": "arbitrum-sepolia",
+      "chainId": 421614,
+      "rpcUrl": "https://sepolia-rollup.arbitrum.io/rpc",
+      "blockExplorer": "https://sepolia.arbiscan.io",
+      "contracts": {
+        "CVTToken": "0xFb419D8E32c14F774279a4dEEf330dc893257147",
+        "ChronosVault": "0x99444B0B1d6F7b21e9234229a2AC2bC0150B9d91",
+        "CrossChainBridgeV3": "0x39601883CD9A115Aba0228fe0620f468Dc710d54",
+        "CVTBridgeV3": "0x00d02550f2a8Fd2CeCa0d6b7882f05Beead1E5d0",
+        "EmergencyMultiSig": "0xFafCA23a7c085A842E827f53A853141C8243F924"
+      }
+    },
+    "solana": {
+      "network": "devnet",
+      "rpcUrl": "https://api.devnet.solana.org",
+      "blockExplorer": "https://explorer.solana.com/?cluster=devnet",
+      "programs": {
+        "chronosVault": "7va69VBveDrnZA5ezS4DRUL7AM2CqzUEvfHEBPL4wRA2",
+        "cvtToken": "aMoyohzfzq3gje4moZphvTBAGSxfELfyik9r9qFAPmZj",
+        "bridge": "ZNZeVxsm5cfdp9jnFUPGTaF6o2dCN3dSRzPtovdxZazG"
+      }
+    },
+    "ton": {
+      "network": "testnet",
+      "rpcUrl": "https://testnet.toncenter.com/api/v2/jsonRPC",
+      "blockExplorer": "https://testnet.tonscan.org",
+      "contracts": {
+        "chronosVault": "EQDJAnXDPT-NivritpEhQeP0XmG20NdeUtxgh4nUiWH-DF7M",
+        "cvtBridge": "EQAOJxa1WDjGZ7f3n53JILojhZoDdTOKWl6h41_yOWX3v0tq"
+      }
+    }
+  },
+  "trinityProtocol": {
+    "consensus": "2-of-3",
+    "primaryChain": "Arbitrum L2",
+    "monitorChain": "Solana",
+    "backupChain": "TON",
+    "threshold": 2,
+    "attackProbability": "10^-18"
+  },
+  "v3Features": {
+    "circuitBreakers": {
+      "CrossChainBridgeV3": {
+        "address": "0x39601883CD9A115Aba0228fe0620f468Dc710d54",
+        "volumeSpikeThreshold": "500%",
+        "failedProofRateThreshold": "20%",
+        "autoRecoveryTime": "4 hours",
+        "sameBlockThreshold": 10
+      },
+      "CVTBridgeV3": {
+        "address": "0x00d02550f2a8Fd2CeCa0d6b7882f05Beead1E5d0",
+        "volumeSpikeThreshold": "500%",
+        "failedSignatureRateThreshold": "20%",
+        "autoRecoveryTime": "2 hours",
+        "sameBlockThreshold": 5
+      }
+    },
+    "emergencyMultiSig": {
+      "address": "0xFafCA23a7c085A842E827f53A853141C8243F924",
+      "requiredSignatures": 2,
+      "totalSigners": 3,
+      "timeLockDuration": "48 hours",
+      "controller": "IMMUTABLE"
+    },
+    "quantumResistance": {
+      "kyber": "Post-quantum key encapsulation",
+      "dilithium": "Post-quantum signatures",
+      "performanceImprovement": "900%"
+    },
+    "zeroKnowledge": {
+      "proofGeneration": "1.2 seconds",
+      "performanceImprovement": "192%"
+    }
+  },
+  "api": {
+    "baseUrl": "https://api.chronosvault.com/v1",
+    "endpoints": {
+      "circuitBreakerStatus": "/api/bridge/circuit-breaker/status",
+      "vaultCreation": "/api/vault-creation/*",
+      "crossChainSwap": "/api/bridge/atomic-swap"
+    }
+  }
+}
