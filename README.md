@@ -2,7 +2,7 @@
 
 ![Solidity](https://img.shields.io/badge/Solidity-363636?style=for-the-badge&logo=solidity&logoColor=white)
 ![Rust](https://img.shields.io/badge/Rust-000000?style=for-the-badge&logo=rust&logoColor=white)
-![TON](https://img.shields.io/badge/TON-0088CC?style=for-the-badge&logo=telegram&logoColor=white)
+![FunC](https://img.shields.io/badge/FunC-0088CC?style=for-the-badge&logo=ton&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)
 
 [Website](https://chronosvault.org) • [Documentation](https://github.com/Chronos-Vault/chronos-vault-docs) • [SDK](https://github.com/Chronos-Vault/chronos-vault-sdk)
