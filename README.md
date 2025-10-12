@@ -1,6 +1,9 @@
 # Chronos Vault Smart Contracts
 
 ![version](https://img.shields.io/badge/version-1.0.0-blue)
+![Solidity](https://img.shields.io/badge/Solidity-0.8.20-363636?logo=solidity)
+![Rust](https://img.shields.io/badge/Rust-1.75-orange?logo=rust)
+![FunC](https://img.shields.io/badge/FunC-TON-0088CC?logo=ton)
 ![Trinity](https://img.shields.io/badge/Trinity-2/3_Consensus-green)
 ![Quantum](https://img.shields.io/badge/Quantum-Resistant-purple)
 ![Lean 4](https://img.shields.io/badge/Lean_4-35/35_Proven-brightgreen)
@@ -9,97 +12,210 @@
 **Multi-chain smart contracts for Trinity Protocol across Ethereum, Solana, and TON**
 
 ![Security](https://img.shields.io/badge/Security-Mathematically_Proven-success)
+![Deployed](https://img.shields.io/badge/Deployed-Arbitrum_Sepolia-blue)
 ![Trinity](https://img.shields.io/badge/Trinity-2/3_Consensus-informational)
-![Quantum](https://img.shields.io/badge/Quantum-Resistant-blueviolet)
 
 ---
 
 ## 🔗 Overview
 
-This repository contains the complete smart contract implementation for Chronos Vault's Trinity Protocol - a mathematically provable multi-chain security system.
+Complete smart contract implementation for Chronos Vault's Trinity Protocol - mathematically provable multi-chain security across three independent blockchains.
 
-## Contract Architecture
+## 📊 Deployed Contracts
 
-### Ethereum/Arbitrum (Solidity)
-- **ChronosVault.sol** - Core vault logic with time-locks and multi-sig
-- **CVTBridge.sol** - Cross-chain token bridge with HTLC
-- **CrossChainBridgeV1.sol** - Atomic swaps and cross-chain verification
-- **CVTToken.sol** - ChronosToken (CVT) ERC-20 implementation
+### ✅ Arbitrum Sepolia (Testnet)
 
-### Solana (Rust/Anchor)
-- **chronos_vault.rs** - Vault state management and validation
-- **cross_chain_bridge.rs** - Cross-chain message verification
-- **cvt_token.rs** - SPL token implementation for CVT
+| Contract | Address | Status |
+|----------|---------|--------|
+| **CVT Token** | `0xFb419D8E32c14F774279a4dEEf330dc893257147` | ✅ Active |
+| **CVT Bridge** | `0x21De95EbA01E31173Efe1b9c4D57E58bb840bA86` | ✅ Active |
+| **ChronosVault** | `0x99444B0B1d6F7b21e9234229a2AC2bC0150B9d91` | ✅ Active |
+| **CrossChainBridge** | `0x13dc7df46c2e87E8B2010A28F13404580158Ed9A` | ✅ Active |
+| **Test USDC** | `0x6818bbb8f604b4c0b52320f633C1E5BF2c5b07bd` | ✅ Active |
 
-### TON (FunC)
-- **ChronosVault.fc** - Vault implementation with quantum-resistant features
-- **CVTBridge.fc** - CVT Jetton bridge for cross-chain transfers
-- **CrossChainVerifier.fc** - Multi-chain consensus verification
+View on [Arbiscan](https://sepolia.arbiscan.io)
 
-## Deployed Contracts
+### 🚀 TON Testnet
 
-### Arbitrum Sepolia (Testnet)
-- **CVT Token**: `0xFb419D8E32c14F774279a4dEEf330dc893257147`
-- **CVT Bridge**: `0x21De95EbA01E31173Efe1b9c4D57E58bb840bA86`
-- **ChronosVault**: `0x99444B0B1d6F7b21e9234229a2AC2bC0150B9d91`
-- **CrossChainBridge**: `0x13dc7df46c2e87E8B2010A28F13404580158Ed9A`
+| Contract | Address | Status |
+|----------|---------|--------|
+| **ChronosVault** | `EQDJAnXDPT-NivritpEhQeP0XmG20NdeUtxgh4nUiWH-DF7M` | ✅ Active |
+| **CVTBridge** | `EQAOJxa1WDjGZ7f3n53JILojhZoDdTOKWl6h41_yOWX3v0tq` | ✅ Active |
 
-### TON Testnet
-- **ChronosVault**: `EQDJAnXDPT-NivritpEhQeP0XmG20NdeUtxgh4nUiWH-DF7M`
-- **CVTBridge**: `EQAOJxa1WDjGZ7f3n53JILojhZoDdTOKWl6h41_yOWX3v0tq`
+### ⚡ Solana (Development)
 
-## Development
+| Program | Status |
+|---------|--------|
+| **Chronos Vault Program** | 🔄 In Development |
+| **CVT Bridge Program** | 🔄 In Development |
+
+---
+
+## 🏗️ Contract Architecture
+
+### Ethereum/Arbitrum Layer 2 (Solidity 0.8.20)
+
+```solidity
+contracts/ethereum/
+├── ChronosVault.sol           // Core vault logic with time-locks
+├── CVTBridge.sol              // Cross-chain token bridge
+├── CrossChainBridgeV1.sol     // HTLC atomic swaps (V1)
+├── CrossChainBridgeV2.sol     // Circuit breakers (V2)
+├── CrossChainBridgeV3.sol     // Multi-sig governance (V3)
+├── CVTBridgeV2.sol            // Enhanced bridge features
+├── CVTBridgeV3.sol            // Multi-sig bridge
+└── EmergencyMultiSig.sol      // Emergency recovery system
+```
+
+**Key Features**:
+- ✅ Time-lock mechanisms with VDF integration
+- ✅ Multi-signature validation (2-of-3, 3-of-5)
+- ✅ Cross-chain message verification
+- ✅ HTLC atomic swaps
+- ✅ Emergency recovery mechanisms
+- ✅ Circuit breaker protection
+
+### Solana Programs (Rust/Anchor)
+
+```rust
+contracts/solana/
+├── chronos_vault.rs           // Vault state management
+├── cross_chain_bridge.rs      // Cross-chain verification
+└── cvt_bridge/
+    └── src/lib.rs             // CVT SPL token bridge
+```
+
+**Key Features**:
+- 🔄 High-frequency transaction validation
+- 🔄 Rapid consensus monitoring
+- 🔄 SPL token bridge for CVT
+- 🔄 Cross-chain message verification
+
+### TON Contracts (FunC)
+
+```func
+contracts/ton/
+├── ChronosVault.fc            // Vault implementation
+├── CVTBridge.fc               // CVT Jetton bridge
+├── CrossChainHelper.fc        // Cross-chain utilities
+└── cvt-token/
+    ├── jetton-minter.fc       // CVT token minting
+    ├── jetton-wallet.fc       // CVT wallet logic
+    ├── time-lock-vault.fc     // Time-lock implementation
+    ├── staking-vault.fc       // Staking mechanism
+    └── buyback-burner.fc      // Token burn mechanism
+```
+
+**Key Features**:
+- ✅ Quantum-resistant storage layer
+- ✅ Emergency recovery system
+- ✅ Jetton standard implementation
+- ✅ Time-lock vaults
+- ✅ Buyback & burn mechanism
+
+---
+
+## 🧪 Development
 
 ### Prerequisites
-- **Ethereum**: Hardhat, Ethers.js v6+
-- **Solana**: Anchor Framework, Rust
-- **TON**: Blueprint, FunC compiler
 
-### Installation
+**Ethereum/Arbitrum**:
 ```bash
-# Install dependencies
 npm install
-
-# Compile Ethereum contracts
 npx hardhat compile
+```
 
-# Build Solana programs
-cd solana && anchor build
+**Solana**:
+```bash
+cd solana
+cargo build-bpf
+anchor build
+```
 
-# Build TON contracts
-cd ton && npx blueprint build
+**TON**:
+```bash
+cd ton
+npm install
+npx blueprint build
 ```
 
 ### Testing
+
+**Ethereum Contracts**:
 ```bash
-# Test Ethereum contracts
 npx hardhat test
-
-# Test Solana programs
-cd solana && anchor test
-
-# Test TON contracts
-cd ton && npx blueprint test
+npx hardhat coverage
 ```
 
-## Security Features
+**Solana Programs**:
+```bash
+cd solana
+anchor test
+```
 
-- **Formal Verification**: 35/35 theorems proven with Lean 4
-- **Multi-Chain Consensus**: 2-of-3 validation across blockchains
-- **Quantum-Resistant**: ML-KEM-1024 and CRYSTALS-Dilithium-5
-- **Zero-Knowledge Proofs**: Privacy-preserving verification
-- **Time-Lock Security**: VDF-based time-locks
+**TON Contracts**:
+```bash
+cd ton
+npx blueprint test
+```
 
-## Related Repositories
+### Deployment
+
+**Deploy to Arbitrum Sepolia**:
+```bash
+npx hardhat run scripts/deploy.js --network arbitrum-sepolia
+```
+
+**Deploy to Solana Devnet**:
+```bash
+cd solana
+anchor deploy
+```
+
+**Deploy to TON Testnet**:
+```bash
+cd ton
+npx blueprint deploy
+```
+
+---
+
+## 🔐 Security Features
+
+### Formal Verification
+- **Status**: ✅ 35/35 theorems proven (100% coverage)
+- **Smart Contracts**: 13/13 theorems proven
+- **Cryptography**: 13/13 theorems proven
+- **Consensus**: 9/9 theorems proven
+
+### Cryptographic Layers
+1. ✅ Zero-Knowledge Proofs (Groth16)
+2. ✅ Formal Verification (Lean 4)
+3. ✅ Multi-Party Computation (Shamir Secret Sharing)
+4. ✅ Verifiable Delay Functions (Wesolowski VDF)
+5. ✅ AI + Cryptographic Governance
+6. ✅ Quantum-Resistant Crypto (ML-KEM-1024, Dilithium-5)
+7. ✅ Trinity Protocol (2-of-3 consensus)
+
+---
+
+## 📚 Related Repositories
 
 - **[Main Platform](https://github.com/Chronos-Vault/chronos-vault-platform-)** - Platform application
 - **[Documentation](https://github.com/Chronos-Vault/chronos-vault-docs)** - Technical documentation
 - **[Security](https://github.com/Chronos-Vault/chronos-vault-security)** - Security audits and protocols
 - **[SDK](https://github.com/Chronos-Vault/chronos-vault-sdk)** - Official SDK
 
+---
+
 ## 🤝 Contributing
 
-We welcome contributions! Please read our contribution guidelines before submitting PRs.
+We welcome contributions! Please:
+1. Follow Solidity style guide for Ethereum contracts
+2. Use Anchor framework patterns for Solana
+3. Follow TON best practices for FunC contracts
+4. Write comprehensive tests
+5. Update documentation
 
 ## 📄 License
 
