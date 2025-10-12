@@ -1,3 +1,9 @@
+![Solidity](https://img.shields.io/badge/Solidity-0.8.20-blue)
+![Rust](https://img.shields.io/badge/Rust-Anchor-orange)
+![FunC](https://img.shields.io/badge/FunC-TON-lightblue)
+![Audited](https://img.shields.io/badge/status-formally_verified-brightgreen)
+![License](https://img.shields.io/badge/license-MIT-blue)
+
 <div align="center">
 
 ![Solidity](https://img.shields.io/badge/Solidity-363636?style=for-the-badge&logo=solidity&logoColor=white)
