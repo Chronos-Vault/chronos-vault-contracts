@@ -91,6 +91,30 @@ contracts/solana/
 - 🔄 SPL token bridge for CVT
 - 🔄 Cross-chain message verification
 
+#### CVT SPL Token (NEW ✨)
+
+```typescript
+contracts/solana/cvt_token/
+├── deploy-cvt-spl.ts          // CVT token deployment script
+├── burn-mechanism.ts           // 60% fee buyback & burn
+└── README.md                   // Complete documentation
+```
+
+**CVT Token Specifications**:
+- **Total Supply**: 21,000,000 CVT (fixed, immutable)
+- **Decimals**: 9 (SPL standard)
+- **Initial Circulation**: 6,300,000 CVT (30%)
+- **Time-Locked**: 14,700,000 CVT (70%) - Released over 21 years
+- **Burn Mechanism**: 60% of platform fees → Automated buyback & burn
+
+**Deployment**:
+```bash
+# Deploy CVT SPL Token
+ts-node contracts/solana/cvt_token/deploy-cvt-spl.ts
+
+# Output: cvt-deployment.json with mint address
+```
+
 ### TON Contracts (FunC)
 
 ```func
