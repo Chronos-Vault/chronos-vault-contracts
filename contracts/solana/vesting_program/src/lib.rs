@@ -1,13 +1,11 @@
 /**
  * CVT Vesting Program - Chronos Vault
- * Mathematically Provable Time-Lock Enforcement
- * 
- * Security: Time-locks are cryptographically enforced on-chain
- * Cannot be bypassed - even by program authority
+ * REAL Cryptographic Time-Lock Enforcement
  */
 
 use anchor_lang::prelude::*;
-use anchor_spl::token::{self, Token, TokenAccount, Transfer};
+use anchor_spl::token::{self, Token, TokenAccount, Transfer, Mint};
+use anchor_spl::associated_token::AssociatedToken;
 
 declare_id!("CVTvest11111111111111111111111111111111111");
 
@@ -15,279 +13,178 @@ declare_id!("CVTvest11111111111111111111111111111111111");
 pub mod cvt_vesting {
     use super::*;
 
-    /// Initialize vesting schedule with cryptographic time-lock
-    pub fn create_vesting_schedule(
-        ctx: Context<CreateVestingSchedule>,
+    /// Create vesting schedule with unique identifier
+    pub fn create_vesting(
+        ctx: Context<CreateVesting>,
+        schedule_id: u64,
         unlock_timestamp: i64,
-        total_amount: u64,
+        amount: u64,
     ) -> Result<()> {
-        let vesting_account = &mut ctx.accounts.vesting_account;
+        let vesting = &mut ctx.accounts.vesting;
         let clock = Clock::get()?;
 
-        // Validate: Unlock time must be in the future
-        require!(
-            unlock_timestamp > clock.unix_timestamp,
-            VestingError::InvalidUnlockTime
-        );
+        require!(unlock_timestamp > clock.unix_timestamp, VestingError::InvalidUnlockTime);
+        require!(amount > 0, VestingError::InvalidAmount);
 
-        // Validate: Amount must be > 0
-        require!(total_amount > 0, VestingError::InvalidAmount);
+        vesting.beneficiary = ctx.accounts.beneficiary.key();
+        vesting.mint = ctx.accounts.mint.key();
+        vesting.schedule_id = schedule_id;
+        vesting.unlock_timestamp = unlock_timestamp;
+        vesting.total_amount = amount;
+        vesting.withdrawn = 0;
+        vesting.bump = ctx.bumps.vesting;
 
-        // Initialize vesting schedule
-        vesting_account.beneficiary = ctx.accounts.beneficiary.key();
-        vesting_account.mint = ctx.accounts.mint.key();
-        vesting_account.unlock_timestamp = unlock_timestamp;
-        vesting_account.total_amount = total_amount;
-        vesting_account.withdrawn_amount = 0;
-        vesting_account.is_initialized = true;
-        vesting_account.authority = ctx.accounts.authority.key();
-        vesting_account.bump = ctx.bumps.vesting_account;
-
-        msg!("✅ Vesting schedule created");
-        msg!("   Beneficiary: {}", vesting_account.beneficiary);
-        msg!("   Amount: {} CVT", total_amount);
+        msg!("✅ Vesting schedule {} created", schedule_id);
+        msg!("   Amount: {}", amount);
         msg!("   Unlock: {}", unlock_timestamp);
 
         Ok(())
     }
 
-    /// Deposit tokens into vesting account
-    pub fn deposit_tokens(
-        ctx: Context<DepositTokens>,
+    /// Withdraw tokens ONLY after time-lock expires
+    pub fn withdraw(
+        ctx: Context<Withdraw>,
         amount: u64,
     ) -> Result<()> {
-        let vesting_account = &ctx.accounts.vesting_account;
-
-        // Validate: Amount doesn't exceed vesting amount
-        let total_deposited = ctx.accounts.vesting_token_account.amount;
-        require!(
-            total_deposited + amount <= vesting_account.total_amount,
-            VestingError::ExceedsVestingAmount
-        );
-
-        // Transfer tokens to vesting account
-        let cpi_accounts = Transfer {
-            from: ctx.accounts.depositor_token_account.to_account_info(),
-            to: ctx.accounts.vesting_token_account.to_account_info(),
-            authority: ctx.accounts.depositor.to_account_info(),
-        };
-        let cpi_program = ctx.accounts.token_program.to_account_info();
-        let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
-        
-        token::transfer(cpi_ctx, amount)?;
-
-        msg!("✅ Deposited {} CVT to vesting", amount);
-
-        Ok(())
-    }
-
-    /// Withdraw tokens - ONLY after time-lock expires
-    pub fn withdraw_tokens(
-        ctx: Context<WithdrawTokens>,
-        amount: u64,
-    ) -> Result<()> {
-        let vesting_account = &mut ctx.accounts.vesting_account;
+        let vesting = &mut ctx.accounts.vesting;
         let clock = Clock::get()?;
 
         // CRITICAL: Enforce time-lock
         require!(
-            clock.unix_timestamp >= vesting_account.unlock_timestamp,
+            clock.unix_timestamp >= vesting.unlock_timestamp,
             VestingError::StillLocked
         );
 
-        // Validate: Beneficiary only
         require!(
-            ctx.accounts.beneficiary.key() == vesting_account.beneficiary,
+            ctx.accounts.beneficiary.key() == vesting.beneficiary,
             VestingError::Unauthorized
         );
 
-        // Validate: Amount available
-        let available = vesting_account.total_amount - vesting_account.withdrawn_amount;
+        let available = vesting.total_amount.checked_sub(vesting.withdrawn)
+            .ok_or(VestingError::Overflow)?;
         require!(amount <= available, VestingError::InsufficientBalance);
 
-        // Transfer tokens using PDA signer
+        // Transfer using PDA signer
         let seeds = &[
             b"vesting",
-            vesting_account.beneficiary.as_ref(),
-            vesting_account.mint.as_ref(),
-            &[vesting_account.bump],
+            vesting.beneficiary.as_ref(),
+            vesting.mint.as_ref(),
+            &vesting.schedule_id.to_le_bytes(),
+            &[vesting.bump],
         ];
         let signer = &[&seeds[..]];
 
-        let cpi_accounts = Transfer {
-            from: ctx.accounts.vesting_token_account.to_account_info(),
-            to: ctx.accounts.beneficiary_token_account.to_account_info(),
-            authority: ctx.accounts.vesting_account.to_account_info(),
-        };
-        let cpi_program = ctx.accounts.token_program.to_account_info();
-        let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer);
-        
-        token::transfer(cpi_ctx, amount)?;
+        token::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.vesting_ata.to_account_info(),
+                    to: ctx.accounts.beneficiary_ata.to_account_info(),
+                    authority: vesting.to_account_info(),
+                },
+                signer
+            ),
+            amount
+        )?;
 
-        // Update withdrawn amount
-        vesting_account.withdrawn_amount += amount;
+        vesting.withdrawn = vesting.withdrawn.checked_add(amount)
+            .ok_or(VestingError::Overflow)?;
 
-        msg!("✅ Withdrawn {} CVT from vesting", amount);
-        msg!("   Remaining: {} CVT", available - amount);
-
-        Ok(())
-    }
-
-    /// Emergency recovery (3-of-5 multisig required)
-    pub fn emergency_withdraw(
-        ctx: Context<EmergencyWithdraw>,
-        amount: u64,
-    ) -> Result<()> {
-        // Emergency withdrawal requires authority signature
-        // In production: Use Squads multisig (3-of-5)
-        
-        let vesting_account = &mut ctx.accounts.vesting_account;
-        
-        require!(
-            ctx.accounts.authority.key() == vesting_account.authority,
-            VestingError::Unauthorized
-        );
-
-        let seeds = &[
-            b"vesting",
-            vesting_account.beneficiary.as_ref(),
-            vesting_account.mint.as_ref(),
-            &[vesting_account.bump],
-        ];
-        let signer = &[&seeds[..]];
-
-        let cpi_accounts = Transfer {
-            from: ctx.accounts.vesting_token_account.to_account_info(),
-            to: ctx.accounts.emergency_account.to_account_info(),
-            authority: ctx.accounts.vesting_account.to_account_info(),
-        };
-        let cpi_program = ctx.accounts.token_program.to_account_info();
-        let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer);
-        
-        token::transfer(cpi_ctx, amount)?;
-
-        msg!("⚠️ Emergency withdrawal: {} CVT", amount);
+        msg!("✅ Withdrawn {} tokens", amount);
 
         Ok(())
     }
 }
 
-// Account Contexts
-
 #[derive(Accounts)]
-pub struct CreateVestingSchedule<'info> {
+#[instruction(schedule_id: u64)]
+pub struct CreateVesting<'info> {
     #[account(
         init,
-        payer = authority,
-        space = 8 + VestingAccount::INIT_SPACE,
-        seeds = [b"vesting", beneficiary.key().as_ref(), mint.key().as_ref()],
+        payer = payer,
+        space = 8 + Vesting::INIT_SPACE,
+        seeds = [
+            b"vesting",
+            beneficiary.key().as_ref(),
+            mint.key().as_ref(),
+            &schedule_id.to_le_bytes()
+        ],
         bump
     )]
-    pub vesting_account: Account<'info, VestingAccount>,
+    pub vesting: Account<'info, Vesting>,
+    
+    pub mint: Account<'info, Mint>,
     
     /// CHECK: Beneficiary address
-    pub beneficiary: AccountInfo<'info>,
-    
-    /// CHECK: Token mint
-    pub mint: AccountInfo<'info>,
+    pub beneficiary: UncheckedAccount<'info>,
     
     #[account(mut)]
-    pub authority: Signer<'info>,
+    pub payer: Signer<'info>,
     
     pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
-pub struct DepositTokens<'info> {
-    #[account(mut)]
-    pub vesting_account: Account<'info, VestingAccount>,
+pub struct Withdraw<'info> {
+    #[account(
+        mut,
+        seeds = [
+            b"vesting",
+            vesting.beneficiary.as_ref(),
+            vesting.mint.as_ref(),
+            &vesting.schedule_id.to_le_bytes()
+        ],
+        bump = vesting.bump,
+        has_one = beneficiary,
+        has_one = mint
+    )]
+    pub vesting: Account<'info, Vesting>,
+    
+    pub mint: Account<'info, Mint>,
     
     #[account(
         mut,
-        associated_token::mint = vesting_account.mint,
-        associated_token::authority = vesting_account
+        associated_token::mint = mint,
+        associated_token::authority = vesting
     )]
-    pub vesting_token_account: Account<'info, TokenAccount>,
-    
-    #[account(mut)]
-    pub depositor_token_account: Account<'info, TokenAccount>,
-    
-    pub depositor: Signer<'info>,
-    pub token_program: Program<'info, Token>,
-}
-
-#[derive(Accounts)]
-pub struct WithdrawTokens<'info> {
-    #[account(
-        mut,
-        seeds = [b"vesting", beneficiary.key().as_ref(), vesting_account.mint.as_ref()],
-        bump = vesting_account.bump
-    )]
-    pub vesting_account: Account<'info, VestingAccount>,
+    pub vesting_ata: Account<'info, TokenAccount>,
     
     #[account(
         mut,
-        associated_token::mint = vesting_account.mint,
-        associated_token::authority = vesting_account
+        associated_token::mint = mint,
+        associated_token::authority = beneficiary
     )]
-    pub vesting_token_account: Account<'info, TokenAccount>,
-    
-    #[account(mut)]
-    pub beneficiary_token_account: Account<'info, TokenAccount>,
+    pub beneficiary_ata: Account<'info, TokenAccount>,
     
     pub beneficiary: Signer<'info>,
     pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
 }
-
-#[derive(Accounts)]
-pub struct EmergencyWithdraw<'info> {
-    #[account(mut)]
-    pub vesting_account: Account<'info, VestingAccount>,
-    
-    #[account(mut)]
-    pub vesting_token_account: Account<'info, TokenAccount>,
-    
-    #[account(mut)]
-    pub emergency_account: Account<'info, TokenAccount>,
-    
-    pub authority: Signer<'info>,
-    pub token_program: Program<'info, Token>,
-}
-
-// State
 
 #[account]
 #[derive(InitSpace)]
-pub struct VestingAccount {
+pub struct Vesting {
     pub beneficiary: Pubkey,
     pub mint: Pubkey,
+    pub schedule_id: u64,
     pub unlock_timestamp: i64,
     pub total_amount: u64,
-    pub withdrawn_amount: u64,
-    pub is_initialized: bool,
-    pub authority: Pubkey,
+    pub withdrawn: u64,
     pub bump: u8,
 }
 
-// Errors
-
 #[error_code]
 pub enum VestingError {
-    #[msg("Unlock time must be in the future")]
+    #[msg("Unlock time must be in future")]
     InvalidUnlockTime,
-    
-    #[msg("Amount must be greater than 0")]
+    #[msg("Amount must be > 0")]
     InvalidAmount,
-    
-    #[msg("Tokens are still locked - time-lock not expired")]
+    #[msg("Tokens still locked")]
     StillLocked,
-    
-    #[msg("Unauthorized - only beneficiary can withdraw")]
+    #[msg("Unauthorized")]
     Unauthorized,
-    
-    #[msg("Insufficient balance in vesting account")]
+    #[msg("Insufficient balance")]
     InsufficientBalance,
-    
-    #[msg("Amount exceeds total vesting amount")]
-    ExceedsVestingAmount,
+    #[msg("Overflow")]
+    Overflow,
 }
