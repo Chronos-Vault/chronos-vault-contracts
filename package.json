@@ -1,5 +1,5 @@
 {
-  "name": "rest-express",
+  "name": "chronos-vault-contracts",
   "version": "1.0.0",
   "type": "module",
   "license": "MIT",
@@ -176,5 +176,24 @@
   },
   "optionalDependencies": {
     "bufferutil": "^4.0.8"
-  }
+  },
+  "description": "Chronos Vault - Mathematically proven multi-chain vault platform with formal verification",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Chronos-Vault/chronos-vault-contracts.git"
+  },
+  "author": "Chronos Vault Team",
+  "keywords": [
+    "blockchain",
+    "vault",
+    "security",
+    "formal-verification",
+    "multi-chain",
+    "cryptography",
+    "defi",
+    "web3",
+    "ethereum",
+    "solana",
+    "ton"
+  ]
 }
