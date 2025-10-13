@@ -284,3 +284,68 @@ This implementation provides **cryptographic time-lock enforcement** using Solan
 
 **Built by Chronos Vault Team**  
 **Secured by Mathematics, Not Trust**
+
+
+---
+
+## 🎉 DEPLOYED ON SOLANA DEVNET
+
+**Deployment Date:** October 13, 2025
+
+### Live Token Details
+
+```
+Token Address:  2yoF4qEN9unigg9Q79dMqnjXqfiQMk3votm68k1TuVjd
+Metadata PDA:   CHr4fbo1gGbumCzp4gTVs49rc2oeyoxSeLHCGcRBHGwS
+Name:           Chronos Vault Token
+Symbol:         CVT
+Total Supply:   21,000,000 (FIXED)
+Decimals:       9
+Network:        Solana Devnet
+```
+
+**🔍 View on Explorer:** [Solana Explorer](https://explorer.solana.com/address/2yoF4qEN9unigg9Q79dMqnjXqfiQMk3votm68k1TuVjd?cluster=devnet)
+
+### Associated Programs
+
+| Program | Address | Purpose |
+|---------|---------|---------|
+| **Bridge** | `6wo8Gso3uB8M6t9UGiritdGmc4UTPEtM5NhC6vbb9CdK` | Cross-chain transfers |
+| **Vesting** | `3dxjcEGP8MurCtodLCJi1V6JBizdRRAYg91nZkhmX1sB` | Time-locked vesting |
+
+### Usage Example
+
+```typescript
+import { PublicKey } from '@solana/web3.js';
+
+// CVT Token (Deployed)
+const CVT_MINT = new PublicKey('2yoF4qEN9unigg9Q79dMqnjXqfiQMk3votm68k1TuVjd');
+
+// Get user's CVT balance
+const userCVT = await connection.getTokenAccountBalance(userTokenAccount);
+console.log(`Balance: ${userCVT.value.uiAmount} CVT`);
+
+// Bridge CVT to Arbitrum
+await bridgeOut({
+  targetChain: 1, // Ethereum/Arbitrum
+  targetAddress: '0xYourArbitrumAddress',
+  amount: 100 * 1e9, // 100 CVT
+});
+```
+
+### Deployment Scripts
+
+Scripts used for this deployment are available in `/scripts`:
+
+1. **`deploy-cvt-with-metadata.ts`** - Token deployment with Metaplex metadata
+2. **`initialize-trinity-protocol.ts`** - Complete Trinity Protocol setup
+
+### Trinity Protocol Status
+
+| Chain | Token Address | Status |
+|-------|---------------|--------|
+| **Arbitrum** | `0xFb419D8E32c14F774279a4dEEf330dc893257147` | ✅ Live |
+| **Solana** | `2yoF4qEN9unigg9Q79dMqnjXqfiQMk3votm68k1TuVjd` | ✅ Live |
+| **TON** | `EQDJAnXDPT-NivritpEhQeP0XmG20NdeUtxgh4nUiWH-DF7M` | ✅ Live |
+
+**Security:** 2-of-3 consensus with mathematical proofs across all chains
