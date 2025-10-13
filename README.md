@@ -1,3 +1,4 @@
+[![Formally Verified](https://img.shields.io/badge/Formally_Verified-35%2F35_Theorems-green.svg)](./docs/formal-verification/)
 # Chronos Vault Smart Contracts
 
 ![version](https://img.shields.io/badge/version-1.0.0-blue)
