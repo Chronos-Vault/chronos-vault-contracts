@@ -15,47 +15,28 @@
 - **ChronosVault**: `EQDJAnXDPT-NivritpEhQeP0XmG20NdeUtxgh4nUiWH-DF7M`
 - **CVT Jetton Bridge**: `EQAOJxa1WDjGZ7f3n53JILojhZoDdTOKWl6h41_yOWX3v0tq`
 
-## Solana - Code Ready (Deployment Pending) ⚠️
+## Solana Devnet - LIVE ✅
 
-### What's Complete
-- ✅ **Vesting Program** - Anchor smart contract with cryptographic time-locks
-- ✅ **CVT Bridge Program** - Cross-chain token transfers
-- ✅ **Deployment Scripts** - Full automation for vesting setup
-- ✅ **Burn Mechanism** - Jupiter DEX integration (60% fees → burn)
+### Deployed Contracts
+- ✅ **CVT Token**: `5g3TkqFxyVe1ismrC5r2QD345CA1YdfWn6s6p4AYNmy4`
+- ✅ **CVT Bridge Program**: `6wo8Gso3uB8M6t9UGiritdGmc4UTPEtM5NhC6vbb9CdK`
+- ✅ **CVT Vesting Program**: `3dxjcEGP8MurCtodLCJi1V6JBizdRRAYg91nZkhmX1sB`
+- **Explorer**: https://explorer.solana.com/?cluster=devnet
 
-### Why Not Deployed Yet
-This Repl environment doesn't have:
-- Solana CLI
-- Anchor framework
-- Rust/Cargo compiler
+### Features
+- 21,000,000 CVT total supply (fixed)
+- 70% vesting with cryptographic time-locks
+- Cross-chain bridge (Solana ↔ Arbitrum ↔ TON)
+- 60% fees → automated burn mechanism
 
-### How to Deploy
-Use external environment with Solana tools:
-
-```bash
-# Install Solana
-sh -c "$(curl -sSfL https://release.solana.com/stable/install)"
-
-# Install Anchor
-cargo install --git https://github.com/coral-xyz/anchor anchor-cli --locked
-
-# Deploy
-cd contracts/solana/vesting_program
-anchor build
-anchor deploy
-
-# Run token deployment
-ts-node contracts/solana/cvt_token/deploy-real-vesting.ts
-```
-
-Full guide: `contracts/solana/DEPLOYMENT_GUIDE.md`
+Full deployment details: `contracts/solana/DEPLOYMENT_STATUS.md`
 
 ## Platform Features
 
 ### Working Features ✅
 - 22 vault types (all operational via ChronosVault contract)
-- Multi-chain support (Arbitrum + TON live)
-- Trinity Protocol (2-of-3 consensus)
+- Multi-chain support (Arbitrum + Solana + TON - All LIVE on testnet)
+- Trinity Protocol (2-of-3 consensus - TESTNET COMPLETE)
 - CVT token payments with 50% discount
 - Quantum-resistant encryption
 - Zero-knowledge privacy layer
@@ -63,9 +44,10 @@ Full guide: `contracts/solana/DEPLOYMENT_GUIDE.md`
 - Formal verification (35/35 theorems proven)
 
 ### Network Status
-- **Arbitrum**: ✅ Fully operational
-- **TON**: ✅ Fully operational  
-- **Solana**: ⚠️ Code ready, awaiting deployment
+- **Arbitrum**: ✅ Fully operational (Sepolia Testnet)
+- **Solana**: ✅ Fully operational (Devnet)
+- **TON**: ✅ Fully operational (Testnet)
+- **Trinity Protocol**: ✅ TESTNET COMPLETE - All 3 chains operational
 - **Bitcoin**: 🔄 Integration layer active
 
 ## Security Status
@@ -86,10 +68,11 @@ Full guide: `contracts/solana/DEPLOYMENT_GUIDE.md`
 
 - **Website**: https://chronosvault.org
 - **Email**: chronosvault@chronosvault.org
+- **Security**: security@chronosvault.org
 
-## Next Steps
+## Next Steps (Mainnet Preparation)
 
-1. Deploy Solana contracts using external Anchor environment
-2. External security audit
-3. Mainnet deployments
-4. CVT liquidity provision
+1. External security audit (recommended before mainnet)
+2. Deploy to mainnet (all 3 chains: Arbitrum, Solana, TON)
+3. CVT liquidity provision (Jupiter, Raydium, Orca)
+4. Community launch and marketing
