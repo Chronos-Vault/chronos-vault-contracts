@@ -267,9 +267,9 @@ Before mainnet deployment:
 
 ## 📞 Support
 
-- **Security**: security@chronosvault.io
-- **Development**: dev@chronosvault.io
-- **Documentation**: https://docs.chronosvault.io
+- **Security**: [security@chronosvault.io](https://chronosvault.org/military-grade-security)
+- **Email**: chronosvault@chronosvault.org
+- **Documentation**: [https://docs.chronosvault.io](https://chronosvault.org/api-documentation)
 
 ---
 
