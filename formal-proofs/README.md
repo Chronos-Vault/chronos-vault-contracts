@@ -75,9 +75,14 @@ All proofs verified successfully!
 
 ## 📚 Documentation
 
+### For Developers (Start Here)
+- [**Verify Yourself Guide**](./VERIFY_YOURSELF.md) - Step-by-step instructions to verify our proofs (5 minutes)
+- [**Formal Verification Explained**](../docs/formal-verification/FORMAL_VERIFICATION_EXPLAINED.md) - What formal verification is and why it matters
+
+### Technical References
 - [**Theorems Proven**](../docs/formal-verification/theorems-proven.md) - Complete list of all 35 theorems
 - [**Verification Report**](../docs/formal-verification/verification-report.md) - Detailed mathematical guarantees
-- [**Developer Guide**](../docs/formal-verification/verify-yourself.md) - Step-by-step verification instructions
+- [**Mathematical Security Guarantees**](../docs/MATHEMATICAL_SECURITY_GUARANTEES.md) - Core philosophy and proofs
 
 ## 🔍 What Makes This Special
 
@@ -176,6 +181,11 @@ Found an error in our proofs? We'd love to know!
 3. We'll investigate and update if needed
 
 Note: Lean's type checker will catch most errors automatically, but feedback on theorem statements and assumptions is valuable.
+
+### Bug Bounty Program
+- Valid proof errors: Up to $10,000
+- Critical security implications: Up to $50,000
+- Contact: security@chronosvault.org
 
 ## 📖 Learn More
 
