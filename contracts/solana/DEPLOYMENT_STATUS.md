@@ -9,14 +9,14 @@ All Chronos Vault Solana contracts are now **LIVE on Solana Devnet** with full f
 ## 📋 DEPLOYED CONTRACTS
 
 ### 1. CVT Token (SPL Token with Metadata)
-- **Address:** `2yoF4qEN9unigg9Q79dMqnjXqfiQMk3votm68k1TuVjd`
+- **Address:** `5g3TkqFxyVe1ismrC5r2QD345CA1YdfWn6s6p4AYNmy4`
 - **Name:** Chronos Vault
 - **Symbol:** CVT
 - **Total Supply:** 21,000,000 CVT (Fixed)
 - **Decimals:** 9
-- **Metadata PDA:** `CHr4fbo1gGbumCzp4gTVs49rc2oeyoxSeLHCGcRBHGwS`
+- **Metadata PDA:** `D5qLqXpJnWDrfpZoePauQv8g22DbM8CbeVZcjeBhdDgF`
 
-**Explorer:** https://explorer.solana.com/address/2yoF4qEN9unigg9Q79dMqnjXqfiQMk3votm68k1TuVjd?cluster=devnet
+**Explorer:** https://explorer.solana.com/address/5g3TkqFxyVe1ismrC5r2QD345CA1YdfWn6s6p4AYNmy4?cluster=devnet
 
 ### 2. CVT Bridge Program
 - **Program ID:** `6wo8Gso3uB8M6t9UGiritdGmc4UTPEtM5NhC6vbb9CdK`
@@ -52,13 +52,13 @@ All Chronos Vault Solana contracts are now **LIVE on Solana Devnet** with full f
 ## 🪙 CVT Tokenomics (21M Total Supply)
 
 ```
-Total Supply: 21,000,000 CVT
+Total Supply: 21,000,000 CVT (Bitcoin-like scarcity)
 
 ├── 70% Vesting Lock:    14,700,000 CVT
-│   ├── Sovereign Fortress Vaults (21-year lock)
-│   ├── Dynasty Trust Vaults (multi-generational)
-│   ├── Team Allocation (4-year linear vesting)
-│   └── Strategic Reserve (custom time-locks)
+│   ├── Sovereign Fortress Vaults: 21-year lock
+│   ├── Dynasty Trust Vaults: Multi-generational
+│   ├── Team Allocation: 4-year linear vesting
+│   └── Strategic Reserve: Custom time-locks
 │
 ├── 20% DEX Liquidity:    4,200,000 CVT
 │   └── Jupiter, Raydium, Orca pools
@@ -74,7 +74,7 @@ Total Supply: 21,000,000 CVT
 | Chain | Status | Token Address | Programs |
 |-------|--------|---------------|----------|
 | **Arbitrum L2** | ✅ Deployed | `0xFb419D8E32c14F774279a4dEEf330dc893257147` | ChronosVault.sol, CVTBridge.sol |
-| **Solana** | ✅ Deployed | `2yoF4qEN9unigg9Q79dMqnjXqfiQMk3votm68k1TuVjd` | CVT Token, Bridge, Vesting |
+| **Solana** | ✅ Deployed | `5g3TkqFxyVe1ismrC5r2QD345CA1YdfWn6s6p4AYNmy4` | CVT Token, Bridge, Vesting |
 | **TON** | ✅ Deployed | `EQDJAnXDPT-NivritpEhQeP0XmG20NdeUtxgh4nUiWH-DF7M` | CVT Jetton, Bridge |
 
 **Multi-Chain Architecture:**
@@ -96,7 +96,7 @@ npx tsx scripts/deploy-cvt-with-metadata.ts
 
 **Features:**
 - Creates SPL token with Metaplex metadata
-- Sets name: "Chronos Vault", symbol: "CVT"
+- Sets name: "Chronos Vault Token", symbol: "CVT"
 - Mints 21,000,000 CVT total supply
 - Automatic devnet SOL airdrop
 
@@ -138,10 +138,10 @@ npx tsx scripts/initialize-trinity-protocol.ts
 Add these to your `.env` file:
 
 ```bash
-# Solana CVT Token (21M Supply)
-VITE_SOLANA_CVT_TOKEN=2yoF4qEN9unigg9Q79dMqnjXqfiQMk3votm68k1TuVjd
-SOLANA_CVT_TOKEN=2yoF4qEN9unigg9Q79dMqnjXqfiQMk3votm68k1TuVjd
-SOLANA_CVT_METADATA=CHr4fbo1gGbumCzp4gTVs49rc2oeyoxSeLHCGcRBHGwS
+# Solana CVT Token (21M Supply with Metadata) - Updated October 13, 2025
+VITE_SOLANA_CVT_TOKEN=5g3TkqFxyVe1ismrC5r2QD345CA1YdfWn6s6p4AYNmy4
+SOLANA_CVT_TOKEN=5g3TkqFxyVe1ismrC5r2QD345CA1YdfWn6s6p4AYNmy4
+SOLANA_CVT_METADATA=D5qLqXpJnWDrfpZoePauQv8g22DbM8CbeVZcjeBhdDgF
 SOLANA_BRIDGE_PROGRAM=6wo8Gso3uB8M6t9UGiritdGmc4UTPEtM5NhC6vbb9CdK
 SOLANA_VESTING_PROGRAM=3dxjcEGP8MurCtodLCJi1V6JBizdRRAYg91nZkhmX1sB
 ```
@@ -157,7 +157,7 @@ import { PublicKey } from '@solana/web3.js';
 import { bridgeOut } from './bridge';
 
 const BRIDGE_PROGRAM = new PublicKey('6wo8Gso3uB8M6t9UGiritdGmc4UTPEtM5NhC6vbb9CdK');
-const CVT_MINT = new PublicKey('2yoF4qEN9unigg9Q79dMqnjXqfiQMk3votm68k1TuVjd');
+const CVT_MINT = new PublicKey('5g3TkqFxyVe1ismrC5r2QD345CA1YdfWn6s6p4AYNmy4');
 
 // Bridge 100 CVT to Arbitrum
 await bridgeOut({
@@ -187,7 +187,7 @@ console.log(`Can withdraw: ${schedule.unlockTime < Date.now() / 1000}`);
 ### 1. Verify CVT Token
 ```bash
 # Check token on explorer
-open "https://explorer.solana.com/address/2yoF4qEN9unigg9Q79dMqnjXqfiQMk3votm68k1TuVjd?cluster=devnet"
+open "https://explorer.solana.com/address/5g3TkqFxyVe1ismrC5r2QD345CA1YdfWn6s6p4AYNmy4?cluster=devnet"
 
 # Verify:
 # ✅ Name: "Chronos Vault"
@@ -205,6 +205,47 @@ solana program show 6wo8Gso3uB8M6t9UGiritdGmc4UTPEtM5NhC6vbb9CdK --url devnet
 ```bash
 solana program show 3dxjcEGP8MurCtodLCJi1V6JBizdRRAYg91nZkhmX1sB --url devnet
 ```
+
+---
+
+## 📚 Next Steps
+
+### 1. Token Distribution
+- [ ] Transfer 14.7M CVT to vesting vaults (70%)
+- [ ] Allocate 4.2M CVT to DEX liquidity pools (20%)
+- [ ] Reserve 2.1M CVT for development (10%)
+
+### 2. DEX Integration
+- [ ] Deploy to Jupiter aggregator
+- [ ] Add liquidity to Raydium pools
+- [ ] Configure Orca whirlpools
+
+### 3. Cross-Chain Setup
+- [ ] Configure Trinity Protocol validators
+- [ ] Enable 2-of-3 consensus mechanism
+- [ ] Test cross-chain bridge flows
+
+### 4. Mainnet Preparation
+- [ ] External security audit
+- [ ] Stress test all programs
+- [ ] Deploy to Solana Mainnet
+
+---
+
+## 🎯 Deployment Checklist
+
+- [x] CVT Token deployed with metadata (21M supply)
+- [x] CVT Bridge Program deployed on Solana
+- [x] CVT Vesting Program deployed on Solana
+- [x] Token metadata verified (name + symbol visible)
+- [x] Tokenomics configured (70/20/10 split)
+- [x] Deployment scripts created
+- [x] Environment variables documented
+- [x] Explorer links verified
+- [ ] Transfer tokens to vesting vaults
+- [ ] Configure cross-chain validators
+- [ ] Enable Trinity Protocol consensus
+- [ ] Deploy to DEX pools
 
 ---
 
