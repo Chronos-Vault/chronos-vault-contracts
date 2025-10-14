@@ -83,6 +83,9 @@ contract ChronosVault is ERC4626, Ownable, ReentrancyGuard {
     }
     CrossChainVerification public crossChainVerification;
     
+    // Emergency recovery nonce tracking (prevents replay attacks)
+    mapping(uint256 => bool) public usedRecoveryNonces;
+    
     // Withdrawal requests for multi-sig vaults
     struct WithdrawalRequest {
         address requester;
@@ -883,15 +886,18 @@ contract ChronosVault is ERC4626, Ownable, ReentrancyGuard {
     /**
      * @dev Activate emergency recovery mode (requires verification)
      * @param _tonRecoveryProof Proof of recovery authorization from TON chain
+     * @param _nonce Unique nonce for replay protection (prevents signature reuse)
      */
-    function activateEmergencyMode(bytes memory _tonRecoveryProof) external {
+    function activateEmergencyMode(bytes memory _tonRecoveryProof, uint256 _nonce) external {
         require(crossChainVerification.emergencyRecoveryAddress != address(0), "Recovery not set up");
         require(!crossChainVerification.emergencyModeActive, "Emergency mode already active");
+        require(!usedRecoveryNonces[_nonce], "Nonce already used");
         
         // Verify the proof is coming from TON recovery mechanism
+        // FIXED: Use nonce instead of block.timestamp to prevent signature verification failures
         bytes32 messageHash = keccak256(abi.encodePacked(
             "\x19Ethereum Signed Message:\n32",
-            keccak256(abi.encodePacked("EMERGENCY_RECOVERY", address(this), block.timestamp))
+            keccak256(abi.encodePacked("EMERGENCY_RECOVERY", address(this), _nonce))
         ));
         address recoveredAddress = messageHash.recover(_tonRecoveryProof);
         
@@ -900,6 +906,8 @@ contract ChronosVault is ERC4626, Ownable, ReentrancyGuard {
             "Invalid recovery proof"
         );
         
+        // Mark nonce as used to prevent replay attacks
+        usedRecoveryNonces[_nonce] = true;
         crossChainVerification.emergencyModeActive = true;
         
         emit EmergencyModeActivated(crossChainVerification.emergencyRecoveryAddress);
