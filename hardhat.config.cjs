@@ -31,11 +31,11 @@ module.exports = {
       chainId: 11155111
     },
     arbitrumSepolia: {
-      url: process.env.ARBITRUM_RPC_URL || "https://arbitrum-sepolia-rpc.publicnode.com",
+      url: process.env.ARBITRUM_RPC_URL || "https://arbitrum-sepolia.public.blastapi.io",
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
       chainId: 421614,
       gasPrice: 100000000,
-      timeout: 60000
+      timeout: 120000
     },
     baseSepolia: {
       url: process.env.BASE_RPC_URL || "https://sepolia.base.org",
