@@ -3,7 +3,9 @@ pragma solidity ^0.8.20;
 
 /**
  * @title EmergencyMultiSig - TRUSTLESS Emergency Pause System
- * @dev Multi-signature system for emergency circuit breaker control
+ * @author Chronos Vault Team
+ * @notice Multi-signature system for emergency circuit breaker control with 48h timelock
+ * @dev Implements 2-of-3 consensus with mathematical guarantees - NO single point of failure
  * 
  * MATHEMATICAL SECURITY:
  * - 2-of-3 multi-sig required for emergency actions
