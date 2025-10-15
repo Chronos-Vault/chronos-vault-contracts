@@ -14,7 +14,8 @@ Chronos Vault has established a **formal verification framework** using Lean 4 t
 
 **✅ Architecture Complete:** Formal verification infrastructure established  
 **✅ Theorems Defined:** 78 security properties mathematically modeled  
-**🔨 Proofs In Progress:** 71 proof obligations remaining (replacing `sorry` placeholders)
+**🔨 Proofs In Progress:** 70 proof obligations remaining (replacing `sorry` placeholders)  
+**✅ Proofs Complete:** 8 theorems fully proven
 
 ### Honest Assessment
 
@@ -25,7 +26,7 @@ Chronos Vault has established a **formal verification framework** using Lean 4 t
 - ✅ CI/CD pipeline ready for automated verification
 
 **What We're Completing:**
-- 🔨 71 `sorry` placeholders to be replaced with complete proofs
+- 🔨 70 `sorry` placeholders to be replaced with complete proofs
 - 🔨 Proof compilation and verification via `lake build`
 - 🔨 External audit by Lean 4 experts
 

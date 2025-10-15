@@ -4,7 +4,7 @@
 
 Chronos Vault has established a **formal verification framework** using Lean 4 theorem prover to mathematically prove security properties of the Trinity Protocol. The architecture is complete, theorem statements are defined, and proof completion is in progress.
 
-**Current Status:** 78 theorem statements formally defined | 71 proof obligations remaining
+**Current Status:** 78 theorem statements formally defined | 70 proof obligations remaining | 8 proofs complete
 
 **Philosophy:** "Trust Math, Not Humans" - Every security claim will be cryptographically verifiable through mathematical proof, not just human audit.
 
