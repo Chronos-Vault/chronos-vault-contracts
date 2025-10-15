@@ -10,6 +10,7 @@ import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 
 /**
  * @title CVTBridgeV3 - WITH EMERGENCY MULTISIG INTEGRATION
+ * @author Chronos Vault Team
  * @dev Enhanced with EmergencyMultiSig control for manual override
  * 
  * NEW IN V3:
