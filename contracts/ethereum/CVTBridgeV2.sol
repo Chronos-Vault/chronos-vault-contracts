@@ -10,15 +10,24 @@ import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 
 /**
  * @title CVTBridgeV2 - Enhanced with Mathematical Circuit Breaker
- * @dev CVT token bridge with automatic anomaly detection
+ * @author Chronos Vault Team
+ * @notice CVT token bridge with automatic anomaly detection and circuit breaker protection
+ * @dev Implements Trinity Protocol with automatic mathematical security enforcement
  * 
- * ENHANCED SECURITY:
- * - Validator-based consensus (existing)
- * - ADDED: Mathematical circuit breaker (automatic triggers)
- * - ADDED: Volume spike detection
- * - ADDED: Failed signature rate monitoring
- * - ADDED: Auto-pause on anomalies
- * - ADDED: Time-based auto-recovery OR validator consensus resume
+ * ENHANCED SECURITY FEATURES:
+ * - Validator-based consensus (multi-signature verification)
+ * - Mathematical circuit breaker (automatic triggers on anomalies)
+ * - Volume spike detection (>500% increase)
+ * - Failed signature rate monitoring (>20% failure rate)
+ * - Auto-pause on detected anomalies
+ * - Time-based auto-recovery OR validator consensus resume
+ * 
+ * SUPPORTED CHAINS:
+ * - CHAIN_ETHEREUM (1) - Ethereum mainnet and L2s (Arbitrum)
+ * - CHAIN_SOLANA (2) - Solana mainnet/devnet
+ * - CHAIN_TON (0) - TON blockchain
+ * 
+ * Trinity Protocol: 2-of-3 consensus across all supported chains
  */
 contract CVTBridgeV2 is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
