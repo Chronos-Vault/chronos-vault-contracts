@@ -10,8 +10,20 @@ import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 /**
  * @title CVTBridge
- * @dev Bridge contract for the ChronosToken (CVT) on Ethereum
- * Handles bridging between TON, Ethereum, and Solana
+ * @author Chronos Vault Team
+ * @notice CVT token bridge implementing Trinity Protocol cross-chain consensus
+ * @dev Handles secure bridging between Ethereum/Arbitrum L2, Solana, and TON with validator signatures
+ * 
+ * SECURITY FEATURES:
+ * - Multi-signature validator consensus
+ * - ChainId binding for replay protection
+ * - Trinity Protocol 2-of-3 verification
+ * - Cryptographic proof validation
+ * 
+ * SUPPORTED CHAINS:
+ * - CHAIN_ETHEREUM (1) - Ethereum mainnet and L2s (Arbitrum)
+ * - CHAIN_SOLANA (2) - Solana mainnet/devnet
+ * - CHAIN_TON (0) - TON blockchain
  */
 contract CVTBridge is Ownable, ReentrancyGuard, Pausable {
     using SafeERC20 for IERC20;
