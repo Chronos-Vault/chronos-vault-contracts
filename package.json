@@ -1,5 +1,5 @@
 {
-  "name": "chronos-vault-contracts",
+  "name": "rest-express",
   "version": "1.0.0",
   "type": "module",
   "license": "MIT",
@@ -13,8 +13,10 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.37.0",
     "@bundlr-network/client": "^0.11.17",
+    "@dedust/sdk": "^0.8.7",
     "@hookform/resolvers": "^3.10.0",
     "@jridgewell/trace-mapping": "^0.3.25",
+    "@metaplex-foundation/mpl-token-metadata": "^2.13.0",
     "@neondatabase/serverless": "^0.10.4",
     "@nomicfoundation/hardhat-chai-matchers": "^2.0.8",
     "@nomicfoundation/hardhat-ethers": "^3.0.8",
@@ -51,9 +53,8 @@
     "@react-three/drei": "^9.84.0",
     "@react-three/fiber": "^8.13.6",
     "@react-three/postprocessing": "^2.15.1",
+    "@solana/spl-token": "^0.4.14",
     "@solana/web3.js": "^1.98.2",
-    "@stripe/react-stripe-js": "^3.7.0",
-    "@stripe/stripe-js": "^7.3.0",
     "@tailwindcss/vite": "^4.1.3",
     "@tanstack/react-query": "^5.60.5",
     "@ton-community/sandbox": "^0.11.0",
@@ -101,6 +102,7 @@
     "cors": "^2.8.5",
     "crypto-browserify": "^3.12.1",
     "date-fns": "^3.6.0",
+    "dilithium-crystals-js": "^1.1.3",
     "drizzle-orm": "^0.39.1",
     "drizzle-zod": "^0.7.0",
     "embla-carousel-react": "^8.6.0",
@@ -112,11 +114,14 @@
     "input-otp": "^1.4.2",
     "lru-cache": "^11.1.0",
     "lucide-react": "^0.453.0",
+    "md-to-pdf": "^5.2.4",
     "memoizee": "^0.4.17",
     "memorystore": "^1.6.7",
+    "mlkem": "^2.5.0",
     "mocha": "^11.2.2",
     "multer": "^1.4.5-lts.2",
     "next-themes": "^0.4.6",
+    "node-fetch": "^3.3.2",
     "openai": "^4.100.0",
     "openid-client": "^6.5.1",
     "passport": "^0.7.0",
@@ -133,7 +138,6 @@
     "remixicon": "^4.6.0",
     "siwe": "^3.0.0",
     "snarkjs": "^0.7.5",
-    "stripe": "^18.1.1",
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
     "three": "^0.176.0",
@@ -176,24 +180,5 @@
   },
   "optionalDependencies": {
     "bufferutil": "^4.0.8"
-  },
-  "description": "Chronos Vault - Mathematically proven multi-chain vault platform with formal verification",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/Chronos-Vault/chronos-vault-contracts.git"
-  },
-  "author": "Chronos Vault Team",
-  "keywords": [
-    "blockchain",
-    "vault",
-    "security",
-    "formal-verification",
-    "multi-chain",
-    "cryptography",
-    "defi",
-    "web3",
-    "ethereum",
-    "solana",
-    "ton"
-  ]
+  }
 }
