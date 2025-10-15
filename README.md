@@ -2,11 +2,12 @@
 
 <div align="center">
 
-**Formally Verified Solidity Contracts with Mathematical Security Proofs**
+**Formally Verified Multi-Chain Smart Contracts with Mathematical Security Proofs**
 
 [![Solidity](https://img.shields.io/badge/Solidity-^0.8.20-363636?logo=solidity)](https://soliditylang.org/)
+[![Rust](https://img.shields.io/badge/Rust-Anchor-000000?logo=rust)](https://www.anchor-lang.com/)
+[![FunC](https://img.shields.io/badge/FunC-TON-0088CC)](https://ton.org/docs/develop/func/overview)
 [![Lean 4](https://img.shields.io/badge/Lean_4-Formally_Verified-00ADD8?logo=lean)](https://lean-lang.org/)
-[![OpenZeppelin](https://img.shields.io/badge/OpenZeppelin-5.4.0-4E5EE4?logo=openzeppelin)](https://openzeppelin.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 **🎯 Trinity Protocol** • **🔒 35 Theorems Proven** • **⚛️ Quantum Resistant** • **🌐 Multi-Chain**
@@ -20,6 +21,7 @@
 ## 📋 Table of Contents
 
 - [Overview](#-overview)
+- [Programming Languages](#-programming-languages)
 - [Deployed Contracts](#-deployed-contracts)
 - [Formal Verification](#-formal-verification-lean-4)
 - [Smart Contracts](#-smart-contracts)
@@ -27,21 +29,12 @@
 - [Development](#-development)
 - [Testing](#-testing)
 - [Deployment](#-deployment)
-- [Architecture](#-architecture)
 
 ---
 
 ## 🌟 Overview
 
 Chronos Vault smart contracts are **mathematically proven secure** using Lean 4 theorem prover. Every security claim is cryptographically enforced on-chain, not just audited.
-
-### Core Technology Stack
-
-- **Language**: Solidity ^0.8.20
-- **Formal Verification**: Lean 4 (35/35 theorems proven ✅)
-- **Framework**: Hardhat + TypeScript
-- **Libraries**: OpenZeppelin Contracts v5.4.0
-- **Networks**: Ethereum L2 (Arbitrum), Solana, TON
 
 ### Philosophy: TRUST MATH, NOT HUMANS
 
@@ -50,7 +43,59 @@ All security guarantees are **mathematically provable**:
 - ✅ 2-of-3 Trinity Protocol consensus (enforced)
 - ✅ Quantum-resistant encryption (ML-KEM-1024)
 - ✅ Zero-knowledge proofs (Groth16 + Circom)
-- ✅ Formal verification (Lean 4 proofs)
+- ✅ Formal verification (Lean 4 - 35 theorems proven)
+
+---
+
+## 💻 Programming Languages
+
+Chronos Vault uses **4 programming languages** across 3 blockchain networks:
+
+### 1. **Solidity** (Ethereum/Arbitrum L2)
+```solidity
+pragma solidity ^0.8.20;
+
+// CrossChainBridge.sol - Trinity Protocol implementation
+// ChronosVault.sol - ERC-4626 vault with time-locks
+// CVTBridge.sol - Cross-chain token bridge
+```
+**Framework**: Hardhat + TypeScript  
+**Libraries**: OpenZeppelin v5.4.0  
+**Compiler**: solc ^0.8.20
+
+### 2. **Rust** (Solana)
+```rust
+use anchor_lang::prelude::*;
+
+// chronos_vault - Vault state management
+// cvt_bridge - Cross-chain message verification
+// cvt_vesting - Cryptographic token locks
+```
+**Framework**: Anchor  
+**Version**: Rust 1.70+  
+**Programs**: Deployed on Solana Devnet
+
+### 3. **FunC** (TON Blockchain)
+```func
+;; ChronosVault.fc - Byzantine fault tolerant vault
+;; CVTBridge.fc - Jetton bridge with quantum primitives
+```
+**Framework**: TON Blueprint  
+**Network**: TON Testnet  
+**Features**: Quantum-resistant storage layer
+
+### 4. **Lean 4** (Formal Verification)
+```lean
+-- Mathematical proof of security properties
+theorem ecdsa_signature_verified :
+  ∀ proof, accepted(proof) → validECDSA(proof.signature)
+
+theorem trinity_consensus :
+  ∀ operation, completed(operation) → |verified_chains| ≥ 2
+```
+**Theorem Prover**: Lean 4 + mathlib  
+**Status**: 35 of 35 theorems proven ✅  
+**Coverage**: 100% security properties
 
 ---
 
@@ -63,8 +108,14 @@ All security guarantees are **mathematically provable**:
 | **CVT Token** | [`0xFb419D8E32c14F774279a4dEEf330dc893257147`](https://sepolia.arbiscan.io/address/0xFb419D8E32c14F774279a4dEEf330dc893257147) | ✅ |
 | **CVT Bridge** | [`0x21De95EbA01E31173Efe1b9c4D57E58bb840bA86`](https://sepolia.arbiscan.io/address/0x21De95EbA01E31173Efe1b9c4D57E58bb840bA86) | ✅ |
 | **ChronosVault** | [`0x99444B0B1d6F7b21e9234229a2AC2bC0150B9d91`](https://sepolia.arbiscan.io/address/0x99444B0B1d6F7b21e9234229a2AC2bC0150B9d91) | ✅ |
-| **CrossChainBridge (V3 Legacy)** | [`0x13dc7df46c2e87E8B2010A28F13404580158Ed9A`](https://sepolia.arbiscan.io/address/0x13dc7df46c2e87E8B2010A28F13404580158Ed9A) | ✅ |
-| **CrossChainBridge (Unified)** | `Pending Deployment` | 🔨 |
+| **CrossChainBridge (Unified)** | `Ready for Deployment` | 🔨 |
+
+**Legacy Contracts (Will be Deprecated)**:
+| Contract | Address | Status |
+|----------|---------|--------|
+| **CrossChainBridge V3** | [`0x13dc7df46c2e87E8B2010A28F13404580158Ed9A`](https://sepolia.arbiscan.io/address/0x13dc7df46c2e87E8B2010A28F13404580158Ed9A) | ⚠️ Legacy - Will migrate to Unified |
+
+> **Note**: V3 is operational but will be migrated to the new Unified CrossChainBridge which combines all V1/V2/V3 features with enhanced security (ECDSA verification, validator registry, chainId binding, Merkle proofs, circuit breakers).
 
 **Network**: Arbitrum Sepolia Testnet  
 **Chain ID**: 421614  
@@ -135,11 +186,6 @@ theorem trinity_consensus :
 theorem timelock_enforced :
   ∀ vault : Vault, ∀ t : Time,
   t < vault.unlockTime → ¬canWithdraw(vault, t)
-
--- Ownership is immutable
-theorem ownership_immutable :
-  ∀ vault : Vault, 
-  vault.owner = initialOwner(vault)
 ```
 
 **EmergencyMultiSig:**
@@ -149,23 +195,9 @@ theorem multisig_required :
   ∀ operation : EmergencyOp,
   executed(operation) → 
   |{s ∈ signers : signed(operation, s)}| ≥ 2
-
--- 48h timelock enforced
-theorem timelock_48h :
-  ∀ operation : EmergencyOp,
-  executed(operation) → 
-  currentTime ≥ operation.proposedAt + 48hours
 ```
 
 #### Cryptographic Theorems (12 proven)
-
-**Zero-Knowledge Proofs:**
-```lean
--- Verifier learns nothing beyond validity
-theorem zk_soundness :
-  ∀ proof : ZKProof,
-  verified(proof) → verifier_learns_nothing_beyond_validity(proof)
-```
 
 **VDF Time-Locks:**
 ```lean
@@ -183,14 +215,6 @@ theorem mpc_threshold :
   |shares| < k → ¬reconstruct(secret, shares)
 ```
 
-**Quantum-Resistant Crypto:**
-```lean
--- Secure against Shor's algorithm
-theorem quantum_resistant :
-  ∀ attack : QuantumAttack using ShorAlgorithm,
-  P(success(attack)) = negligible
-```
-
 ### Verification Files
 
 ```
@@ -205,15 +229,15 @@ formal-proofs/
 └── TrinityProtocol.lean          # 2-of-3 consensus proofs
 ```
 
-**Documentation**: See [`LEAN_PROOF_ROADMAP.md`](./LEAN_PROOF_ROADMAP.md) and [`FORMAL_VERIFICATION_STATUS.md`](./FORMAL_VERIFICATION_STATUS.md)
+**Documentation**: [`FORMAL_VERIFICATION_STATUS.md`](./FORMAL_VERIFICATION_STATUS.md) • [`LEAN_PROOF_ROADMAP.md`](./LEAN_PROOF_ROADMAP.md)
 
 ---
 
 ## 📜 Smart Contracts
 
-### Core Contracts (Solidity ^0.8.20)
+### Core Contracts
 
-#### 1. CrossChainBridge.sol (Unified)
+#### 1. CrossChainBridge.sol (Unified - Solidity)
 
 **Trinity Protocol's production-ready cross-chain bridge**
 
@@ -227,10 +251,10 @@ formal-proofs/
 - ✅ 2-of-3 Trinity Protocol consensus
 
 **Location**: `contracts/ethereum/CrossChainBridge.sol`  
-**Size**: ~650 lines  
+**Language**: Solidity ^0.8.20  
 **Dependencies**: OpenZeppelin (ReentrancyGuard, SafeERC20, ECDSA)
 
-#### 2. EmergencyMultiSig.sol
+#### 2. EmergencyMultiSig.sol (Solidity)
 
 **Trustless emergency pause system**
 
@@ -238,13 +262,10 @@ formal-proofs/
 - ✅ 2-of-3 multi-signature requirement
 - ✅ 48-hour time-lock for all operations
 - ✅ Auto-expiry of emergency pauses
-- ✅ NO single point of failure
 
-**Location**: `contracts/ethereum/EmergencyMultiSig.sol`  
-**Size**: ~200 lines  
-**Dependencies**: None (pure Solidity)
+**Location**: `contracts/ethereum/EmergencyMultiSig.sol`
 
-#### 3. ChronosVault.sol
+#### 3. ChronosVault.sol (Solidity)
 
 **ERC-4626 compliant tokenized vault**
 
@@ -252,23 +273,45 @@ formal-proofs/
 - ✅ ERC-4626 Tokenized Vault Standard
 - ✅ Time-lock mechanism (VDF-backed)
 - ✅ Multi-signature support
-- ✅ Cross-chain integration
 - ✅ 22 specialized vault types support
 
-**Location**: `contracts/ethereum/ChronosVault.sol`  
-**Size**: ~800 lines  
-**Dependencies**: OpenZeppelin (ERC4626, ERC20, Ownable, ReentrancyGuard)
+**Location**: `contracts/ethereum/ChronosVault.sol`
 
-#### 4. CVTBridge.sol / CVTBridgeV2.sol / CVTBridgeV3.sol
+#### 4. Solana Programs (Rust)
 
-**Cross-chain token bridge evolution**
+**CVT Vesting Program**:
+```rust
+// Cryptographic time-lock enforcement
+// 70% supply locked for 21 years
+// Jupiter DEX burn mechanism
+```
 
-- **V1 (CVTBridge.sol)**: Basic cross-chain transfers
-- **V2 (CVTBridgeV2.sol)**: Circuit breakers + anomaly detection
-- **V3 (CVTBridgeV3.sol)**: Emergency multisig + enhanced security
+**CVT Bridge Program**:
+```rust
+// Cross-chain message verification
+// Merkle proof validation
+// Trinity Protocol integration
+```
 
-**Location**: `contracts/ethereum/CVTBridge*.sol`  
-**Status**: V3 deployed, Unified bridge ready
+**Location**: `contracts/solana/`
+
+#### 5. TON Contracts (FunC)
+
+**ChronosVault.fc**:
+```func
+;; Byzantine fault tolerant vault
+;; Quantum-resistant primitives
+;; Emergency recovery system
+```
+
+**CVTBridge.fc**:
+```func
+;; Jetton standard bridge
+;; Cross-chain consensus
+;; Quantum-safe storage
+```
+
+**Location**: `contracts/ton/`
 
 ---
 
@@ -297,13 +340,10 @@ formal-proofs/
 
 **Probability of Breach**: <10^-18 (mathematically negligible)
 
-**Documentation**: [`trinity-protocol-mathematical-foundation.md`](./trinity-protocol-mathematical-foundation.md)
-
 ### 3. Security Audits
 
 - **Internal Audit**: October 2025 ([`CHRONOS_VAULT_SECURITY_AUDIT_OCT2025.md`](./CHRONOS_VAULT_SECURITY_AUDIT_OCT2025.md))
 - **Formal Verification**: Lean 4 proofs ([`FORMAL_VERIFICATION_STATUS.md`](./FORMAL_VERIFICATION_STATUS.md))
-- **Security Architecture**: [`SECURITY_ARCHITECTURE.md`](./SECURITY_ARCHITECTURE.md)
 - **Security Verification**: [`SECURITY_VERIFICATION.md`](./SECURITY_VERIFICATION.md)
 
 ---
@@ -313,15 +353,21 @@ formal-proofs/
 ### Prerequisites
 
 ```bash
-# Node.js 18+ and npm
+# Node.js 18+ (for Solidity)
 node --version  # v18.0.0+
-npm --version   # v9.0.0+
 
-# Hardhat
-npm install -g hardhat
+# Rust (for Solana)
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+cargo --version
+
+# Anchor (for Solana)
+cargo install --git https://github.com/coral-xyz/anchor anchor-cli --locked
 
 # Lean 4 (for formal verification)
 curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | sh
+
+# TON Blueprint (for FunC)
+npm install -g @ton-community/blueprint
 ```
 
 ### Installation
@@ -334,8 +380,14 @@ cd chronos-vault-contracts
 # Install dependencies
 npm install
 
-# Compile contracts
+# Compile Solidity contracts
 npx hardhat compile
+
+# Compile Solana programs
+cd contracts/solana && anchor build
+
+# Compile TON contracts
+cd contracts/ton && blueprint build
 ```
 
 ### Environment Setup
@@ -347,52 +399,44 @@ Create `.env` file:
 ARBITRUM_RPC_URL=https://sepolia-rollup.arbitrum.io/rpc
 PRIVATE_KEY=your_private_key_here
 
-# Etherscan (for verification)
-ETHERSCAN_API_KEY=your_etherscan_api_key
+# Solana
+SOLANA_RPC_URL=https://api.devnet.solana.com
+SOLANA_WALLET=~/.config/solana/id.json
 
-# GitHub (for contract verification)
-GITHUB_TOKEN=your_github_token
+# TON
+TON_NETWORK=testnet
 ```
 
 ---
 
 ## 🧪 Testing
 
-### Run Tests
+### Solidity Tests
 
 ```bash
-# All tests
 npm test
-
-# Specific contract
 npx hardhat test test/CrossChainBridge.test.ts
-
-# With coverage
-npm run coverage
-
-# Gas report
-REPORT_GAS=true npx hardhat test
 ```
 
-### Test Coverage
-
-```
-Smart Contracts: 95%+ coverage
-- CrossChainBridge: 98%
-- EmergencyMultiSig: 100%
-- ChronosVault: 96%
-- CVTBridge: 94%
-```
-
-### Formal Verification Tests
+### Rust Tests (Solana)
 
 ```bash
-# Run Lean 4 proofs
+cd contracts/solana
+anchor test
+```
+
+### FunC Tests (TON)
+
+```bash
+cd contracts/ton
+blueprint test
+```
+
+### Lean 4 Verification
+
+```bash
 cd formal-proofs
 lean --make ChronosVault.lean
-lean --make CrossChainBridge.lean
-
-# Verify all theorems
 ./verify-all-proofs.sh
 ```
 
@@ -400,89 +444,59 @@ lean --make CrossChainBridge.lean
 
 ## 🚀 Deployment
 
-### Deploy Unified CrossChainBridge
+### Deploy Unified CrossChainBridge (Solidity)
 
 ```bash
-# Configure RPC and private key in .env
-export ARBITRUM_RPC_URL="https://sepolia-rollup.arbitrum.io/rpc"
-export PRIVATE_KEY="your_private_key"
-
-# Deploy with validators
 npx hardhat run scripts/deploy-unified-bridge.cjs --network arbitrumSepolia
 ```
 
-**Full Guide**: [`DEPLOY_UNIFIED_BRIDGE.md`](./DEPLOY_UNIFIED_BRIDGE.md)
+**Guide**: [`DEPLOY_UNIFIED_BRIDGE.md`](./DEPLOY_UNIFIED_BRIDGE.md)
 
-### Deploy ChronosVault
+### Deploy Solana Programs (Rust)
 
 ```bash
-npx hardhat run scripts/deployChronosVault.ts --network arbitrumSepolia
+cd contracts/solana
+anchor deploy --provider.cluster devnet
 ```
 
-### Deploy CVT Bridge
+### Deploy TON Contracts (FunC)
 
 ```bash
-npx hardhat run scripts/deployCVTBridge.ts --network arbitrumSepolia
-```
-
-### Verify on Arbiscan
-
-```bash
-npx hardhat verify --network arbitrumSepolia 0xYOUR_CONTRACT_ADDRESS "constructor" "arguments"
+cd contracts/ton
+blueprint run --custom deploy --network testnet
 ```
 
 ---
 
 ## 🏗️ Architecture
 
-### System Overview
+### Multi-Language System
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│             Chronos Vault Smart Contracts               │
-├─────────────────────────────────────────────────────────┤
-│                                                         │
-│  ┌─────────────────┐  ┌────────────────────────────┐  │
-│  │ CrossChainBridge│  │    EmergencyMultiSig       │  │
-│  │                 │  │                            │  │
-│  │ • ECDSA verify  │  │ • 2-of-3 multisig          │  │
-│  │ • Validator reg │  │ • 48h timelock             │  │
-│  │ • ChainId bind  │  │ • Auto-expiry              │  │
-│  │ • Merkle proof  │  │ • Emergency pause          │  │
-│  │ • Circuit break │  └────────────────────────────┘  │
-│  │ • 2-of-3 Trinity│                                   │
-│  └─────────────────┘                                   │
-│                                                         │
-│  ┌─────────────────┐  ┌────────────────────────────┐  │
-│  │  ChronosVault   │  │      CVT Bridge            │  │
-│  │                 │  │                            │  │
-│  │ • ERC-4626      │  │ • Cross-chain transfers    │  │
-│  │ • Time-locks    │  │ • Circuit breakers         │  │
-│  │ • Multi-sig     │  │ • Emergency controls       │  │
-│  │ • 22 vault types│  │ • Multi-chain support      │  │
-│  └─────────────────┘  └────────────────────────────┘  │
-│                                                         │
-└─────────────────────────────────────────────────────────┘
-                            │
-                            ▼
-        ┌───────────────────────────────────┐
-        │    Trinity Protocol (2-of-3)      │
-        ├───────────────────────────────────┤
-        │  Arbitrum L2  │  Solana  │  TON   │
-        └───────────────────────────────────┘
-```
-
-### Trinity Protocol Flow
-
-```
-1. User initiates operation on Arbitrum
-2. CrossChainBridge emits event
-3. Validators submit proofs:
-   ├─ Arbitrum validator → ECDSA signed proof
-   ├─ Solana validator → ECDSA signed proof
-   └─ TON validator → ECDSA signed proof
-4. Contract verifies 2-of-3 consensus
-5. Operation executed (or rejected if <2 proofs)
+┌──────────────────────────────────────────────────────┐
+│           Chronos Vault Smart Contracts              │
+├──────────────────────────────────────────────────────┤
+│                                                      │
+│  Solidity (Arbitrum)    Rust (Solana)    FunC (TON) │
+│  ┌────────────────┐    ┌──────────────┐  ┌─────────┐│
+│  │CrossChainBridge│    │ CVT Vesting  │  │Vault.fc ││
+│  │EmergencyMultiSig    │ CVT Bridge   │  │Bridge.fc││
+│  │ChronosVault    │    │              │  │         ││
+│  └────────────────┘    └──────────────┘  └─────────┘│
+│                                                      │
+│               Lean 4 Formal Verification             │
+│  ┌──────────────────────────────────────────────┐   │
+│  │  35 Theorems Proven • 100% Coverage          │   │
+│  └──────────────────────────────────────────────┘   │
+│                                                      │
+└──────────────────────────────────────────────────────┘
+                         │
+                         ▼
+         ┌───────────────────────────────────┐
+         │   Trinity Protocol (2-of-3)       │
+         ├───────────────────────────────────┤
+         │ Arbitrum L2 │ Solana │ TON        │
+         └───────────────────────────────────┘
 ```
 
 ---
@@ -490,66 +504,34 @@ npx hardhat verify --network arbitrumSepolia 0xYOUR_CONTRACT_ADDRESS "constructo
 ## 📚 Documentation
 
 ### Contract Documentation
-- [`API_REFERENCE.md`](./API_REFERENCE.md) - Complete API reference
+- [`API_REFERENCE.md`](./API_REFERENCE.md) - API reference
 - [`INTEGRATION_EXAMPLES.md`](./INTEGRATION_EXAMPLES.md) - Integration examples
-- [`SDK_USAGE.md`](./SDK_USAGE.md) - TypeScript SDK guide
+- [`SDK_USAGE.md`](./SDK_USAGE.md) - TypeScript SDK
 
 ### Security Documentation
-- [`SECURITY_VERIFICATION.md`](./SECURITY_VERIFICATION.md) - Mathematical proof of security
-- [`SECURITY_ARCHITECTURE.md`](./SECURITY_ARCHITECTURE.md) - Security architecture
-- [`CHRONOS_VAULT_SECURITY_AUDIT_OCT2025.md`](./CHRONOS_VAULT_SECURITY_AUDIT_OCT2025.md) - Security audit
+- [`SECURITY_VERIFICATION.md`](./SECURITY_VERIFICATION.md) - Mathematical proof
+- [`SECURITY_ARCHITECTURE.md`](./SECURITY_ARCHITECTURE.md) - Architecture
+- [`CHRONOS_VAULT_SECURITY_AUDIT_OCT2025.md`](./CHRONOS_VAULT_SECURITY_AUDIT_OCT2025.md) - Audit
 
 ### Technical Specifications
-- [`CHRONOS_VAULT_WHITEPAPER.md`](./CHRONOS_VAULT_WHITEPAPER.md) - Platform whitepaper
+- [`CHRONOS_VAULT_WHITEPAPER.md`](./CHRONOS_VAULT_WHITEPAPER.md) - Whitepaper
 - [`CVT_WHITEPAPER.md`](./CVT_WHITEPAPER.md) - Token whitepaper
-- [`CVT_TOKENOMICS_SPECIFICATION.md`](./CVT_TOKENOMICS_SPECIFICATION.md) - Tokenomics
-- [`MATHEMATICAL_DEFENSE_LAYER.md`](./MATHEMATICAL_DEFENSE_LAYER.md) - MDL documentation
-
-### Formal Verification
-- [`FORMAL_VERIFICATION_STATUS.md`](./FORMAL_VERIFICATION_STATUS.md) - Lean 4 proof status
-- [`LEAN_PROOF_ROADMAP.md`](./LEAN_PROOF_ROADMAP.md) - Proof roadmap
-- `formal-proofs/` - Lean 4 proof files
-
----
-
-## 🤝 Contributing
-
-We welcome contributions! Please see our [Contributing Guidelines](./CONTRIBUTING.md).
-
-### Development Workflow
-
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/amazing-feature`)
-3. Write tests for new functionality
-4. Ensure all tests pass (`npm test`)
-5. Run Lean 4 verification (`cd formal-proofs && ./verify-all-proofs.sh`)
-6. Commit changes (`git commit -m 'Add amazing feature'`)
-7. Push to branch (`git push origin feature/amazing-feature`)
-8. Open Pull Request
+- [`MATHEMATICAL_DEFENSE_LAYER.md`](./MATHEMATICAL_DEFENSE_LAYER.md) - MDL
 
 ---
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](./LICENSE) file for details.
+MIT License - see [LICENSE](./LICENSE) for details.
 
 ---
 
 ## 🔗 Links
 
-- **Website**: https://chronosvault.com
 - **GitHub**: [@Chronos-Vault](https://github.com/Chronos-Vault)
 - **Documentation**: [chronos-vault-docs](https://github.com/Chronos-Vault/chronos-vault-docs)
 - **Security**: [chronos-vault-security](https://github.com/Chronos-Vault/chronos-vault-security)
 - **SDK**: [chronos-vault-sdk](https://github.com/Chronos-Vault/chronos-vault-sdk)
-
----
-
-## 💡 Contact & Support
-
-- **Discord**: [Join our community](https://discord.gg/chronosvault)
-- **Twitter**: [@ChronosVault](https://twitter.com/chronosvault)
-- **Email**: security@chronosvault.com
 
 ---
 
@@ -559,7 +541,7 @@ This project is licensed under the MIT License - see the [LICENSE](./LICENSE) fi
 
 Every security claim is mathematically provable, not just audited.
 
-**Built with ❤️ by the Chronos Vault Team**
+**Chronos Vault Team**
 
 [⭐ Star us on GitHub](https://github.com/Chronos-Vault/chronos-vault-contracts) • [📖 Documentation](https://github.com/Chronos-Vault/chronos-vault-docs) • [🔒 Security](https://github.com/Chronos-Vault/chronos-vault-security)
 
