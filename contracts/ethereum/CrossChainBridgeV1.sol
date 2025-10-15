@@ -343,7 +343,10 @@ contract CrossChainBridgeV1 is ReentrancyGuard {
         if (proof.merkleRoot == bytes32(0)) return false;
         
         // Verify operation hash is in merkle tree
-        bytes32 operationHash = keccak256(abi.encodePacked(operationId, proof.chainId));
+        // SECURITY: Include block.chainid to prevent cross-chain replay
+        // - proof.chainId identifies which chain submitted the proof
+        // - block.chainid binds verification to THIS deployment chain
+        bytes32 operationHash = keccak256(abi.encodePacked(block.chainid, operationId, proof.chainId));
         bytes32 computedRoot = _computeMerkleRoot(operationHash, proof.merkleProof);
         
         if (computedRoot != proof.merkleRoot) return false;

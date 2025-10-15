@@ -894,10 +894,12 @@ contract ChronosVault is ERC4626, Ownable, ReentrancyGuard {
         require(!usedRecoveryNonces[_nonce], "Nonce already used");
         
         // Verify the proof is coming from TON recovery mechanism
-        // FIXED: Use nonce instead of block.timestamp to prevent signature verification failures
+        // SECURITY: Use nonce + chainId to prevent cross-chain replay attacks
+        // - nonce prevents same-chain replay
+        // - block.chainid prevents cross-chain replay (Arbitrum signature can't be used on TON)
         bytes32 messageHash = keccak256(abi.encodePacked(
             "\x19Ethereum Signed Message:\n32",
-            keccak256(abi.encodePacked("EMERGENCY_RECOVERY", address(this), _nonce))
+            keccak256(abi.encodePacked("EMERGENCY_RECOVERY", block.chainid, address(this), _nonce))
         ));
         address recoveredAddress = messageHash.recover(_tonRecoveryProof);
         

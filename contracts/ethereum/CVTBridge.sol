@@ -155,8 +155,13 @@ contract CVTBridge is Ownable, ReentrancyGuard, Pausable {
         require(amount > 0, "Invalid amount");
         
         // Compute bridge operation hash
+        // SECURITY: Include block.chainid to prevent cross-chain replay attacks
+        // - sourceChain identifies the origin chain
+        // - block.chainid binds signature to THIS deployment chain
+        // - Prevents: Arbitrum signature → replayed on TON deployment
         bytes32 bridgeHash = keccak256(
             abi.encodePacked(
+                block.chainid,      // CRITICAL: Binds to deployment chain
                 sourceChain,
                 sourceAddress,
                 recipient,
