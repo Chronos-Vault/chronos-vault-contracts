@@ -10,15 +10,16 @@ import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 /**
  * @title ChronosVault
- * @dev An ERC-4626 compliant tokenized vault for time-locked digital assets
- *      with cross-chain integration capabilities
+ * @author Chronos Vault Team
+ * @notice ERC-4626 compliant tokenized vault for time-locked digital assets with Trinity Protocol
+ * @dev Implements Trinity Protocol's 2-of-3 consensus across Ethereum/Arbitrum L2, Solana, and TON
  * 
  * This vault implements the ERC-4626 Tokenized Vault Standard to provide
  * advanced financial functionality for the Chronos Vault platform, while
  * integrating a Triple-Chain Security architecture with Ethereum (primary ownership),
  * Solana (monitoring and verification), and TON (backup and recovery).
  * 
- * CRITICAL: This contract implements "TRUST MATH, NOT HUMANS" philosophy
+ * SECURITY PHILOSOPHY: TRUST MATH, NOT HUMANS
  * - NO owner bypass mechanisms
  * - ALL withdrawals require mathematical 2-of-3 chain verification
  * - Time locks are IMMUTABLE and cannot be bypassed by any human
