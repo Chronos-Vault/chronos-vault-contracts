@@ -612,6 +612,7 @@ contract ChronosVaultOptimized is ERC4626, Ownable, ReentrancyGuard {
     
     /**
      * @dev SECURITY FIX: Execute withdrawal using proper ERC4626 flow
+     * Uses internal _withdraw to bypass allowance check (multi-sig already approved)
      */
     function _executeWithdrawal(uint256 _requestId) internal {
         WithdrawalRequest storage request = withdrawalRequests[_requestId];
@@ -619,16 +620,29 @@ contract ChronosVaultOptimized is ERC4626, Ownable, ReentrancyGuard {
         require(!request.executed, "Already executed");
         require(request.approvalCount >= multiSig.threshold, "Insufficient approvals");
         
-        // SECURITY FIX: Mark executed BEFORE external calls
+        // SECURITY FIX: Mark executed BEFORE external calls (reentrancy protection)
         request.executed = true;
         
         uint256 amount = uint256(request.amount);
         address receiver = request.receiver;
         address _owner = request.owner;
         
-        // SECURITY FIX: Use proper ERC4626 withdraw function
-        // This internally burns shares from owner and transfers assets to receiver
-        super.withdraw(amount, receiver, _owner);
+        // SECURITY FIX: Use internal _withdraw to bypass allowance checks
+        // Multi-sig approval replaces individual owner approval
+        // Calculate shares needed for the withdrawal amount
+        uint256 shares = previewWithdraw(amount);
+        
+        // Call internal _withdraw which:
+        // 1. Burns shares from owner
+        // 2. Transfers assets to receiver
+        // 3. Does NOT check allowances (bypassed by multi-sig approval)
+        super._withdraw({
+            caller: address(this),
+            receiver: receiver,
+            owner: _owner,
+            assets: amount,
+            shares: shares
+        });
         
         emit WithdrawalExecuted(_requestId, receiver, amount);
     }
