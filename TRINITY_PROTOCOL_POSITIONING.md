@@ -1,8 +1,8 @@
-# Trinity Protocol: Multi-Chain Consensus Verification System
+# Trinity Protocol™: Multi-Chain Consensus Verification System
 
-## What Trinity Protocol Actually Is
+## What Trinity Protocol™ Actually Is
 
-**Trinity Protocol is a mathematically provable 2-of-3 consensus verification system across three independent blockchains (Arbitrum L2, Solana, TON).**
+**Trinity Protocol™ is a mathematically provable 2-of-3 consensus verification system across three independent blockchains (Arbitrum L2, Solana, TON).**
 
 This is NOT a cross-chain bridge for transferring tokens between chains.  
 This IS a secure consensus system for verifying operations across multiple chains.
@@ -109,7 +109,7 @@ This IS a secure consensus system for verifying operations across multiple chain
 ## What It Does NOT Do ❌
 
 ### NOT a Token Bridge
-Trinity Protocol does **NOT** transfer tokens between chains (e.g., move USDC from Ethereum to Solana).
+Trinity Protocol™ does **NOT** transfer tokens between chains (e.g., move USDC from Ethereum to Solana).
 
 For token bridging, use:
 - LayerZero
@@ -118,7 +118,7 @@ For token bridging, use:
 - Stargate
 
 ### NOT an AMM/DEX
-Trinity Protocol does **NOT** swap tokens or provide liquidity.
+Trinity Protocol™ does **NOT** swap tokens or provide liquidity.
 
 For swaps, use:
 - Uniswap
@@ -127,7 +127,7 @@ For swaps, use:
 - STON.fi (TON)
 
 ### NOT a Full Cross-Chain Messaging System
-Trinity Protocol does **NOT** send arbitrary messages between chains.
+Trinity Protocol™ does **NOT** send arbitrary messages between chains.
 
 For messaging, integrate:
 - LayerZero V2 OApp
@@ -140,7 +140,7 @@ For messaging, integrate:
 
 ### Security Model
 
-**Trinity Protocol = 2-of-3 Consensus**
+**Trinity Protocol™ = 2-of-3 Consensus**
 
 ```
 Operation Created
@@ -222,7 +222,7 @@ Operation Executed ✅
 
 ## Integration Guide
 
-### For Developers: How to Use Trinity Protocol
+### For Developers: How to Use Trinity Protocol™
 
 **Step 1: Deploy Validator Nodes**
 ```bash
@@ -387,7 +387,7 @@ trinityProtocol.claimValidatorFees();
 
 ## Conclusion
 
-**Trinity Protocol is a production-ready multi-chain consensus verification system**, not a token bridge.
+**Trinity Protocol™ is a production-ready multi-chain consensus verification system**, not a token bridge.
 
 **What Makes It Valuable:**
 1. Mathematical security through 2-of-3 consensus
