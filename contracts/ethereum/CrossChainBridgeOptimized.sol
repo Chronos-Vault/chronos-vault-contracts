@@ -76,10 +76,21 @@ contract CrossChainBridgeOptimized is ReentrancyGuard {
     // EMERGENCY CONTROLLER (IMMUTABLE)
     address public immutable emergencyController;
     
+    // SECURITY FIX: Trusted Merkle root storage
+    mapping(uint8 => bytes32) public trustedMerkleRoots;
+    mapping(bytes32 => bool) public usedSignatures; // Prevent replay attacks
+    mapping(address => mapping(uint256 => uint256)) public userDailyOperations; // Rate limiting
+    uint256 public constant MAX_USER_OPS_PER_DAY = 100;
+    uint256 public constant MAX_MERKLE_DEPTH = 32;
+    
     // TRINITY PROTOCOL: Validators
     mapping(uint8 => mapping(address => bool)) public authorizedValidators;
     mapping(uint8 => address[]) public validatorList;
     mapping(string => bool) public supportedChains;
+    
+    // Fee distribution
+    uint256 public collectedFees;
+    address public feeCollector;
     
     // Operation types & status
     enum OperationType { TRANSFER, SWAP, BRIDGE }
@@ -276,6 +287,7 @@ contract CrossChainBridgeOptimized is ReentrancyGuard {
         require(_tonValidators.length > 0, "No TON validators");
         
         emergencyController = _emergencyController;
+        feeCollector = _emergencyController; // CRITICAL FIX: Initialize fee collector
         
         // Initialize validators
         for (uint256 i = 0; i < _ethereumValidators.length; i++) {
@@ -328,6 +340,58 @@ contract CrossChainBridgeOptimized is ReentrancyGuard {
         emit CircuitBreakerResolved("Emergency override", block.timestamp);
     }
     
+    /**
+     * @dev CRITICAL FIX: Update trusted Merkle roots
+     * Validators submit verified Merkle roots from their chains
+     * @param chainId Chain to update root for (1=ETH, 2=SOL, 3=TON)
+     * @param merkleRoot The trusted Merkle root from validator
+     * @param validatorTimestamp Timestamp when validator signed (for replay protection)
+     * @param validatorSignature Validator's signature
+     */
+    function updateTrustedMerkleRoot(
+        uint8 chainId,
+        bytes32 merkleRoot,
+        uint256 validatorTimestamp,
+        bytes calldata validatorSignature
+    ) external {
+        require(chainId >= 1 && chainId <= 3, "Invalid chain ID");
+        require(merkleRoot != bytes32(0), "Invalid Merkle root");
+        
+        // CRITICAL FIX: Verify timestamp freshness (prevent old signatures)
+        require(validatorTimestamp <= block.timestamp, "Future timestamp");
+        require(block.timestamp - validatorTimestamp <= 1 hours, "Signature too old");
+        
+        // Verify signature from authorized validator
+        bytes32 messageHash = keccak256(abi.encodePacked(
+            "UPDATE_MERKLE_ROOT",
+            block.chainid,
+            chainId,
+            merkleRoot,
+            validatorTimestamp // Use validator's timestamp, not block.timestamp!
+        ));
+        
+        bytes32 ethSignedMessageHash = keccak256(abi.encodePacked(
+            "\x19Ethereum Signed Message:\n32",
+            messageHash
+        ));
+        
+        address recoveredSigner = ECDSA.recover(ethSignedMessageHash, validatorSignature);
+        require(authorizedValidators[chainId][recoveredSigner], "Not authorized validator");
+        
+        trustedMerkleRoots[chainId] = merkleRoot;
+    }
+    
+    /**
+     * @dev CRITICAL FIX: Withdraw collected fees
+     */
+    function withdrawFees(address to) external onlyEmergencyController {
+        require(to != address(0), "Invalid address");
+        uint256 amount = collectedFees;
+        collectedFees = 0;
+        (bool sent, ) = to.call{value: amount}("");
+        require(sent, "Failed to send fees");
+    }
+    
     function getCircuitBreakerStatus() external view returns (
         bool active,
         bool isEmergencyPaused,
@@ -358,6 +422,11 @@ contract CrossChainBridgeOptimized is ReentrancyGuard {
     ) external payable nonReentrant whenNotPaused returns (bytes32 operationId) {
         if (amount == 0) revert InvalidAmount();
         if (!supportedChains[destinationChain]) revert InvalidChain();
+        
+        // CRITICAL FIX: Per-user rate limiting
+        uint256 today = block.timestamp / 1 days;
+        require(userDailyOperations[msg.sender][today] < MAX_USER_OPS_PER_DAY, "Rate limit exceeded");
+        userDailyOperations[msg.sender][today]++;
         
         // TIER 2: Track same-block EVERY operation, check volume every 10th
         bool sameBlockAnomaly = _checkSameBlockAnomaly(); // Always track
@@ -501,11 +570,36 @@ contract CrossChainBridgeOptimized is ReentrancyGuard {
         operation.chainVerified[chainProof.chainId] = true;
         operation.validProofCount++;
         
-        // Auto-execute if consensus reached
+        // CRITICAL FIX: Auto-execute and RELEASE FUNDS if consensus reached
         if (operation.validProofCount >= REQUIRED_CHAIN_CONFIRMATIONS) {
-            operation.status = OperationStatus.COMPLETED;
-            emit OperationStatusUpdated(operationId, OperationStatus.COMPLETED, bytes32(0));
+            _executeOperation(operationId);
         }
+    }
+    
+    /**
+     * @dev CRITICAL FIX: Actually release funds to user
+     * This function was COMPLETELY MISSING - funds were locked forever!
+     */
+    function _executeOperation(bytes32 operationId) internal {
+        Operation storage operation = operations[operationId];
+        
+        require(operation.status == OperationStatus.PENDING, "Operation not pending");
+        operation.status = OperationStatus.COMPLETED;
+        
+        // CRITICAL: Release funds to user
+        if (operation.tokenAddress != address(0)) {
+            // ERC20 token transfer
+            IERC20(operation.tokenAddress).safeTransfer(operation.user, operation.amount);
+        } else {
+            // Native token (ETH) transfer
+            (bool sent, ) = operation.user.call{value: operation.amount}("");
+            require(sent, "Failed to send ETH to user");
+        }
+        
+        // Collect fees
+        collectedFees += operation.fee;
+        
+        emit OperationStatusUpdated(operationId, OperationStatus.COMPLETED, bytes32(0));
     }
     
     function submitResumeApproval(
@@ -602,8 +696,8 @@ contract CrossChainBridgeOptimized is ReentrancyGuard {
     }
     
     /**
-     * @dev OPTIMIZED: Verify chain proof with Merkle caching
-     * TIER 1: Always runs (critical ECDSA + ChainId verification)
+     * @dev CRITICAL FIX: Verify chain proof with ALL security checks
+     * TIER 1: Always runs (critical ECDSA + ChainId + Merkle + Replay verification)
      */
     function _verifyChainProofOptimized(
         ChainProof calldata proof,
@@ -613,7 +707,45 @@ contract CrossChainBridgeOptimized is ReentrancyGuard {
         if (proof.merkleRoot == bytes32(0)) return false;
         if (proof.validatorSignature.length == 0) return false;
         
-        // Step 1: Check Merkle cache (OPTIMIZATION)
+        // CRITICAL FIX: Proof depth limit to prevent DOS
+        require(proof.merkleProof.length <= MAX_MERKLE_DEPTH, "Proof too deep");
+        
+        // CRITICAL FIX: Timestamp validation
+        require(proof.timestamp <= block.timestamp, "Future timestamp not allowed");
+        require(proof.timestamp + maxProofAge > block.timestamp, "Proof expired");
+        
+        // Step 1: Verify ECDSA signature FIRST (before caching)
+        bytes32 messageHash = keccak256(abi.encodePacked(
+            "CHAIN_PROOF",
+            block.chainid,
+            proof.chainId,
+            operationId,
+            proof.merkleRoot,
+            proof.blockHash,
+            proof.txHash,
+            proof.timestamp, // CRITICAL FIX: Include timestamp to prevent replay
+            proof.blockNumber // CRITICAL FIX: Include blockNumber for uniqueness
+        ));
+        
+        bytes32 ethSignedMessageHash = keccak256(abi.encodePacked(
+            "\x19Ethereum Signed Message:\n32",
+            messageHash
+        ));
+        
+        // CRITICAL FIX: Check signature replay BEFORE verification
+        require(!usedSignatures[messageHash], "Signature already used");
+        
+        address recoveredSigner = ECDSA.recover(ethSignedMessageHash, proof.validatorSignature);
+        
+        // TIER 1 CRITICAL: Verify authorized validator
+        if (!authorizedValidators[proof.chainId][recoveredSigner]) {
+            return false;
+        }
+        
+        // CRITICAL FIX: Mark signature as used AFTER successful verification
+        usedSignatures[messageHash] = true;
+        
+        // Step 2: Verify Merkle proof against TRUSTED root
         bytes32 operationHash = keccak256(abi.encodePacked(block.chainid, operationId, proof.chainId));
         
         CachedRoot memory cached = merkleCache[operationHash];
@@ -624,38 +756,24 @@ contract CrossChainBridgeOptimized is ReentrancyGuard {
             computedRoot = cached.root;
             emit MerkleCacheHit(operationHash, computedRoot);
         } else {
-            // Cache miss - compute and cache
+            // Cache miss - compute
             computedRoot = _computeMerkleRoot(operationHash, proof.merkleProof);
+        }
+        
+        // CRITICAL FIX: Verify against TRUSTED Merkle root
+        bytes32 trustedRoot = trustedMerkleRoots[proof.chainId];
+        require(trustedRoot != bytes32(0), "No trusted root for chain");
+        require(computedRoot == trustedRoot, "Merkle proof invalid - root mismatch");
+        
+        // CRITICAL FIX: Only cache AFTER full validation (prevents cache poisoning)
+        if (cached.blockNumber == 0 || block.number >= cached.blockNumber + CACHE_TTL) {
             merkleCache[operationHash] = CachedRoot({
                 root: computedRoot,
                 blockNumber: block.number
             });
         }
         
-        if (computedRoot != proof.merkleRoot) {
-            return false;
-        }
-        
-        // Step 2: TIER 1 CRITICAL - ALWAYS verify ECDSA signature
-        bytes32 messageHash = keccak256(abi.encodePacked(
-            "CHAIN_PROOF",
-            block.chainid,
-            proof.chainId,
-            operationId,
-            proof.merkleRoot,
-            proof.blockHash,
-            proof.txHash
-        ));
-        
-        bytes32 ethSignedMessageHash = keccak256(abi.encodePacked(
-            "\x19Ethereum Signed Message:\n32",
-            messageHash
-        ));
-        
-        address recoveredSigner = ECDSA.recover(ethSignedMessageHash, proof.validatorSignature);
-        
-        // TIER 1 CRITICAL: Verify authorized validator
-        return authorizedValidators[proof.chainId][recoveredSigner];
+        return true;
     }
     
     function _computeMerkleRoot(bytes32 leaf, bytes[] memory proof) internal pure returns (bytes32 root) {
