@@ -295,7 +295,9 @@ contract CVTBridgeV3 is Ownable, ReentrancyGuard {
         uint256 nonce,
         bytes[] calldata signatures
     ) external whenNotPaused onlyValidator nonReentrant {
+        // SECURITY FIX: Include block.chainid to prevent cross-chain replay attacks
         bytes32 bridgeId = keccak256(abi.encodePacked(
+            block.chainid,      // CRITICAL: Binds signature to deployment chain
             recipient,
             sourceChain,
             sourceAddress,
