@@ -222,8 +222,16 @@ contract CVTBridgeV2 is Ownable, ReentrancyGuard {
         require(recipient != address(0), "Invalid recipient");
         require(amount > 0, "Invalid amount");
         
+        // SECURITY FIX: Include block.chainid to prevent cross-chain replay attacks
         bytes32 bridgeHash = keccak256(
-            abi.encodePacked(sourceChain, sourceAddress, recipient, amount, nonce)
+            abi.encodePacked(
+                block.chainid,      // CRITICAL: Binds signature to deployment chain
+                sourceChain,
+                sourceAddress,
+                recipient,
+                amount,
+                nonce
+            )
         );
         
         require(!processedBridges[bridgeHash], "Bridge already processed");
