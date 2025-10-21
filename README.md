@@ -109,12 +109,12 @@ theorem trinity_consensus :
 | **CVT Bridge** | [`0x21De95EbA01E31173Efe1b9c4D57E58bb840bA86`](https://sepolia.arbiscan.io/address/0x21De95EbA01E31173Efe1b9c4D57E58bb840bA86) | ✅ |
 | **ChronosVault** | [`0x99444B0B1d6F7b21e9234229a2AC2bC0150B9d91`](https://sepolia.arbiscan.io/address/0x99444B0B1d6F7b21e9234229a2AC2bC0150B9d91) | ✅ |
 | **EmergencyMultiSig** | [`0xecc00bbE268Fa4D0330180e0fB445f64d824d818`](https://sepolia.arbiscan.io/address/0xecc00bbE268Fa4D0330180e0fB445f64d824d818) | ✅ |
-| **CrossChainBridge (Unified)** | [`0x101F37D9bf445E92A237F8721CA7D12205D61Fe6`](https://sepolia.arbiscan.io/address/0x101F37D9bf445E92A237F8721CA7D12205D61Fe6) | ✅ |
+| **CrossChainBridge: `0x4300AbD703dae7641ec096d8ac03684fB4103CDe``](https://sepolia.arbiscan.io/address/0x101F37D9bf445E92A237F8721CA7D12205D61Fe6) | ✅ |
 
 **Legacy Contracts (Will be Deprecated)**:
 | Contract | Address | Status |
 |----------|---------|--------|
-| **CrossChainBridge V3** | [`0x13dc7df46c2e87E8B2010A28F13404580158Ed9A`](https://sepolia.arbiscan.io/address/0x13dc7df46c2e87E8B2010A28F13404580158Ed9A) | ⚠️ Legacy - Will migrate to Unified |
+| **CrossChainBridge: `0x4300AbD703dae7641ec096d8ac03684fB4103CDe``](https://sepolia.arbiscan.io/address/0x13dc7df46c2e87E8B2010A28F13404580158Ed9A) | ⚠️ Legacy - Will migrate to Unified |
 
 > **🎉 Trinity Protocol Unified Bridge DEPLOYED (Oct 15, 2025)**: All security features now LIVE on-chain - ECDSA verification, Validator registry (9 validators), ChainId binding, Merkle proofs, Circuit breakers, Emergency multisig, 2-of-3 consensus. Legacy V3 will be deprecated.
 
@@ -547,3 +547,30 @@ Every security claim is mathematically provable, not just audited.
 [⭐ Star us on GitHub](https://github.com/Chronos-Vault/chronos-vault-contracts) • [📖 Documentation](https://github.com/Chronos-Vault/chronos-vault-docs) • [🔒 Security](https://github.com/Chronos-Vault/chronos-vault-security)
 
 </div>
+
+
+## Testnet Validator Addresses
+
+### Ethereum/Arbitrum Validators
+- Validator 1: `0x0be8788807DA1E4f95057F564562594D65a0C4f9`
+- Validator 2: `0x0A19B76c3C8FE9C88f910C3212e2B44b5b263E26`
+- Validator 3: `0xCf2847d3c872998F5FbFFD7eCb23e8932E890c2d`
+
+### Solana Validators
+- Validator 1: `Epi28nV2op8hFLN8NVapiUiyW3f8LUtE8A5qDVyY3xET`
+- Validator 2: `AXDkesdHyAp7egzYdULGJU9A9Ar2VX1JBogLEqaSiWj8`
+- Validator 3: `5oa3idk9PixR1PuYiiQjkfTuDpZXf4Svi2WipkvPX7Nr`
+
+### TON Validators
+- Validator 1: `0x1520c281cd057eead87e4671d5affd8df4090a07474e3d37480bc0d03b56c672`
+- Validator 2: `0x228a35ee2682d359d56661c18765aef68d18015b2c6b1c550fa5093cbe8d6985`
+- Validator 3: `0xe8c759772e0eb2eb5aba1b9233bccd2c8156531e114272f0168c4504415dae2c`
+
+## Trinity Protocol 2-of-3 Consensus
+
+The deployed CrossChainBridge at `0x4300AbD703dae7641ec096d8ac03684fB4103CDe` requires 2-of-3 validator signatures across:
+- **Ethereum Layer 2** (Arbitrum): 3 validators
+- **Solana**: 3 validators  
+- **TON**: 3 validators
+
+For a cross-chain operation to be valid, it must be approved by at least 2 validators from 2 different chains.
