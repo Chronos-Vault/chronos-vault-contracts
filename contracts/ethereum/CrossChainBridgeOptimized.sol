@@ -7,8 +7,36 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 /**
- * @title CrossChainBridge - GAS OPTIMIZED v1.1
+ * @title CrossChainBridge - GAS OPTIMIZED v1.2 - SECURITY FIXES APPLIED
  * @author Chronos Vault Team
+ * 
+ * ⚠️⚠️⚠️ CRITICAL WARNINGS - NOT PRODUCTION READY ⚠️⚠️⚠️
+ * 
+ * UNFIXABLE ISSUES (require complete architectural redesign):
+ * 
+ * 1. DOUBLE-SPEND VULNERABILITY (CRITICAL):
+ *    - _executeOperation() releases funds on SOURCE chain instead of DESTINATION chain
+ *    - Users receive funds on BOTH chains (100% exploitable)
+ *    - FIX REQUIRED: Implement Lock-Mint pattern with LayerZero V2
+ *      - Source chain: Lock tokens, send cross-chain message
+ *      - Destination chain: Receive message, verify 2-of-3 consensus, release funds
+ *    - See COMPREHENSIVE_FIX_PLAN.md for full implementation details
+ * 
+ * 2. MISSING CROSS-CHAIN MESSAGING (CRITICAL):
+ *    - No actual bridge mechanism (no LayerZero/Axelar/Wormhole integration)
+ *    - Contract cannot coordinate lock/mint flows across chains
+ *    - Cannot verify message delivery on destination chain
+ *    - FIX REQUIRED: Integrate LayerZero V2 OApp for cross-chain messaging
+ *    - Timeline: 6-8 weeks, ~$250K investment
+ * 
+ * FIXED ISSUES (v1.2):
+ * ✅ FIX #3: Nonce-based Merkle root updates (prevents replay attacks)
+ * ✅ FIX #4: Slippage protection comments added (SWAP not implemented yet)
+ * ✅ FIX #5: Resume approval tied to circuit breaker events (prevents timestamp replay)
+ * ✅ FIX #6: Validator fee distribution (80% validators, 20% protocol)
+ * ✅ FIX #7: Rolling window rate limiting (prevents day-boundary bypass)
+ * ✅ FIX #8: Operation cancellation with 24h timelock
+ * 
  * @notice Storage-packed version with 33-40% gas savings while maintaining security
  * @dev OPTIMIZATIONS APPLIED:
  * 
@@ -76,12 +104,44 @@ contract CrossChainBridgeOptimized is ReentrancyGuard {
     // EMERGENCY CONTROLLER (IMMUTABLE)
     address public immutable emergencyController;
     
-    // SECURITY FIX: Trusted Merkle root storage
+    // SECURITY FIX: Trusted Merkle root storage with NONCE-BASED replay protection
     mapping(uint8 => bytes32) public trustedMerkleRoots;
+    mapping(uint8 => uint256) public merkleRootNonce; // FIX #3: Sequential nonce per chain
+    mapping(bytes32 => bool) public usedMerkleSignatures; // FIX #3: Additional replay protection
     mapping(bytes32 => bool) public usedSignatures; // Prevent replay attacks
-    mapping(address => mapping(uint256 => uint256)) public userDailyOperations; // Rate limiting
-    uint256 public constant MAX_USER_OPS_PER_DAY = 100;
+    
+    // FIX #7: Rolling window rate limiting (replaces daily limit)
+    struct RateLimitWindow {
+        uint256[100] timestamps;  // Circular buffer for last 100 operations
+        uint8 currentIndex;       // Next slot to overwrite
+    }
+    mapping(address => RateLimitWindow) public userRateLimits;
+    uint256 public constant RATE_LIMIT_WINDOW = 24 hours;
+    uint256 public constant MAX_OPS_PER_WINDOW = 100;
     uint256 public constant MAX_MERKLE_DEPTH = 32;
+    
+    // FIX #8: Operation cancellation
+    uint256 public constant CANCELLATION_DELAY = 24 hours;
+    uint256 public constant CANCELLATION_PENALTY = 20; // 20% penalty
+    
+    // FIX #5: Circuit breaker event tracking for resume approval
+    struct CircuitBreakerEvent {
+        uint256 eventId;
+        uint256 triggeredAt;
+        string reason;
+        bool resolved;
+    }
+    mapping(uint256 => CircuitBreakerEvent) public circuitBreakerEvents;
+    uint256 public currentEventId;
+    mapping(uint256 => mapping(uint8 => mapping(bytes32 => bool))) public usedApprovals; // Per-event approval tracking
+    
+    // FIX #6: Validator fee distribution
+    mapping(address => uint256) public validatorFeeShares;
+    mapping(address => uint256) public validatorProofsSubmitted;
+    uint256 public totalProofsSubmitted;
+    uint256 public constant VALIDATOR_FEE_PERCENTAGE = 80; // 80% to validators
+    uint256 public constant PROTOCOL_FEE_PERCENTAGE = 20;  // 20% to protocol
+    uint256 public protocolFees;
     
     // TRINITY PROTOCOL: Validators
     mapping(uint8 => mapping(address => bool)) public authorizedValidators;
@@ -166,9 +226,11 @@ contract CrossChainBridgeOptimized is ReentrancyGuard {
         string sourceChain;
         string destinationChain;
         address tokenAddress;
+        address destinationToken; // FIX #4: For SWAP operations
         uint256 amount;
         uint256 fee;
         uint256 timestamp;
+        uint256 lastProofTimestamp; // FIX #8: Track last proof submission for cancellation
         bytes32 targetTxHash;
         uint256 slippageTolerance;
         ChainProof[3] chainProofs;
@@ -237,6 +299,51 @@ contract CrossChainBridgeOptimized is ReentrancyGuard {
         uint8 chainId,
         address submitter,
         string reason
+    );
+    
+    // FIX #3: Merkle root update event with nonce
+    event MerkleRootUpdated(
+        uint8 indexed chainId,
+        bytes32 merkleRoot,
+        uint256 nonce,
+        address indexed validator
+    );
+    
+    // FIX #6: Fee distribution events
+    event FeesDistributed(
+        uint256 totalFees,
+        uint256 validatorPortion,
+        uint256 protocolPortion
+    );
+    
+    event ValidatorFeesClaimed(
+        address indexed validator,
+        uint256 amount
+    );
+    
+    event ProtocolFeesWithdrawn(
+        address indexed to,
+        uint256 amount
+    );
+    
+    // FIX #7: Rate limit event
+    event RateLimitChecked(
+        address indexed user,
+        uint256 timestamp
+    );
+    
+    // FIX #8: Operation cancellation events
+    event OperationCanceled(
+        bytes32 indexed operationId,
+        uint256 amountRefunded,
+        uint256 feeRefunded,
+        uint256 penalty
+    );
+    
+    event EmergencyCancellation(
+        bytes32 indexed operationId,
+        string reason,
+        uint256 timestamp
     );
     
     // Modifiers
@@ -341,33 +448,32 @@ contract CrossChainBridgeOptimized is ReentrancyGuard {
     }
     
     /**
-     * @dev CRITICAL FIX: Update trusted Merkle roots
+     * @dev FIX #3: Update trusted Merkle roots with NONCE-BASED replay protection
      * Validators submit verified Merkle roots from their chains
      * @param chainId Chain to update root for (1=ETH, 2=SOL, 3=TON)
      * @param merkleRoot The trusted Merkle root from validator
-     * @param validatorTimestamp Timestamp when validator signed (for replay protection)
+     * @param nonce Sequential nonce (must be current nonce + 1)
      * @param validatorSignature Validator's signature
      */
     function updateTrustedMerkleRoot(
         uint8 chainId,
         bytes32 merkleRoot,
-        uint256 validatorTimestamp,
+        uint256 nonce,
         bytes calldata validatorSignature
     ) external {
         require(chainId >= 1 && chainId <= 3, "Invalid chain ID");
         require(merkleRoot != bytes32(0), "Invalid Merkle root");
         
-        // CRITICAL FIX: Verify timestamp freshness (prevent old signatures)
-        require(validatorTimestamp <= block.timestamp, "Future timestamp");
-        require(block.timestamp - validatorTimestamp <= 1 hours, "Signature too old");
+        // FIX #3: CRITICAL - Enforce sequential nonce (prevents replay attacks)
+        require(nonce == merkleRootNonce[chainId] + 1, "Invalid nonce sequence");
         
-        // Verify signature from authorized validator
+        // Create unique message hash with nonce
         bytes32 messageHash = keccak256(abi.encodePacked(
             "UPDATE_MERKLE_ROOT",
             block.chainid,
             chainId,
             merkleRoot,
-            validatorTimestamp // Use validator's timestamp, not block.timestamp!
+            nonce  // FIX #3: Nonce ensures uniqueness
         ));
         
         bytes32 ethSignedMessageHash = keccak256(abi.encodePacked(
@@ -375,21 +481,83 @@ contract CrossChainBridgeOptimized is ReentrancyGuard {
             messageHash
         ));
         
+        // FIX #3: CRITICAL - Prevent signature replay
+        require(!usedMerkleSignatures[ethSignedMessageHash], "Signature already used");
+        
         address recoveredSigner = ECDSA.recover(ethSignedMessageHash, validatorSignature);
         require(authorizedValidators[chainId][recoveredSigner], "Not authorized validator");
         
+        // Update state
+        merkleRootNonce[chainId] = nonce;
         trustedMerkleRoots[chainId] = merkleRoot;
+        usedMerkleSignatures[ethSignedMessageHash] = true;
+        
+        emit MerkleRootUpdated(chainId, merkleRoot, nonce, recoveredSigner);
     }
     
     /**
-     * @dev CRITICAL FIX: Withdraw collected fees
+     * @dev FIX #6: Distribute fees to validators (replaces centralized withdrawal)
+     * 80% goes to validators proportional to their proof submissions
+     * 20% goes to protocol (emergency controller)
      */
-    function withdrawFees(address to) external onlyEmergencyController {
-        require(to != address(0), "Invalid address");
-        uint256 amount = collectedFees;
+    function distributeFees() external {
+        require(totalProofsSubmitted > 0, "No proofs submitted");
+        
+        uint256 totalFees = collectedFees;
         collectedFees = 0;
+        
+        // Split fees: 80% validators, 20% protocol
+        uint256 validatorPortion = (totalFees * VALIDATOR_FEE_PERCENTAGE) / 100;
+        uint256 protocolPortion = totalFees - validatorPortion;
+        
+        protocolFees += protocolPortion;
+        
+        // Distribute to validators based on contribution
+        for (uint8 chainId = 1; chainId <= 3; chainId++) {
+            address[] memory validators = validatorList[chainId];
+            
+            for (uint256 i = 0; i < validators.length; i++) {
+                address validator = validators[i];
+                uint256 validatorProofs = validatorProofsSubmitted[validator];
+                
+                if (validatorProofs > 0) {
+                    // Share proportional to proofs submitted
+                    uint256 validatorShare = (validatorPortion * validatorProofs) / totalProofsSubmitted;
+                    validatorFeeShares[validator] += validatorShare;
+                }
+            }
+        }
+        
+        emit FeesDistributed(totalFees, validatorPortion, protocolPortion);
+    }
+    
+    /**
+     * @dev FIX #6: Validators claim their earned fees
+     */
+    function claimValidatorFees() external {
+        uint256 amount = validatorFeeShares[msg.sender];
+        require(amount > 0, "No fees to claim");
+        
+        validatorFeeShares[msg.sender] = 0;
+        
+        (bool sent, ) = msg.sender.call{value: amount}("");
+        require(sent, "Failed to send fees");
+        
+        emit ValidatorFeesClaimed(msg.sender, amount);
+    }
+    
+    /**
+     * @dev FIX #6: Emergency controller withdraws protocol fees (only 20% share)
+     */
+    function withdrawProtocolFees(address to) external onlyEmergencyController {
+        require(to != address(0), "Invalid address");
+        uint256 amount = protocolFees;
+        protocolFees = 0;
+        
         (bool sent, ) = to.call{value: amount}("");
         require(sent, "Failed to send fees");
+        
+        emit ProtocolFeesWithdrawn(to, amount);
     }
     
     function getCircuitBreakerStatus() external view returns (
@@ -423,10 +591,8 @@ contract CrossChainBridgeOptimized is ReentrancyGuard {
         if (amount == 0) revert InvalidAmount();
         if (!supportedChains[destinationChain]) revert InvalidChain();
         
-        // CRITICAL FIX: Per-user rate limiting
-        uint256 today = block.timestamp / 1 days;
-        require(userDailyOperations[msg.sender][today] < MAX_USER_OPS_PER_DAY, "Rate limit exceeded");
-        userDailyOperations[msg.sender][today]++;
+        // FIX #7: Rolling window rate limiting (prevents day-boundary bypass)
+        _checkRateLimit(msg.sender);
         
         // TIER 2: Track same-block EVERY operation, check volume every 10th
         bool sameBlockAnomaly = _checkSameBlockAnomaly(); // Always track
@@ -570,6 +736,30 @@ contract CrossChainBridgeOptimized is ReentrancyGuard {
         operation.chainVerified[chainProof.chainId] = true;
         operation.validProofCount++;
         
+        // FIX #8: Track last proof timestamp for cancellation checks
+        operation.lastProofTimestamp = block.timestamp;
+        
+        // FIX #6: Track validator contribution for fee distribution
+        address validator = ECDSA.recover(
+            keccak256(abi.encodePacked(
+                "\x19Ethereum Signed Message:\n32",
+                keccak256(abi.encodePacked(
+                    "CHAIN_PROOF",
+                    block.chainid,
+                    chainProof.chainId,
+                    operationId,
+                    chainProof.merkleRoot,
+                    chainProof.blockHash,
+                    chainProof.txHash,
+                    chainProof.timestamp,
+                    chainProof.blockNumber
+                ))
+            )),
+            chainProof.validatorSignature
+        );
+        validatorProofsSubmitted[validator]++;
+        totalProofsSubmitted++;
+        
         // CRITICAL FIX: Auto-execute and RELEASE FUNDS if consensus reached
         if (operation.validProofCount >= REQUIRED_CHAIN_CONFIRMATIONS) {
             _executeOperation(operationId);
@@ -579,12 +769,39 @@ contract CrossChainBridgeOptimized is ReentrancyGuard {
     /**
      * @dev CRITICAL FIX: Actually release funds to user
      * This function was COMPLETELY MISSING - funds were locked forever!
+     * 
+     * ⚠️ WARNING: FIX #4 - SLIPPAGE PROTECTION NOT ENFORCED
+     * When SWAP operations are implemented, MUST add:
+     * 
+     * if (operation.operationType == OperationType.SWAP) {
+     *     uint256 expectedAmount = operation.amount;
+     *     uint256 minAcceptable = expectedAmount * (10000 - operation.slippageTolerance) / 10000;
+     *     uint256 amountOut = _performSwap(
+     *         operation.tokenAddress,
+     *         operation.destinationToken,
+     *         operation.amount,
+     *         minAcceptable
+     *     );
+     *     require(amountOut >= minAcceptable, "Slippage exceeded tolerance");
+     *     IERC20(operation.destinationToken).safeTransfer(operation.user, amountOut);
+     * } else {
+     *     // Regular TRANSFER or BRIDGE operation
+     *     [existing code]
+     * }
+     * 
+     * ⚠️ WARNING: DOUBLE-SPEND VULNERABILITY (UNFIXABLE HERE)
+     * This function releases funds on SOURCE chain, not DESTINATION chain!
+     * Requires LayerZero V2 integration - see COMPREHENSIVE_FIX_PLAN.md
      */
     function _executeOperation(bytes32 operationId) internal {
         Operation storage operation = operations[operationId];
         
         require(operation.status == OperationStatus.PENDING, "Operation not pending");
         operation.status = OperationStatus.COMPLETED;
+        
+        // CRITICAL WARNING: This releases funds on SOURCE chain (WRONG!)
+        // Should only release on DESTINATION chain after cross-chain message
+        // This creates double-spend vulnerability - user gets funds on both chains
         
         // CRITICAL: Release funds to user
         if (operation.tokenAddress != address(0)) {
@@ -605,21 +822,47 @@ contract CrossChainBridgeOptimized is ReentrancyGuard {
     function submitResumeApproval(
         uint8 chainId,
         bytes32 approvalHash,
+        uint256 approvalTimestamp,
         bytes calldata chainSignature
     ) external {
         require(circuitBreaker.active, "Circuit breaker not active");
         require(chainId >= 1 && chainId <= 3, "Invalid chain ID");
         require(!circuitBreaker.chainApprovedResume[chainId], "Chain already approved");
         
-        require(_verifyResumeApproval(chainId, approvalHash, chainSignature), "Invalid approval");
+        CircuitBreakerEvent storage currentEvent = circuitBreakerEvents[currentEventId];
         
+        // FIX #5: Create message hash tied to specific event
+        bytes32 messageHash = keccak256(abi.encodePacked(
+            "RESUME_APPROVAL",
+            block.chainid,
+            chainId,
+            approvalHash,
+            currentEventId,
+            currentEvent.triggeredAt,
+            approvalTimestamp
+        ));
+        
+        bytes32 ethSignedMessageHash = keccak256(abi.encodePacked(
+            "\x19Ethereum Signed Message:\n32",
+            messageHash
+        ));
+        
+        // FIX #5: CRITICAL - Prevent replay within same event
+        require(!usedApprovals[currentEventId][chainId][ethSignedMessageHash], "Approval already used");
+        
+        address recoveredSigner = ECDSA.recover(ethSignedMessageHash, chainSignature);
+        require(authorizedValidators[chainId][recoveredSigner], "Not authorized validator");
+        
+        // Mark approval as used
+        usedApprovals[currentEventId][chainId][ethSignedMessageHash] = true;
         circuitBreaker.chainApprovedResume[chainId] = true;
         circuitBreaker.resumeChainConsensus++;
         
+        // Resolve if 2-of-3 consensus reached
         if (circuitBreaker.resumeChainConsensus >= 2) {
             circuitBreaker.active = false;
-            circuitBreaker.resumeChainConsensus = 0;
-            emit CircuitBreakerResolved("2-of-3 chain consensus", block.timestamp);
+            currentEvent.resolved = true;
+            emit CircuitBreakerResolved("Trinity consensus", block.timestamp);
         }
     }
     
@@ -643,6 +886,16 @@ contract CrossChainBridgeOptimized is ReentrancyGuard {
             circuitBreaker.active = true;
             circuitBreaker.triggeredAt = block.timestamp;
             circuitBreaker.reason = "Volume spike detected";
+            
+            // FIX #5: Create new circuit breaker event
+            currentEventId++;
+            circuitBreakerEvents[currentEventId] = CircuitBreakerEvent({
+                eventId: currentEventId,
+                triggeredAt: block.timestamp,
+                reason: "Volume spike detected",
+                resolved: false
+            });
+            
             emit CircuitBreakerTriggered("Volume spike", block.timestamp, newAmount);
             return true; // Don't revert - let state persist
         }
@@ -661,6 +914,16 @@ contract CrossChainBridgeOptimized is ReentrancyGuard {
                 circuitBreaker.active = true;
                 circuitBreaker.triggeredAt = block.timestamp;
                 circuitBreaker.reason = "Same-block spam detected";
+                
+                // FIX #5: Create new circuit breaker event
+                currentEventId++;
+                circuitBreakerEvents[currentEventId] = CircuitBreakerEvent({
+                    eventId: currentEventId,
+                    triggeredAt: block.timestamp,
+                    reason: "Same-block spam detected",
+                    resolved: false
+                });
+                
                 emit CircuitBreakerTriggered("Same-block spam", block.timestamp, uint256(metrics.operationsInBlock));
                 return true; // Don't revert - let state persist
             }
@@ -688,6 +951,16 @@ contract CrossChainBridgeOptimized is ReentrancyGuard {
                 circuitBreaker.active = true;
                 circuitBreaker.triggeredAt = block.timestamp;
                 circuitBreaker.reason = "High proof failure rate";
+                
+                // FIX #5: Create new circuit breaker event
+                currentEventId++;
+                circuitBreakerEvents[currentEventId] = CircuitBreakerEvent({
+                    eventId: currentEventId,
+                    triggeredAt: block.timestamp,
+                    reason: "High proof failure rate",
+                    resolved: false
+                });
+                
                 emit CircuitBreakerTriggered("Proof failure spike", block.timestamp, failureRate);
                 return true; // Don't revert - let state persist
             }
@@ -788,17 +1061,23 @@ contract CrossChainBridgeOptimized is ReentrancyGuard {
         }
     }
     
+    /**
+     * @dev FIX #5: Verify resume approval tied to specific circuit breaker event
+     */
     function _verifyResumeApproval(
         uint8 chainId,
         bytes32 approvalHash,
         bytes calldata chainSignature
     ) internal view returns (bool) {
+        CircuitBreakerEvent storage currentEvent = circuitBreakerEvents[currentEventId];
+        
         bytes32 messageHash = keccak256(abi.encodePacked(
             "RESUME_APPROVAL",
             block.chainid,
             chainId,
             approvalHash,
-            block.timestamp
+            currentEventId,           // FIX #5: Ties to specific event
+            currentEvent.triggeredAt  // FIX #5: Ties to trigger time
         ));
         
         bytes32 ethSignedMessageHash = keccak256(abi.encodePacked(
@@ -806,7 +1085,105 @@ contract CrossChainBridgeOptimized is ReentrancyGuard {
             messageHash
         ));
         
+        // FIX #5: CRITICAL - Prevent replay within same event
+        require(!usedApprovals[currentEventId][chainId][ethSignedMessageHash], "Approval already used");
+        
         address recoveredSigner = ECDSA.recover(ethSignedMessageHash, chainSignature);
         return authorizedValidators[chainId][recoveredSigner];
+    }
+    
+    /**
+     * @dev FIX #7: Rolling window rate limiting (prevents day-boundary bypass)
+     */
+    function _checkRateLimit(address user) internal {
+        RateLimitWindow storage window = userRateLimits[user];
+        
+        // Check oldest operation in window
+        uint256 oldestTime = window.timestamps[window.currentIndex];
+        
+        // If oldest operation is still within 24h window, limit reached
+        require(
+            block.timestamp >= oldestTime + RATE_LIMIT_WINDOW,
+            "Rate limit: max 100 operations per 24 hours"
+        );
+        
+        // Store new timestamp (overwrites oldest)
+        window.timestamps[window.currentIndex] = block.timestamp;
+        
+        // Move to next slot (circular buffer)
+        window.currentIndex = uint8((window.currentIndex + 1) % MAX_OPS_PER_WINDOW);
+        
+        emit RateLimitChecked(user, block.timestamp);
+    }
+    
+    /**
+     * @dev FIX #8: Cancel stuck operation after 24-hour timelock
+     */
+    function cancelOperation(bytes32 operationId) external nonReentrant {
+        Operation storage op = operations[operationId];
+        
+        require(op.id == operationId, "Operation not found");
+        require(op.user == msg.sender, "Not operation owner");
+        require(op.status == OperationStatus.PENDING, "Cannot cancel non-pending operation");
+        
+        // FIX #8: CRITICAL - Enforce 24-hour waiting period
+        require(
+            block.timestamp >= op.timestamp + CANCELLATION_DELAY,
+            "Must wait 24 hours before cancellation"
+        );
+        
+        // FIX #8: Additional check - No recent proof submissions
+        require(
+            block.timestamp >= op.lastProofTimestamp + 1 hours,
+            "Recent proof activity - wait 1 hour"
+        );
+        
+        op.status = OperationStatus.CANCELED;
+        
+        // Refund locked tokens
+        if (op.tokenAddress != address(0)) {
+            IERC20(op.tokenAddress).safeTransfer(op.user, op.amount);
+        } else {
+            (bool sent, ) = op.user.call{value: op.amount}("");
+            require(sent, "Failed to refund ETH");
+        }
+        
+        // Refund fee with penalty
+        uint256 refundFee = op.fee * (100 - CANCELLATION_PENALTY) / 100;
+        uint256 penaltyFee = op.fee - refundFee;
+        
+        (bool feeSent, ) = op.user.call{value: refundFee}("");
+        require(feeSent, "Failed to refund fee");
+        
+        // Penalty goes to validators as compensation
+        collectedFees += penaltyFee;
+        
+        emit OperationCanceled(operationId, op.amount, refundFee, penaltyFee);
+    }
+    
+    /**
+     * @dev FIX #8: Emergency controller can cancel any operation
+     */
+    function emergencyCancelOperation(bytes32 operationId, string calldata reason) 
+        external 
+        onlyEmergencyController 
+    {
+        Operation storage op = operations[operationId];
+        require(op.status == OperationStatus.PENDING, "Cannot cancel");
+        
+        op.status = OperationStatus.CANCELED;
+        
+        // Full refund (no penalty for admin cancellations)
+        if (op.tokenAddress != address(0)) {
+            IERC20(op.tokenAddress).safeTransfer(op.user, op.amount);
+        } else {
+            (bool sent, ) = op.user.call{value: op.amount}("");
+            require(sent, "Failed to refund ETH");
+        }
+        
+        (bool feeSent, ) = op.user.call{value: op.fee}("");
+        require(feeSent, "Failed to refund fee");
+        
+        emit EmergencyCancellation(operationId, reason, block.timestamp);
     }
 }
