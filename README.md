@@ -114,7 +114,7 @@ theorem trinity_consensus :
 **Legacy Contracts (Will be Deprecated)**:
 | Contract | Address | Status |
 |----------|---------|--------|
-| **CrossChainBridge: `0x4300AbD703dae7641ec096d8ac03684fB4103CDe``](https://sepolia.arbiscan.io/address/0x13dc7df46c2e87E8B2010A28F13404580158Ed9A) | ⚠️ Legacy - Will migrate to Unified |
+| **CrossChainBridge: `0x4300AbD703dae7641ec096d8ac03684fB4103CDe``](https://sepolia.arbiscan.io/address/0x83DeAbA0de5252c74E1ac64EDEc25aDab3c50859) | ⚠️ Legacy - Will migrate to Unified |
 
 > **🎉 Trinity Protocol Unified Bridge DEPLOYED (Oct 15, 2025)**: All security features now LIVE on-chain - ECDSA verification, Validator registry (9 validators), ChainId binding, Merkle proofs, Circuit breakers, Emergency multisig, 2-of-3 consensus. Legacy V3 will be deprecated.
 
