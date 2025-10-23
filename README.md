@@ -108,13 +108,13 @@ theorem trinity_consensus :
 | **CVT Token** | [`0xFb419D8E32c14F774279a4dEEf330dc893257147`](https://sepolia.arbiscan.io/address/0xFb419D8E32c14F774279a4dEEf330dc893257147) | ✅ |
 | **CVT Bridge** | [`0x21De95EbA01E31173Efe1b9c4D57E58bb840bA86`](https://sepolia.arbiscan.io/address/0x21De95EbA01E31173Efe1b9c4D57E58bb840bA86) | ✅ |
 | **ChronosVault** | [`0x99444B0B1d6F7b21e9234229a2AC2bC0150B9d91`](https://sepolia.arbiscan.io/address/0x99444B0B1d6F7b21e9234229a2AC2bC0150B9d91) | ✅ |
-| **EmergencyMultiSig** | [`0xecc00bbE268Fa4D0330180e0fB445f64d824d818`](https://sepolia.arbiscan.io/address/0xecc00bbE268Fa4D0330180e0fB445f64d824d818) | ✅ |
-| **CrossChainBridge: `0x4300AbD703dae7641ec096d8ac03684fB4103CDe``](https://sepolia.arbiscan.io/address/0x101F37D9bf445E92A237F8721CA7D12205D61Fe6) | ✅ |
+| **EmergencyMultiSig** | [`0x83DeAbA0de5252c74E1ac64EDEc25aDab3c50859`](https://sepolia.arbiscan.io/address/0x83DeAbA0de5252c74E1ac64EDEc25aDab3c50859) | ✅ |
+| **CrossChainBridge: `0x83DeAbA0de5252c74E1ac64EDEc25aDab3c50859``](https://sepolia.arbiscan.io/address/0x83DeAbA0de5252c74E1ac64EDEc25aDab3c50859) | ✅ |
 
 **Legacy Contracts (Will be Deprecated)**:
 | Contract | Address | Status |
 |----------|---------|--------|
-| **CrossChainBridge: `0x4300AbD703dae7641ec096d8ac03684fB4103CDe``](https://sepolia.arbiscan.io/address/0x83DeAbA0de5252c74E1ac64EDEc25aDab3c50859) | ⚠️ Legacy - Will migrate to Unified |
+| **CrossChainBridge: `0x83DeAbA0de5252c74E1ac64EDEc25aDab3c50859``](https://sepolia.arbiscan.io/address/0x83DeAbA0de5252c74E1ac64EDEc25aDab3c50859) | ⚠️ Legacy - Will migrate to Unified |
 
 > **🎉 Trinity Protocol Unified Bridge DEPLOYED (Oct 15, 2025)**: All security features now LIVE on-chain - ECDSA verification, Validator registry (9 validators), ChainId binding, Merkle proofs, Circuit breakers, Emergency multisig, 2-of-3 consensus. Legacy V3 will be deprecated.
 
@@ -568,7 +568,7 @@ Every security claim is mathematically provable, not just audited.
 
 ## Trinity Protocol 2-of-3 Consensus
 
-The deployed CrossChainBridge at `0x4300AbD703dae7641ec096d8ac03684fB4103CDe` requires 2-of-3 validator signatures across:
+The deployed CrossChainBridge at `0x83DeAbA0de5252c74E1ac64EDEc25aDab3c50859` requires 2-of-3 validator signatures across:
 - **Ethereum Layer 2** (Arbitrum): 3 validators
 - **Solana**: 3 validators  
 - **TON**: 3 validators
