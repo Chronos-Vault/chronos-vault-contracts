@@ -9,12 +9,31 @@ import "@openzeppelin/contracts/utils/math/Math.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 /**
- * @title ChronosVault - SECURITY HARDENED v1.2
+ * @notice Interface for CrossChainBridgeOptimized
+ * @dev Used for type-safe Trinity Protocol integration
+ */
+interface ICrossChainBridge {
+    function createVaultOperation(
+        address _vaultAddress,
+        string calldata destinationChain,
+        uint256 amount,
+        bool prioritizeSecurity
+    ) external payable returns (bytes32 operationId);
+}
+
+/**
+ * @title ChronosVault - SECURITY HARDENED v1.3 (Audit Fixes Applied)
  * @author Chronos Vault Team
- * @notice Storage-packed vault with 37-49% gas savings AND complete security
- * @dev SECURITY FIXES APPLIED (v1.1 → v1.2):
+ * @notice ERC-4626 vault for investment-focused vault types with Trinity Protocol integration
+ * @dev SECURITY FIXES APPLIED (v1.2 → v1.3):
  * 
- * CRITICAL FIXES:
+ * AUDIT FIXES (October 2025):
+ * H-01: Fixed multi-sig race condition (strict equality check)
+ * M-01: Added whenNotEmergencyMode to withdrawal functions
+ * M-02: Removed dangerous fee collection time limit
+ * L-01: Optimized blockchain check to O(1) with mapping
+ * 
+ * PREVIOUS FIXES (v1.1 → v1.2):
  * 1. Added access control to submitChainVerification (authorized validators only)
  * 2. Merkle root verification now properly enforced
  * 3. Fixed _executeWithdrawal to use proper ERC4626 withdraw flow
@@ -32,9 +51,46 @@ contract ChronosVaultOptimized is ERC4626, Ownable, ReentrancyGuard {
     using Math for uint256;
     using ECDSA for bytes32;
 
+    /**
+     * @notice Vault Types - Matches ChronosVault.sol enum
+     * @dev Only 7 types support ERC-4626 functionality (investment-focused vaults)
+     */
+    enum VaultType {
+        TIME_LOCK,              // 1. Standard vault (non-ERC-4626)
+        MULTI_SIGNATURE,        // 2. Standard vault (non-ERC-4626)
+        QUANTUM_RESISTANT,      // 3. Standard vault (non-ERC-4626)
+        GEO_LOCATION,           // 4. Standard vault (non-ERC-4626)
+        NFT_POWERED,            // 5. Standard vault (non-ERC-4626)
+        BIOMETRIC,              // 6. Standard vault (non-ERC-4626)
+        SOVEREIGN_FORTRESS,     // 7. ✅ ERC-4626 (Premium all-in-one with yield)
+        DEAD_MANS_SWITCH,       // 8. Standard vault (non-ERC-4626)
+        INHERITANCE,            // 9. Standard vault (non-ERC-4626)
+        CONDITIONAL_RELEASE,    // 10. Standard vault (non-ERC-4626)
+        SOCIAL_RECOVERY,        // 11. Standard vault (non-ERC-4626)
+        PROOF_OF_RESERVE,       // 12. ✅ ERC-4626 (Requires tokenized backing)
+        ESCROW,                 // 13. ✅ ERC-4626 (Tradeable escrow positions)
+        CORPORATE_TREASURY,     // 14. ✅ ERC-4626 (Governance tokens)
+        LEGAL_COMPLIANCE,       // 15. Standard vault (non-ERC-4626)
+        INSURANCE_BACKED,       // 16. ✅ ERC-4626 (Insured yield positions)
+        STAKING_REWARDS,        // 17. ✅ ERC-4626 (DeFi staking yields)
+        LEVERAGE_VAULT,         // 18. ✅ ERC-4626 (Collateralized lending)
+        PRIVACY_ENHANCED,       // 19. Standard vault (non-ERC-4626)
+        MULTI_ASSET,            // 20. Standard vault (non-ERC-4626)
+        TIERED_ACCESS,          // 21. Standard vault (non-ERC-4626)
+        DELEGATED_VOTING        // 22. Standard vault (non-ERC-4626)
+    }
+    
+    VaultType public vaultType;
+    
+    // ===== TRINITY PROTOCOL INTEGRATION =====
+    address public trinityBridge; // CrossChainBridgeOptimized address
+    mapping(bytes32 => bool) public trinityOperations; // Track approved operations
+    uint256 public proofNonce; // Sequential nonce for cross-chain proofs
+
     // ===== SECURITY: Authorized Validators =====
     mapping(uint8 => mapping(address => bool)) public authorizedValidators;
     mapping(bytes32 => bytes32) public storedMerkleRoots; // NEW: Store expected roots
+    mapping(string => bool) public isBlockchainSupported; // L-01 FIX: O(1) blockchain check
     
     // ===== OPTIMIZED: State Variables (STORAGE PACKED) =====
     
@@ -147,6 +203,21 @@ contract ChronosVaultOptimized is ERC4626, Ownable, ReentrancyGuard {
     event AuthorizedRetrieverAdded(address indexed retriever);
     event CrossChainAddressUpdated(string blockchain, string chainAddress);
     event ValidatorAuthorized(uint8 chainId, address validator);
+    event TrinityBridgeUpdated(address indexed oldBridge, address indexed newBridge);
+    event TrinityOperationCreated(bytes32 indexed operationId, string destinationChain, uint256 amount);
+    
+    // ===== TRINITY PROTOCOL: Cross-Chain Proof Events =====
+    event ProofGenerated(
+        bytes32 indexed operationId,
+        uint8 indexed sourceChainId,
+        uint8 operationType,
+        bytes32 vaultId,
+        uint256 amount,
+        uint256 timestamp,
+        uint256 blockNumber,
+        bytes32[] merkleProof,
+        uint256 nonce
+    );
     
     // Modifiers
     modifier onlyWhenUnlocked() {
@@ -188,7 +259,8 @@ contract ChronosVaultOptimized is ERC4626, Ownable, ReentrancyGuard {
         uint256 _unlockTime,
         uint8 _securityLevel,
         string memory _accessKey,
-        bool _isPublic
+        bool _isPublic,
+        VaultType _vaultType
     ) 
         ERC20(_name, _symbol)
         ERC4626(_asset)
@@ -196,6 +268,7 @@ contract ChronosVaultOptimized is ERC4626, Ownable, ReentrancyGuard {
     {
         require(_unlockTime > block.timestamp, "Unlock time must be in the future");
         require(_securityLevel >= 1 && _securityLevel <= 5, "Security level must be 1-5");
+        require(supportsERC4626(_vaultType), "Vault type must support ERC-4626");
         
         if (_securityLevel > 1) {
             require(bytes(_accessKey).length > 0, "Access key required for security levels > 1");
@@ -205,6 +278,7 @@ contract ChronosVaultOptimized is ERC4626, Ownable, ReentrancyGuard {
         unlockTime = _unlockTime;
         isUnlocked = false;
         securityLevel = _securityLevel;
+        vaultType = _vaultType;
         lastFeeCollection = uint128(block.timestamp);
         nextWithdrawalRequestId = 1;
         
@@ -259,6 +333,9 @@ contract ChronosVaultOptimized is ERC4626, Ownable, ReentrancyGuard {
         
         uint256 shares = super.deposit(assets, receiver);
         
+        // TRINITY PROTOCOL: Generate cross-chain proof for deposit
+        generateProof(2, assets); // operationType=2 (Deposit)
+        
         emit AssetDeposited(msg.sender, assets);
         return shares;
     }
@@ -288,6 +365,9 @@ contract ChronosVaultOptimized is ERC4626, Ownable, ReentrancyGuard {
         }
         
         uint256 shares = super.withdraw(assets, receiver, _owner);
+        
+        // TRINITY PROTOCOL: Generate cross-chain proof for withdrawal
+        generateProof(3, assets); // operationType=3 (Withdrawal)
         
         emit AssetWithdrawn(receiver, assets);
         return shares;
@@ -319,6 +399,9 @@ contract ChronosVaultOptimized is ERC4626, Ownable, ReentrancyGuard {
         
         uint256 assets = super.redeem(shares, receiver, _owner);
         
+        // TRINITY PROTOCOL: Generate cross-chain proof for redemption
+        generateProof(3, assets); // operationType=3 (Withdrawal)
+        
         emit AssetWithdrawn(receiver, assets);
         return assets;
     }
@@ -331,6 +414,7 @@ contract ChronosVaultOptimized is ERC4626, Ownable, ReentrancyGuard {
     /**
      * @dev TRINITY PROTOCOL: Submit cryptographic proof
      * SECURITY FIX: Added access control and Merkle verification
+     * FIX: Gate verification to only known Trinity operations
      */
     function submitChainVerification(
         uint8 chainId,
@@ -342,6 +426,9 @@ contract ChronosVaultOptimized is ERC4626, Ownable, ReentrancyGuard {
         require(chainId >= 1 && chainId <= 3, "Invalid chain ID");
         require(verificationHash != bytes32(0), "Invalid verification hash");
         require(merkleProof.length > 0, "Merkle proof required");
+        
+        // FIX: Only allow verification for known Trinity operations
+        require(trinityOperations[operationId], "Unknown Trinity operation");
         
         // SECURITY FIX 1: Verify ECDSA signature and check authorized validator
         bytes32 messageHash = keccak256(abi.encodePacked(
@@ -380,8 +467,117 @@ contract ChronosVaultOptimized is ERC4626, Ownable, ReentrancyGuard {
         emit CrossChainVerified(chainId, verificationHash);
     }
     
+    /**
+     * @notice Check if a vault type supports ERC-4626 functionality
+     * @dev Only 7 investment-focused vault types support ERC-4626
+     * @return bool True if the vault type supports ERC-4626
+     */
+    function supportsERC4626(VaultType _type) public pure returns (bool) {
+        return _type == VaultType.SOVEREIGN_FORTRESS ||
+               _type == VaultType.PROOF_OF_RESERVE ||
+               _type == VaultType.ESCROW ||
+               _type == VaultType.CORPORATE_TREASURY ||
+               _type == VaultType.INSURANCE_BACKED ||
+               _type == VaultType.STAKING_REWARDS ||
+               _type == VaultType.LEVERAGE_VAULT;
+    }
+    
     function getSecurityLevel() external view returns (uint8) {
         return securityLevel;
+    }
+    
+    function getVaultType() external view returns (VaultType) {
+        return vaultType;
+    }
+    
+    /**
+     * @notice Generate cross-chain proof for vault operation
+     * @dev Emits proof that Solana/TON chains can verify
+     * @param operationType 1=VaultCreation, 2=Deposit, 3=Withdrawal, 4=StateUpdate
+     * @param amount Amount involved in operation (0 if not applicable)
+     * @return operationId Unique identifier for this operation
+     */
+    function generateProof(
+        uint8 operationType,
+        uint256 amount
+    ) public returns (bytes32 operationId) {
+        require(msg.sender == owner() || msg.sender == address(this), "Only owner or internal");
+        
+        // Generate unique operation ID
+        operationId = keccak256(abi.encodePacked(
+            block.chainid,
+            address(this),
+            operationType,
+            amount,
+            block.timestamp,
+            block.number,
+            proofNonce
+        ));
+        
+        // Generate Merkle proof (simplified - real implementation would build full tree)
+        bytes32[] memory merkleProof = new bytes32[](3);
+        merkleProof[0] = keccak256(abi.encodePacked(operationType, amount));
+        merkleProof[1] = keccak256(abi.encodePacked(block.timestamp, block.number));
+        merkleProof[2] = keccak256(abi.encodePacked(address(this), owner()));
+        
+        // Increment nonce
+        proofNonce++;
+        
+        // Emit proof for relayer to pick up
+        emit ProofGenerated(
+            operationId,
+            CHAIN_ETHEREUM, // sourceChainId
+            operationType,
+            bytes32(uint256(uint160(address(this)))), // vaultId
+            amount,
+            block.timestamp,
+            block.number,
+            merkleProof,
+            proofNonce - 1
+        );
+        
+        return operationId;
+    }
+    
+    /**
+     * @notice Set Trinity Protocol bridge address
+     * @dev Only owner can set bridge for Trinity Protocol integration
+     */
+    function setTrinityBridge(address _bridge) external onlyOwner {
+        require(_bridge != address(0), "Invalid bridge address");
+        address oldBridge = trinityBridge;
+        trinityBridge = _bridge;
+        emit TrinityBridgeUpdated(oldBridge, _bridge);
+    }
+    
+    /**
+     * @notice Create cross-chain vault operation through Trinity Protocol
+     * @dev Calls CrossChainBridgeOptimized to create 2-of-3 consensus operation
+     * @param destinationChain Target blockchain for operation
+     * @param amount Amount to process
+     * @param prioritizeSecurity Whether to prioritize security (2-of-3) over speed
+     * @return operationId Unique identifier for the cross-chain operation
+     */
+    function createTrinityOperation(
+        string calldata destinationChain,
+        uint256 amount,
+        bool prioritizeSecurity
+    ) external payable onlyOwner returns (bytes32 operationId) {
+        require(trinityBridge != address(0), "Trinity Bridge not set");
+        require(amount > 0, "Invalid amount");
+        
+        // FIX: Use typed interface for type-safe call to bridge
+        ICrossChainBridge bridge = ICrossChainBridge(trinityBridge);
+        operationId = bridge.createVaultOperation{value: msg.value}(
+            address(this),
+            destinationChain,
+            amount,
+            prioritizeSecurity
+        );
+        
+        // FIX: Track operation for verification gating
+        trinityOperations[operationId] = true;
+        emit TrinityOperationCreated(operationId, destinationChain, amount);
     }
     
     function verifyAccessKey(string memory _accessKey) external view returns (bool) {
@@ -450,8 +646,8 @@ contract ChronosVaultOptimized is ERC4626, Ownable, ReentrancyGuard {
         if (_managementFee > 0 && timeElapsed > 0) {
             uint256 yearInSeconds = 365 days;
             
-            // SECURITY FIX: Add overflow protection
-            require(timeElapsed < 10 * yearInSeconds, "Time elapsed too large");
+            // M-02 FIX: Removed dangerous time limit check
+            // OpenZeppelin's mulDiv handles overflow protection internally
             
             uint256 feeAmount = totalAssets
                 .mulDiv(uint256(_managementFee), 10000)
@@ -555,8 +751,9 @@ contract ChronosVaultOptimized is ERC4626, Ownable, ReentrancyGuard {
     
     /**
      * @dev SECURITY FIX: Request withdrawal with proper owner tracking
+     * M-01 FIX: Added whenNotEmergencyMode modifier
      */
-    function requestWithdrawal(address _receiver, address _owner, uint256 _amount) external nonReentrant onlyAuthorized returns (uint256) {
+    function requestWithdrawal(address _receiver, address _owner, uint256 _amount) external nonReentrant whenNotEmergencyMode onlyAuthorized returns (uint256) {
         require(multiSig.enabled, "Multi-sig not enabled");
         require(_amount > 0, "Amount must be greater than 0");
         require(_amount < type(uint128).max, "Amount exceeds uint128");
@@ -580,8 +777,9 @@ contract ChronosVaultOptimized is ERC4626, Ownable, ReentrancyGuard {
     
     /**
      * @dev SECURITY FIX: Approve withdrawal with O(1) signer check
+     * M-01 FIX: Added whenNotEmergencyMode modifier
      */
-    function approveWithdrawal(uint256 _requestId) external nonReentrant {
+    function approveWithdrawal(uint256 _requestId) external nonReentrant whenNotEmergencyMode {
         WithdrawalRequest storage request = withdrawalRequests[_requestId];
         
         // SECURITY FIX: Check request exists
@@ -604,8 +802,9 @@ contract ChronosVaultOptimized is ERC4626, Ownable, ReentrancyGuard {
         
         emit WithdrawalApproved(_requestId, msg.sender);
         
-        // SECURITY FIX: Prevent race condition with reentrancy guard
-        if (request.approvalCount >= _threshold && !request.executed) {
+        // H-01 FIX: Use strict equality to prevent race condition
+        // Only the final signer (who reaches exactly threshold) executes
+        if (request.approvalCount == _threshold && !request.executed) {
             _executeWithdrawal(_requestId);
         }
     }
@@ -682,6 +881,7 @@ contract ChronosVaultOptimized is ERC4626, Ownable, ReentrancyGuard {
     
     /**
      * @dev Add cross-chain address with event
+     * L-01 FIX: Use mapping for O(1) blockchain existence check
      */
     function addCrossChainAddress(string calldata blockchain, string calldata chainAddress) external onlyOwner {
         require(bytes(blockchain).length > 0, "Invalid blockchain name");
@@ -689,17 +889,10 @@ contract ChronosVaultOptimized is ERC4626, Ownable, ReentrancyGuard {
         
         crossChainAddresses[blockchain] = chainAddress;
         
-        // Add to supported list if new
-        bool exists = false;
-        for (uint256 i = 0; i < supportedBlockchains.length; i++) {
-            if (keccak256(bytes(supportedBlockchains[i])) == keccak256(bytes(blockchain))) {
-                exists = true;
-                break;
-            }
-        }
-        
-        if (!exists) {
+        // L-01 FIX: O(1) check instead of O(n) loop
+        if (!isBlockchainSupported[blockchain]) {
             supportedBlockchains.push(blockchain);
+            isBlockchainSupported[blockchain] = true;
         }
         
         emit CrossChainAddressUpdated(blockchain, chainAddress);
