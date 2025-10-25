@@ -33,7 +33,8 @@
     "ChronosVaultOptimized": {
       "address": "TBD",
       "version": "v1.3",
-      "note": "ERC-4626 compliant vault for 7 investment-focused vault types",
+      "status": "⏳ PENDING DEPLOYMENT",
+      "note": "ERC-4626 compliant vault for 7 investment-focused vault types. Deployment scheduled post-audit.",
       "features": [
         "✅ ERC-4626 tokenized vaults",
         "✅ Audit Fixes H-01, M-01, M-02, L-01",
