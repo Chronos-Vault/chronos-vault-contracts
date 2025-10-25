@@ -1,0 +1,137 @@
+{
+  "version": "v1.4-PRODUCTION",
+  "release_date": "2025-10-25",
+  "network": "arbitrum-sepolia",
+  "chainId": 421614,
+  "deployer": "0x66e5046D136E82d17cbeB2FfEa5bd5205D962906",
+  
+  "contracts": {
+    "CrossChainBridgeOptimized": {
+      "address": "0x83DeAbA0de5252c74E1ac64EDEc25aDab3c50859",
+      "version": "v1.4-PRODUCTION",
+      "deploymentTx": "0x5714b91d7c23d1c23ed8f822d7d5a1ec1862d1f6a188f6e3b84742c2ec1fc623",
+      "features": [
+        "✅ SECURITY FIX C-01: Non-reverting native transfers (prevents DoS attacks)",
+        "✅ SECURITY FIX H-01: Zero-address check for emergencyController",
+        "✅ SECURITY FIX H-02: Pull-based fee distribution (scales to thousands of validators)",
+        "✅ 22 Vault Type Integration (IChronosVault interface)",
+        "✅ Vault-specific security enforcement",
+        "✅ Gas optimizations: 33-40% savings maintained",
+        "✅ Trinity Protocol 2-of-3 consensus"
+      ]
+    },
+    "ChronosVault": {
+      "address": "0x99444B0B1d6F7b21e9234229a2AC2bC0150B9d91",
+      "version": "v1.3",
+      "features": [
+        "✅ Audit Fixes H-01, M-01, M-02, L-01",
+        "✅ 15 standard vault types",
+        "✅ Multi-sig race condition fixes",
+        "✅ Emergency mode protection"
+      ]
+    },
+    "ChronosVaultOptimized": {
+      "address": "TBD",
+      "version": "v1.3",
+      "note": "ERC-4626 compliant vault for 7 investment-focused vault types",
+      "features": [
+        "✅ ERC-4626 tokenized vaults",
+        "✅ Audit Fixes H-01, M-01, M-02, L-01",
+        "✅ Performance and management fee systems",
+        "✅ 7 investment vault types"
+      ]
+    },
+    "CVTToken": {
+      "address": "0xFb419D8E32c14F774279a4dEEf330dc893257147",
+      "version": "v1.0"
+    },
+    "CVTBridge": {
+      "address": "0x21De95EbA01E31173Efe1b9c4D57E58bb840bA86",
+      "version": "v1.0"
+    },
+    "TestUSDC": {
+      "address": "0x6818bbb8f604b4c0b52320f633C1E5BF2c5b07bd",
+      "version": "v1.0",
+      "note": "Test token for development only"
+    }
+  },
+  
+  "trinity_protocol": {
+    "consensus": "2-of-3",
+    "chains": [
+      "Ethereum Layer 2 (Arbitrum)",
+      "Solana",
+      "TON"
+    ],
+    "validators": {
+      "ethereum": [
+        "0x1090495C9bC80106a8E42D89E10fd58adbDA409b",
+        "0x1A24e5C53B1438f15B25c819fEe1F894e6D131f2",
+        "0xB1C4590F893EE598c661e1c396Db9c3097b983de"
+      ],
+      "solana": [
+        "0x384E377cedF156AAe8A686077a8F7CdFEe9b8493",
+        "0xf3Ea7A720D37f817E142119b968D188220bF1471",
+        "0x6B26D1F2Bb6c9cF5EEA2c0eB5E67EfE303c167E6"
+      ],
+      "ton": [
+        "0x6Edcf8657b545b2cB86D78E1b199Db9BfB9CCe32",
+        "0xfeEBD269a1c124F85a0949090cA53cca6D763F42",
+        "0x8b45A1f23f4298c8DF3331976641bFCbF1DAb51D"
+      ]
+    },
+    "emergency_controller": "0x66e5046D136E82d17cbeB2FfEa5bd5205D962906"
+  },
+  
+  "parameters": {
+    "base_fee": "0.001 ETH",
+    "speed_multiplier": "150%",
+    "security_multiplier": "120%",
+    "max_fee": "0.1 ETH",
+    "min_confirmations": 6,
+    "max_proof_age": "3600 seconds (1 hour)",
+    "bridge_fee": "0.001 ETH (0.1%)",
+    "min_bridge_amount": "10 CVT"
+  },
+  
+  "security_enhancements": {
+    "fixes_applied": [
+      "FIX #3: Nonce-based Merkle root updates (prevents replay attacks)",
+      "FIX #4: Slippage protection framework documented",
+      "FIX #5: Circuit breaker event tracking (prevents timestamp replay)",
+      "FIX #6: Validator fee distribution (80% validators, 20% protocol)",
+      "FIX #7: Rolling window rate limiting (prevents day-boundary bypass)",
+      "FIX #8: Operation cancellation with 24h timelock + 20% penalty",
+      "SECURITY FIX C-01: Non-reverting native transfers",
+      "SECURITY FIX H-01: Zero-address validation for emergency controller",
+      "SECURITY FIX H-02: Pull-based fee distribution"
+    ],
+    "gas_optimizations": "33-40% savings via storage packing + tiered anomaly checks",
+    "audit_status": "Ready for professional security audit (OpenZeppelin or Trail of Bits)"
+  },
+  
+  "explorer_links": {
+    "arbitrum_sepolia": "https://sepolia.arbiscan.io",
+    "cross_chain_bridge": "https://sepolia.arbiscan.io/address/0x83DeAbA0de5252c74E1ac64EDEc25aDab3c50859"
+  },
+  
+  "multichain_addresses": {
+    "solana": {
+      "vault_program": "ChronoSVauLt11111111111111111111111111111111",
+      "bridge_program": "6wo8Gso3uB8M6t9UGiritdGmc4UTPEtM5NhC6vbb9CdK",
+      "network": "devnet"
+    },
+    "ton": {
+      "vault_address": "EQDJAnXDPT-NivritpEhQeP0XmG20NdeUtxgh4nUiWH-DF7M",
+      "network": "testnet"
+    }
+  },
+  
+  "metadata": {
+    "name": "Trinity Protocol™ Multi-Chain Consensus Verification System",
+    "description": "Mathematically provable 2-of-3 consensus across Arbitrum, Solana, and TON blockchains for enterprise-grade vault security",
+    "author": "Chronos Vault Team",
+    "website": "https://chronosvault.org",
+    "repository": "https://github.com/chronos-vault"
+  }
+}
