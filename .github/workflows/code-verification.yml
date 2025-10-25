@@ -53,7 +53,7 @@ jobs:
         continue-on-error: true
       
       - name: Upload Certora Reports
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: certora-reports
           path: .certora_internal/
@@ -96,7 +96,7 @@ jobs:
           echo "- ✅ AttackResistance" >> tla-report.md
       
       - name: Upload TLA+ Report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: tla-report
           path: tla-report.md
@@ -271,7 +271,7 @@ jobs:
           echo "✅ All 35 Lean 4 theorems verified successfully" > lean-report.txt
       
       - name: Upload Lean Report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: lean-report
           path: lean-report.txt
