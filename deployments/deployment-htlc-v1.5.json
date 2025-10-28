@@ -1,0 +1,10 @@
+{
+  "network": "arbitrum-sepolia",
+  "chainId": 421614,
+  "htlcBridge": "0x6cd3B1a72F67011839439f96a70290051fd66D57",
+  "trinityBridge": "0x499B24225a4d15966E118bfb86B2E421d57f4e21",
+  "deployer": "0x66e5046D136E82d17cbeB2FfEa5bd5205D962906",
+  "timestamp": "2025-10-26T10:46:05.162Z",
+  "version": "v1.5-PRODUCTION",
+  "blockNumber": 208629944
+}
