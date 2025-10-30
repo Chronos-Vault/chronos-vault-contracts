@@ -622,5 +622,19 @@ bool approved = trinityBridge.hasConsensusApproval(operationId);
 
 ---
 
-**Built with ❤️ by Chronos Vault Team**  
-**Trinity Protocol™ - Trust Math, Not Humans**
+## Developer Support
+
+**Chronos Vault Development Team**  
+Building the future of mathematically provable multi-chain security.
+
+**Trinity Protocol™** - Trust Math, Not Humans  
+**Version**: v1.5-PRODUCTION  
+**License**: MIT  
+**Repository**: https://github.com/Chronos-Vault/chronos-vault-contracts
+
+For technical support, integration questions, or security disclosures:
+- GitHub Issues: https://github.com/Chronos-Vault/chronos-vault-contracts/issues
+- Documentation: https://github.com/Chronos-Vault/chronos-vault-contracts/blob/main/TRINITY_ARCHITECTURE.md
+- Security Contact: security@chronosvault.org
+
+© 2025 Chronos Vault. All rights reserved.
