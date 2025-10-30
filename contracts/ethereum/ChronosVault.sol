@@ -115,6 +115,9 @@ contract ChronosVault is ERC4626, Ownable, ReentrancyGuard {
     }
     MultiSigConfig public multiSig;
     
+    // AUDIT FIX M-01: O(1) signer lookup mapping to prevent DoS
+    mapping(address => bool) public isMultiSigSigner;
+    
     // Cross-chain verification
     struct CrossChainVerification {
         // TON verification
@@ -389,11 +392,21 @@ contract ChronosVault is ERC4626, Ownable, ReentrancyGuard {
      * @param assets Amount of assets to deposit
      * @param receiver Receiver of the vault tokens
      */
+    /**
+     * @dev Deposit assets into the vault
+     * @param assets Amount of assets to deposit
+     * @param receiver Address to receive vault shares
+     * @return shares Amount of shares minted
+     * 
+     * AUDIT FIX L-02: ChronosVault is designed for single-owner vaults where
+     * the contract owner holds all shares. Multi-sig is used for governance
+     * over the owner's assets, not for managing multiple depositors.
+     * This ensures _executeWithdrawal()'s use of owner() parameter is correct.
+     */
     function deposit(uint256 assets, address receiver) public override nonReentrant returns (uint256) {
-        // If vault is unlocked, only owner can deposit
-        if (isUnlocked) {
-            require(msg.sender == owner(), "Only owner can deposit after unlock");
-        }
+        // AUDIT FIX L-02: Enforce owner-only deposits for single-owner vault model
+        require(msg.sender == owner(), "Only owner can deposit in ChronosVault");
+        require(receiver == owner(), "Shares can only be minted to owner");
         
         uint256 shares = super.deposit(assets, receiver);
         
@@ -789,6 +802,8 @@ contract ChronosVault is ERC4626, Ownable, ReentrancyGuard {
         // Add all signers
         for (uint256 i = 0; i < _signers.length; i++) {
             require(_signers[i] != address(0), "Invalid signer address");
+            // AUDIT FIX M-01: Populate O(1) signer mapping
+            isMultiSigSigner[_signers[i]] = true;
         }
         
         multiSig.signers = _signers;
@@ -804,6 +819,11 @@ contract ChronosVault is ERC4626, Ownable, ReentrancyGuard {
     function disableMultiSig() external onlyOwner {
         require(multiSig.enabled, "Multi-sig not enabled");
         
+        // AUDIT FIX M-01: Clear signer mapping
+        for (uint256 i = 0; i < multiSig.signers.length; i++) {
+            isMultiSigSigner[multiSig.signers[i]] = false;
+        }
+        
         multiSig.enabled = false;
         
         emit MultiSigEnabled(false);
@@ -817,13 +837,12 @@ contract ChronosVault is ERC4626, Ownable, ReentrancyGuard {
         require(multiSig.enabled, "Multi-sig not enabled");
         require(_signer != address(0), "Invalid signer address");
         
-        // Check if signer already exists
-        for (uint256 i = 0; i < multiSig.signers.length; i++) {
-            require(multiSig.signers[i] != _signer, "Signer already exists");
-        }
+        // AUDIT FIX M-01: O(1) signer check instead of O(n) loop
+        require(!isMultiSigSigner[_signer], "Signer already exists");
         
         // Add new signer
         multiSig.signers.push(_signer);
+        isMultiSigSigner[_signer] = true;
         
         emit SignerAdded(_signer);
     }
@@ -836,23 +855,24 @@ contract ChronosVault is ERC4626, Ownable, ReentrancyGuard {
         require(multiSig.enabled, "Multi-sig not enabled");
         require(multiSig.signers.length > multiSig.threshold, "Cannot reduce signers below threshold");
         
-        bool found = false;
-        uint256 signerIndex;
+        // AUDIT FIX M-01: O(1) signer check instead of O(n) loop
+        require(isMultiSigSigner[_signer], "Signer not found");
         
-        // Find signer
+        // Find signer index (still need to iterate array for removal, but only after verification)
+        uint256 signerIndex;
         for (uint256 i = 0; i < multiSig.signers.length; i++) {
             if (multiSig.signers[i] == _signer) {
-                found = true;
                 signerIndex = i;
                 break;
             }
         }
         
-        require(found, "Signer not found");
-        
         // Remove signer by replacing with the last element and popping
         multiSig.signers[signerIndex] = multiSig.signers[multiSig.signers.length - 1];
         multiSig.signers.pop();
+        
+        // Clear mapping
+        isMultiSigSigner[_signer] = false;
         
         emit SignerRemoved(_signer);
     }
@@ -895,18 +915,18 @@ contract ChronosVault is ERC4626, Ownable, ReentrancyGuard {
         request.executed = false;
         request.cancelled = false;
         
-        // Auto-approve if the requester is a signer
-        bool isRequesterSigner = false;
-        for (uint256 i = 0; i < multiSig.signers.length; i++) {
-            if (multiSig.signers[i] == msg.sender) {
-                isRequesterSigner = true;
-                request.approvals[msg.sender] = true;
-                request.approvalCount = 1;
-                break;
-            }
+        // AUDIT FIX M-01 & L-03: Auto-approve if the requester is a signer (O(1) check)
+        if (isMultiSigSigner[msg.sender]) {
+            request.approvals[msg.sender] = true;
+            request.approvalCount = 1;
+            
+            emit WithdrawalRequested(requestId, msg.sender, _amount);
+            // AUDIT FIX L-03: Emit WithdrawalApproved immediately after auto-approval
+            emit WithdrawalApproved(requestId, msg.sender);
+        } else {
+            emit WithdrawalRequested(requestId, msg.sender, _amount);
         }
         
-        emit WithdrawalRequested(requestId, msg.sender, _amount);
         return requestId;
     }
     
@@ -917,15 +937,8 @@ contract ChronosVault is ERC4626, Ownable, ReentrancyGuard {
     function approveWithdrawal(uint256 _requestId) external {
         require(multiSig.enabled, "Multi-sig not enabled");
         
-        // Check if caller is a signer
-        bool isSigner = false;
-        for (uint256 i = 0; i < multiSig.signers.length; i++) {
-            if (multiSig.signers[i] == msg.sender) {
-                isSigner = true;
-                break;
-            }
-        }
-        require(isSigner, "Not a signer");
+        // AUDIT FIX M-01: O(1) signer check instead of O(n) loop
+        require(isMultiSigSigner[msg.sender], "Not a signer");
         
         WithdrawalRequest storage request = withdrawalRequests[_requestId];
         
@@ -1005,6 +1018,10 @@ contract ChronosVault is ERC4626, Ownable, ReentrancyGuard {
     /**
      * @dev Internal function to execute a withdrawal after sufficient approvals
      * @param _requestId ID of the withdrawal request
+     * 
+     * AUDIT FIX L-02: Uses owner() as share owner parameter because ChronosVault
+     * is a single-owner vault model. All shares belong to owner(), and multi-sig
+     * provides governance security over the owner's assets.
      */
     function _executeWithdrawal(uint256 _requestId) internal {
         WithdrawalRequest storage request = withdrawalRequests[_requestId];
@@ -1016,6 +1033,7 @@ contract ChronosVault is ERC4626, Ownable, ReentrancyGuard {
         request.executed = true;
         
         // Transfer assets to the receiver
+        // owner() parameter is correct: all shares belong to vault owner
         uint256 shares = convertToShares(request.amount);
         super._withdraw(msg.sender, request.receiver, owner(), request.amount, shares);
         
@@ -1067,15 +1085,26 @@ contract ChronosVault is ERC4626, Ownable, ReentrancyGuard {
     }
     
     /**
-     * @dev Check if 2-of-3 consensus is satisfied (manual OR Trinity Bridge)
+     * @dev Check if 2-of-3 consensus is satisfied
      * @param _user User address to check
-     * @return satisfied True if either manual verification or Trinity consensus achieved
+     * @return satisfied True if consensus requirements are met
+     * 
+     * AUDIT FIX L-01: For security level 3+ with Trinity Bridge configured,
+     * ONLY use Trinity Bridge verification (no manual verification fallback).
+     * Manual verification is deprecated for high-security vaults.
      */
     function has2of3Consensus(address _user) public view returns (bool satisfied) {
+        // AUDIT FIX L-01: Strictly enforce Trinity Bridge for security level 3+ when configured
+        if (securityLevel >= 3 && address(trinityBridge) != address(0)) {
+            // High-security vaults MUST use Trinity Bridge (no manual override)
+            return checkTrinityApproval(_user);
+        }
+        
+        // For lower security levels or if Trinity Bridge not configured:
         // Option 1: Manual cross-chain verification (legacy/backward compatible)
         bool manualVerified = crossChainVerification.tonVerified && crossChainVerification.solanaVerified;
         
-        // Option 2: Trinity Bridge consensus (REAL 2-of-3 verification)
+        // Option 2: Trinity Bridge consensus (if available)
         bool trinityVerified = checkTrinityApproval(_user);
         
         return manualVerified || trinityVerified;
