@@ -172,12 +172,15 @@ contract HTLCBridge is IHTLC, ReentrancyGuard {
         }
 
         // Create Trinity Protocol operation for 2-of-3 consensus
-        bytes32 operationId = trinityBridge.createOperation{value: msg.value}(
-            swap.recipient,
+        // FIX: Use correct interface matching CrossChainBridgeOptimized v1.5
+        bytes32 operationId = trinityBridge.createOperation{value: 0.001 ether}(
+            ICrossChainBridgeOptimized.OperationType.SWAP,
+            "htlc_swap", // destination chain (generic for HTLC)
             swap.tokenAddress,
             swap.amount,
-            "htlc_swap", // destination chain (generic for HTLC)
-            true // prioritize security
+            false, // prioritizeSpeed
+            true,  // prioritizeSecurity (ALWAYS true for HTLC)
+            0      // slippageTolerance
         );
 
         // Update swap with operation ID
@@ -192,6 +195,15 @@ contract HTLCBridge is IHTLC, ReentrancyGuard {
 
     /**
      * @inheritdoc IHTLC
+     * @dev DEPRECATED: This function is no longer used in Trinity Protocol v1.5
+     * 
+     * CRITICAL SECURITY FIX:
+     * - Old implementation allowed ANYONE to fake consensus by calling this function
+     * - Validators now submit proofs directly to CrossChainBridgeOptimized.submitProof()
+     * - claimHTLC() now queries REAL consensus via trinityBridge.hasConsensusApproval()
+     * 
+     * This function remains for interface compatibility but does NOT affect consensus.
+     * Real Trinity consensus is verified through CrossChainBridgeOptimized only.
      */
     function submitConsensusProof(
         bytes32 swapId,
@@ -204,7 +216,8 @@ contract HTLCBridge is IHTLC, ReentrancyGuard {
         require(swap.state == SwapState.LOCKED || swap.state == SwapState.CONSENSUS_PENDING, "Invalid state");
         require(swap.operationId == operationId, "Operation ID mismatch");
 
-        // Update consensus count based on chain
+        // DEPRECATED: Local consensus tracking no longer used for security decisions
+        // Kept only for backwards compatibility and event emission
         bytes32 chainHash = keccak256(bytes(chain));
         
         if (chainHash == keccak256("arbitrum") || chainHash == keccak256("ethereum")) {
@@ -225,7 +238,7 @@ contract HTLCBridge is IHTLC, ReentrancyGuard {
 
         emit ConsensusProofSubmitted(swapId, operationId, msg.sender, chain, swap.consensusCount);
 
-        // Check if 2-of-3 consensus achieved
+        // Update state for tracking purposes (but claimHTLC checks REAL Trinity consensus)
         if (swap.consensusCount >= REQUIRED_CONSENSUS) {
             swap.state = SwapState.CONSENSUS_ACHIEVED;
             emit ConsensusAchieved(swapId, operationId, swap.consensusCount);
@@ -238,12 +251,18 @@ contract HTLCBridge is IHTLC, ReentrancyGuard {
 
     /**
      * @inheritdoc IHTLC
+     * @dev CRITICAL FIX: Now checks REAL Trinity consensus from CrossChainBridgeOptimized
      */
     function claimHTLC(bytes32 swapId, bytes32 secret) external override nonReentrant returns (bool success) {
         HTLCSwap storage swap = htlcSwaps[swapId];
         
-        require(swap.state == SwapState.CONSENSUS_ACHIEVED, "Consensus not achieved");
+        require(swap.state == SwapState.LOCKED || swap.state == SwapState.CONSENSUS_PENDING || swap.state == SwapState.CONSENSUS_ACHIEVED, "Invalid swap state");
         require(block.timestamp < swap.timelock, "Timelock expired");
+        require(swap.operationId != bytes32(0), "Operation ID not set");
+        
+        // CRITICAL FIX: Check REAL Trinity consensus from bridge (not local flags)
+        bool consensusApproved = _checkTrinityConsensus(swap.operationId);
+        require(consensusApproved, "Trinity 2-of-3 consensus not achieved");
         
         // Verify secret matches hash
         require(keccak256(abi.encodePacked(secret)) == swap.secretHash, "Invalid secret");
@@ -321,6 +340,17 @@ contract HTLCBridge is IHTLC, ReentrancyGuard {
     // ===== INTERNAL FUNCTIONS =====
 
     /**
+     * @notice Check REAL Trinity consensus from CrossChainBridgeOptimized
+     * @param operationId Trinity Protocol operation ID
+     * @return approved True if 2-of-3 consensus achieved on the bridge
+     * @dev CRITICAL FIX: This queries the REAL Trinity Bridge instead of local flags
+     */
+    function _checkTrinityConsensus(bytes32 operationId) internal view returns (bool approved) {
+        // Query the REAL Trinity Protocol consensus from CrossChainBridgeOptimized
+        return trinityBridge.hasConsensusApproval(operationId);
+    }
+
+    /**
      * @notice Internal function to transfer funds (native or ERC20)
      * @param to Recipient address
      * @param tokenAddress Token contract (0x0 for native)
@@ -340,17 +370,42 @@ contract HTLCBridge is IHTLC, ReentrancyGuard {
 
 /**
  * @notice Interface for CrossChainBridgeOptimized v1.5
- * @dev Minimal interface for Trinity Protocol integration
+ * @dev Complete interface for Trinity Protocol integration with real consensus checking
  */
 interface ICrossChainBridgeOptimized {
+    enum OperationType { TRANSFER, SWAP, BRIDGE }
+    enum OperationStatus { PENDING, PROCESSING, COMPLETED, CANCELED, FAILED }
+    
     function createOperation(
-        address recipient,
+        OperationType operationType,
+        string calldata destinationChain,
         address tokenAddress,
         uint256 amount,
-        string calldata destinationChain,
-        bool prioritizeSecurity
+        bool prioritizeSpeed,
+        bool prioritizeSecurity,
+        uint256 slippageTolerance
     ) external payable returns (bytes32 operationId);
-
-    function getOperationStatus(bytes32 operationId) 
-        external view returns (uint8 status, uint8 confirmations);
+    
+    function hasConsensusApproval(bytes32 operationId) external view returns (bool approved);
+    
+    function getChainVerifications(bytes32 operationId) 
+        external 
+        view 
+        returns (
+            bool arbitrumVerified,
+            bool solanaVerified,
+            bool tonVerified
+        );
+    
+    function getOperationDetails(bytes32 operationId)
+        external
+        view
+        returns (
+            address user,
+            OperationStatus status,
+            uint256 amount,
+            address tokenAddress,
+            uint8 validProofCount,
+            uint256 timestamp
+        );
 }
