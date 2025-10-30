@@ -1,0 +1,35 @@
+# Echidna Configuration for Chronos Vault
+# High-intensity fuzzing: 10M+ iterations
+
+testMode: assertion
+testLimit: 10000000
+shrinkLimit: 5000
+seqLen: 100
+contractAddr: "0x00a329c0648769A73afAc7F9381E08FB43dBEA72"
+
+# Coverage-guided fuzzing
+coverage: true
+corpusDir: "corpus"
+
+# Multi-sender simulation (Byzantine scenarios)
+sender: ["0x10000", "0x20000", "0x30000"]
+deployer: "0x30000"
+
+# Gas limits
+gasLimit: 12500000
+
+# Filters for critical functions
+filterBlacklist: true
+filterFunctions: []
+
+# Fuzzing strategies
+mutConsts:
+  - "0"
+  - "1"
+  - "2"
+  - "3"
+  - "1000000000000000000"  # 1 ETH
+  - "115792089237316195423570985008687907853269984665640564039457584007913129639935"  # uint256 max
+
+# Assertion mode for invariant testing
+checkAsserts: true
