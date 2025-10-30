@@ -1,0 +1,19 @@
+{
+  "name": "chronos-vault-verification",
+  "version": "1.0.0",
+  "description": "Open-source formal verification suite for Chronos Vault",
+  "scripts": {
+    "verify:smt": "solc --model-checker-engine chc --model-checker-targets all contracts/*.sol",
+    "verify:halmos": "halmos --solver-timeout-assertion 0 --solver-parallel",
+    "verify:echidna": "echidna . --contract ChronosVaultVerification --config echidna.yaml",
+    "verify:slither": "slither . --config-file slither.config.json",
+    "verify:all": "npm run verify:smt && npm run verify:halmos && npm run verify:echidna && npm run verify:slither",
+    "test:symbolic": "halmos --function check",
+    "test:fuzz": "echidna . --test-mode assertion --test-limit 10000000"
+  },
+  "devDependencies": {
+    "@crytic/echidna": "^2.2.1",
+    "halmos": "^0.1.11",
+    "slither-analyzer": "^0.10.0"
+  }
+}
