@@ -1,0 +1,18 @@
+{
+  "filter_paths": "node_modules|test",
+  "exclude_informational": false,
+  "exclude_low": false,
+  "exclude_medium": false,
+  "exclude_high": false,
+  "disable_color": false,
+  "detectors_to_run": "all",
+  "printers_to_run": [],
+  "detectors_to_exclude": [
+    "naming-convention",
+    "solc-version"
+  ],
+  "compilation_unit": {
+    "solc": "0.8.20",
+    "solc-remaps": []
+  }
+}
