@@ -7,11 +7,7 @@
 ///! Role: High-frequency monitoring and proof submission (<5 seconds)
 
 use anchor_lang::prelude::*;
-use anchor_lang::solana_program::{
-    keccak::hashv,
-    secp256k1_recover::secp256k1_recover,
-};
-use anchor_spl::token::{Token, TokenAccount};
+use anchor_lang::solana_program::keccak::hashv;
 
 declare_id!("TrNtyV4L1D4T0RSoLAN4C0nsENSuS1111111111111");
 
