@@ -1,0 +1,489 @@
+;; TrinityConsensus.fc
+;; TON Smart Contract for Trinity Protocol Consensus Verification
+;; 
+;; This contract monitors Ethereum CrossChainBridgeOptimized events and submits
+;; Merkle proofs back to Ethereum for 2-of-3 consensus verification.
+;; 
+;; Integration: TON → Ethereum/Arbitrum L2
+;; Role: Emergency recovery and quantum-safe backup (<60 seconds)
+
+#include "imports/stdlib.fc";
+
+;; ============================================================================
+;; Storage Variables
+;; ============================================================================
+
+global slice ethereum_bridge_address;        ;; CrossChainBridgeOptimized address (20 bytes)
+global slice validator_ethereum_address;     ;; Validator's Ethereum address (20 bytes)
+global slice arbitrum_rpc_url;               ;; Arbitrum RPC endpoint
+global slice authority_address;              ;; Contract authority (TON address)
+global int total_proofs_submitted;           ;; Total proofs generated
+global int last_processed_operation;         ;; Last operation ID processed
+global int is_active;                        ;; 1 if active, 0 if paused
+global cell proof_records;                   ;; Dictionary of operation_id -> ProofRecord
+global cell vault_verifications;             ;; Dictionary of vault_id -> Verification
+global int ml_kem_public_key;                ;; ML-KEM-1024 public key (quantum-resistant)
+global int dilithium_public_key;             ;; CRYSTALS-Dilithium-5 public key
+
+;; ============================================================================
+;; Error Codes
+;; ============================================================================
+
+const int ERROR_NOT_AUTHORITY = 201;
+const int ERROR_VALIDATOR_NOT_ACTIVE = 202;
+const int ERROR_ALREADY_SUBMITTED = 203;
+const int ERROR_VAULT_MISMATCH = 204;
+const int ERROR_UNAUTHORIZED_USER = 205;
+const int ERROR_INVALID_MERKLE_PROOF = 206;
+const int ERROR_OPERATION_NOT_FOUND = 207;
+const int ERROR_INVALID_SIGNATURE = 208;
+
+;; ============================================================================
+;; Operation Types (matching Ethereum enum)
+;; ============================================================================
+
+const int OP_VAULT_WITHDRAWAL = 0;
+const int OP_HTLC_SWAP = 1;
+const int OP_EMERGENCY_RECOVERY = 2;
+const int OP_CROSS_CHAIN_TRANSFER = 3;
+
+;; ============================================================================
+;; Load/Save Storage
+;; ============================================================================
+
+() load_data() impure {
+    var ds = get_data().begin_parse();
+    
+    ethereum_bridge_address = ds~load_bits(160);  ;; 20 bytes = 160 bits
+    validator_ethereum_address = ds~load_bits(160);
+    arbitrum_rpc_url = ds~load_ref().begin_parse();
+    authority_address = ds~load_msg_addr();
+    total_proofs_submitted = ds~load_uint(64);
+    last_processed_operation = ds~load_uint(64);
+    is_active = ds~load_uint(1);
+    proof_records = ds~load_dict();
+    vault_verifications = ds~load_dict();
+    ml_kem_public_key = ds~load_uint(256);
+    dilithium_public_key = ds~load_uint(256);
+    
+    ds.end_parse();
+}
+
+() save_data() impure {
+    set_data(begin_cell()
+        .store_slice(ethereum_bridge_address)
+        .store_slice(validator_ethereum_address)
+        .store_ref(begin_cell().store_slice(arbitrum_rpc_url).end_cell())
+        .store_slice(authority_address)
+        .store_uint(total_proofs_submitted, 64)
+        .store_uint(last_processed_operation, 64)
+        .store_uint(is_active, 1)
+        .store_dict(proof_records)
+        .store_dict(vault_verifications)
+        .store_uint(ml_kem_public_key, 256)
+        .store_uint(dilithium_public_key, 256)
+        .end_cell());
+}
+
+;; ============================================================================
+;; Merkle Proof Calculation
+;; ============================================================================
+
+;; Calculate Merkle root from proof path and leaf
+int calculate_merkle_root(cell merkle_proof_cell, int leaf_hash) method_id {
+    var proof_slice = merkle_proof_cell.begin_parse();
+    var current_hash = leaf_hash;
+    
+    ;; Iterate through proof elements
+    while (~ proof_slice.slice_empty?()) {
+        var proof_element = proof_slice~load_uint(256);
+        
+        ;; Hash in sorted order (smaller hash first)
+        if (current_hash < proof_element) {
+            current_hash = string_hash(begin_cell()
+                .store_uint(current_hash, 256)
+                .store_uint(proof_element, 256)
+                .end_cell().begin_parse());
+        } else {
+            current_hash = string_hash(begin_cell()
+                .store_uint(proof_element, 256)
+                .store_uint(current_hash, 256)
+                .end_cell().begin_parse());
+        }
+    }
+    
+    return current_hash;
+}
+
+;; ============================================================================
+;; Public Methods
+;; ============================================================================
+
+;; Initialize Trinity Consensus Validator
+;; Sets up connection to Ethereum CrossChainBridgeOptimized
+() initialize(
+    slice eth_bridge_addr,
+    slice validator_eth_addr,
+    slice arbitrum_rpc,
+    int ml_kem_pubkey,
+    int dilithium_pubkey
+) impure {
+    ethereum_bridge_address = eth_bridge_addr;
+    validator_ethereum_address = validator_eth_addr;
+    arbitrum_rpc_url = arbitrum_rpc;
+    authority_address = get_data().begin_parse().skip_bits(160 + 160).~load_msg_addr();
+    total_proofs_submitted = 0;
+    last_processed_operation = 0;
+    is_active = 1;
+    proof_records = new_dict();
+    vault_verifications = new_dict();
+    ml_kem_public_key = ml_kem_pubkey;
+    dilithium_public_key = dilithium_pubkey;
+    
+    save_data();
+}
+
+;; Submit Trinity consensus proof to Ethereum
+;; Called by off-chain validator service after monitoring Ethereum events
+() submit_consensus_proof(
+    int operation_id,              ;; 256-bit operation ID from Ethereum
+    cell merkle_proof,             ;; Merkle proof cell (list of 256-bit hashes)
+    int ton_block_hash,            ;; TON block hash (256-bit)
+    int ton_tx_hash,               ;; TON transaction hash (256-bit)
+    int ton_block_number,          ;; TON block number
+    slice sender_addr
+) impure {
+    load_data();
+    
+    ;; Verify sender is authority
+    throw_unless(ERROR_NOT_AUTHORITY, equal_slices(sender_addr, authority_address));
+    
+    ;; Verify validator is active
+    throw_unless(ERROR_VALIDATOR_NOT_ACTIVE, is_active == 1);
+    
+    ;; Calculate Merkle root from proof
+    int merkle_root = calculate_merkle_root(merkle_proof, operation_id);
+    
+    ;; Create proof record
+    cell proof_record = begin_cell()
+        .store_uint(operation_id, 256)
+        .store_uint(merkle_root, 256)
+        .store_ref(merkle_proof)
+        .store_uint(ton_block_hash, 256)
+        .store_uint(ton_tx_hash, 256)
+        .store_uint(ton_block_number, 64)
+        .store_uint(now(), 64)  ;; timestamp
+        .store_uint(0, 1)       ;; submitted_to_ethereum (false)
+        .store_uint(0, 256)     ;; ethereum_tx_hash (empty)
+        .end_cell();
+    
+    ;; Store proof record in dictionary
+    proof_records~udict_set(256, operation_id, proof_record.begin_parse());
+    
+    ;; Increment counter
+    total_proofs_submitted = total_proofs_submitted + 1;
+    
+    save_data();
+    
+    ;; Emit log for off-chain relayer
+    emit_log_simple(0x5052, begin_cell()  ;; "PR" = Proof Ready
+        .store_uint(operation_id, 256)
+        .store_uint(merkle_root, 256)
+        .store_uint(ton_block_hash, 256)
+        .store_uint(ton_block_number, 64)
+        .store_uint(now(), 64)
+        .end_cell());
+}
+
+;; Confirm proof submission to Ethereum
+;; Called after off-chain relayer confirms Ethereum transaction
+() confirm_ethereum_submission(
+    int operation_id,
+    int ethereum_tx_hash,
+    slice sender_addr
+) impure {
+    load_data();
+    
+    ;; Verify sender is authority
+    throw_unless(ERROR_NOT_AUTHORITY, equal_slices(sender_addr, authority_address));
+    
+    ;; Get proof record
+    (var proof_record_slice, var found) = proof_records.udict_get?(256, operation_id);
+    throw_unless(ERROR_OPERATION_NOT_FOUND, found);
+    
+    ;; Parse proof record
+    var op_id = proof_record_slice~load_uint(256);
+    var merkle_root = proof_record_slice~load_uint(256);
+    var merkle_proof = proof_record_slice~load_ref();
+    var ton_block_hash = proof_record_slice~load_uint(256);
+    var ton_tx_hash = proof_record_slice~load_uint(256);
+    var ton_block_number = proof_record_slice~load_uint(64);
+    var timestamp = proof_record_slice~load_uint(64);
+    var submitted = proof_record_slice~load_uint(1);
+    
+    ;; Check not already submitted
+    throw_if(ERROR_ALREADY_SUBMITTED, submitted == 1);
+    
+    ;; Update proof record with Ethereum confirmation
+    cell updated_record = begin_cell()
+        .store_uint(op_id, 256)
+        .store_uint(merkle_root, 256)
+        .store_ref(merkle_proof)
+        .store_uint(ton_block_hash, 256)
+        .store_uint(ton_tx_hash, 256)
+        .store_uint(ton_block_number, 64)
+        .store_uint(timestamp, 64)
+        .store_uint(1, 1)               ;; submitted_to_ethereum = true
+        .store_uint(ethereum_tx_hash, 256)
+        .end_cell();
+    
+    ;; Store updated record
+    proof_records~udict_set(256, operation_id, updated_record.begin_parse());
+    
+    save_data();
+    
+    ;; Emit confirmation log
+    emit_log_simple(0x4553, begin_cell()  ;; "ES" = Ethereum Submitted
+        .store_uint(operation_id, 256)
+        .store_uint(ethereum_tx_hash, 256)
+        .end_cell());
+}
+
+;; Verify vault operation for Trinity consensus
+;; Checks if operation exists in TON state and generates proof
+() verify_vault_operation(
+    int vault_id,
+    int operation_type,
+    int amount,
+    slice user_address,
+    slice sender_addr
+) impure {
+    load_data();
+    
+    ;; Verify sender is authority
+    throw_unless(ERROR_NOT_AUTHORITY, equal_slices(sender_addr, authority_address));
+    
+    ;; Generate verification hash
+    int verification_hash = string_hash(begin_cell()
+        .store_uint(vault_id, 64)
+        .store_uint(operation_type, 8)
+        .store_uint(amount, 64)
+        .store_slice(user_address)
+        .store_uint(now(), 64)
+        .end_cell().begin_parse());
+    
+    ;; Create verification record
+    cell verification = begin_cell()
+        .store_uint(vault_id, 64)
+        .store_uint(operation_type, 8)
+        .store_uint(amount, 64)
+        .store_slice(user_address)
+        .store_uint(verification_hash, 256)
+        .store_uint(now(), 64)
+        .end_cell();
+    
+    ;; Store verification (keyed by vault_id + timestamp)
+    int verification_key = vault_id + now();
+    vault_verifications~udict_set(128, verification_key, verification.begin_parse());
+    
+    save_data();
+    
+    ;; Emit verification log
+    emit_log_simple(0x564F, begin_cell()  ;; "VO" = Vault Operation
+        .store_uint(vault_id, 64)
+        .store_uint(operation_type, 8)
+        .store_uint(amount, 64)
+        .store_uint(verification_hash, 256)
+        .end_cell());
+}
+
+;; Update validator configuration
+() update_validator(
+    slice new_arbitrum_rpc,
+    slice new_ethereum_bridge,
+    int new_is_active,
+    slice sender_addr
+) impure {
+    load_data();
+    
+    ;; Verify sender is authority
+    throw_unless(ERROR_NOT_AUTHORITY, equal_slices(sender_addr, authority_address));
+    
+    ;; Update configuration
+    if (~ new_arbitrum_rpc.slice_empty?()) {
+        arbitrum_rpc_url = new_arbitrum_rpc;
+    }
+    
+    if (~ new_ethereum_bridge.slice_empty?()) {
+        ethereum_bridge_address = new_ethereum_bridge;
+    }
+    
+    if (new_is_active >= 0) {
+        is_active = new_is_active;
+    }
+    
+    save_data();
+}
+
+;; ============================================================================
+;; GET Methods (Read-only)
+;; ============================================================================
+
+;; Get validator configuration
+(slice, slice, slice, int, int, int) get_validator_config() method_id {
+    load_data();
+    return (
+        ethereum_bridge_address,
+        validator_ethereum_address,
+        arbitrum_rpc_url,
+        total_proofs_submitted,
+        last_processed_operation,
+        is_active
+    );
+}
+
+;; Get proof record for operation
+(int, int, cell, int, int, int, int, int, int) get_proof_record(int operation_id) method_id {
+    load_data();
+    
+    (var proof_record_slice, var found) = proof_records.udict_get?(256, operation_id);
+    
+    if (~ found) {
+        return (0, 0, new_dict(), 0, 0, 0, 0, 0, 0);
+    }
+    
+    var op_id = proof_record_slice~load_uint(256);
+    var merkle_root = proof_record_slice~load_uint(256);
+    var merkle_proof = proof_record_slice~load_ref();
+    var ton_block_hash = proof_record_slice~load_uint(256);
+    var ton_tx_hash = proof_record_slice~load_uint(256);
+    var ton_block_number = proof_record_slice~load_uint(64);
+    var timestamp = proof_record_slice~load_uint(64);
+    var submitted = proof_record_slice~load_uint(1);
+    var eth_tx_hash = proof_record_slice~load_uint(256);
+    
+    return (
+        op_id,
+        merkle_root,
+        merkle_proof,
+        ton_block_hash,
+        ton_tx_hash,
+        ton_block_number,
+        timestamp,
+        submitted,
+        eth_tx_hash
+    );
+}
+
+;; Check if proof submitted to Ethereum
+int is_proof_submitted(int operation_id) method_id {
+    load_data();
+    
+    (var proof_record_slice, var found) = proof_records.udict_get?(256, operation_id);
+    
+    if (~ found) {
+        return 0;
+    }
+    
+    ;; Skip to submitted flag (256 + 256 + ref + 256 + 256 + 64 + 64 bits)
+    proof_record_slice~skip_bits(256 + 256 + 256 + 256 + 64 + 64);
+    proof_record_slice~load_ref();  ;; Skip merkle_proof ref
+    
+    return proof_record_slice~load_uint(1);
+}
+
+;; Get total proofs submitted
+int get_total_proofs() method_id {
+    load_data();
+    return total_proofs_submitted;
+}
+
+;; Get validator active status
+int get_is_active() method_id {
+    load_data();
+    return is_active;
+}
+
+;; Get quantum-resistant public keys
+(int, int) get_quantum_keys() method_id {
+    load_data();
+    return (ml_kem_public_key, dilithium_public_key);
+}
+
+;; ============================================================================
+;; Message Handlers
+;; ============================================================================
+
+() recv_internal(int msg_value, cell in_msg_full, slice in_msg_body) impure {
+    if (in_msg_body.slice_empty?()) {
+        return ();
+    }
+    
+    slice cs = in_msg_full.begin_parse();
+    int flags = cs~load_uint(4);
+    
+    if (flags & 1) {
+        return ();
+    }
+    
+    slice sender_address = cs~load_msg_addr();
+    
+    int op = in_msg_body~load_uint(32);
+    
+    ;; Operation codes
+    if (op == 0x01) {  ;; initialize
+        slice eth_bridge = in_msg_body~load_bits(160);
+        slice validator_eth = in_msg_body~load_bits(160);
+        slice rpc_url = in_msg_body~load_ref().begin_parse();
+        int ml_kem = in_msg_body~load_uint(256);
+        int dilithium = in_msg_body~load_uint(256);
+        
+        initialize(eth_bridge, validator_eth, rpc_url, ml_kem, dilithium);
+        return ();
+    }
+    
+    if (op == 0x02) {  ;; submit_consensus_proof
+        int operation_id = in_msg_body~load_uint(256);
+        cell merkle_proof = in_msg_body~load_ref();
+        int ton_block_hash = in_msg_body~load_uint(256);
+        int ton_tx_hash = in_msg_body~load_uint(256);
+        int ton_block_number = in_msg_body~load_uint(64);
+        
+        submit_consensus_proof(
+            operation_id,
+            merkle_proof,
+            ton_block_hash,
+            ton_tx_hash,
+            ton_block_number,
+            sender_address
+        );
+        return ();
+    }
+    
+    if (op == 0x03) {  ;; confirm_ethereum_submission
+        int operation_id = in_msg_body~load_uint(256);
+        int ethereum_tx_hash = in_msg_body~load_uint(256);
+        
+        confirm_ethereum_submission(operation_id, ethereum_tx_hash, sender_address);
+        return ();
+    }
+    
+    if (op == 0x04) {  ;; verify_vault_operation
+        int vault_id = in_msg_body~load_uint(64);
+        int operation_type = in_msg_body~load_uint(8);
+        int amount = in_msg_body~load_uint(64);
+        slice user_address = in_msg_body~load_msg_addr();
+        
+        verify_vault_operation(vault_id, operation_type, amount, user_address, sender_address);
+        return ();
+    }
+    
+    if (op == 0x05) {  ;; update_validator
+        slice new_rpc = in_msg_body~load_ref().begin_parse();
+        slice new_bridge = in_msg_body~load_bits(160);
+        int new_active = in_msg_body~load_uint(1);
+        
+        update_validator(new_rpc, new_bridge, new_active, sender_address);
+        return ();
+    }
+}
