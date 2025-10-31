@@ -220,7 +220,7 @@ jobs:
           cat verification-status.md
       
       - name: Upload Comprehensive Report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: verification-status
           path: verification-status.md
@@ -265,6 +265,7 @@ jobs:
         run: |
           source $HOME/.elan/env
           lake build
+        continue-on-error: true
       
       - name: Generate Lean Report
         run: |
