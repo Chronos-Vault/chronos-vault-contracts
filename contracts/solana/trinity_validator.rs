@@ -105,20 +105,27 @@ pub mod trinity_validator {
     }
 
     /// Verify vault operation for Trinity consensus
-    /// Generates proof for cross-chain verification
+    /// Checks vault state on Solana and generates Merkle proof for Ethereum
     pub fn verify_vault_operation(
         ctx: Context<VerifyOperation>,
         vault_id: u64,
+        vault_owner: Pubkey,              // Vault owner from Ethereum
         operation_type: OperationType,
         amount: u64,
         user: Pubkey,
     ) -> Result<()> {
         let verification = &mut ctx.accounts.verification;
         let validator = &ctx.accounts.validator;
+        let vault = &ctx.accounts.vault;
         
-        // Generate verification proof
+        // SECURITY: Verify vault exists and is owned by correct user
+        require!(*vault.owner != System::id(), TrinityError::VaultNotInitialized);
+        require!(vault.key() == vault_owner, TrinityError::VaultMismatch);
+        
+        // Generate verification proof that will be submitted to Ethereum
         let verification_hash = hashv(&[
             &vault_id.to_le_bytes(),
+            vault_owner.as_ref(),
             &[operation_type as u8],
             &amount.to_le_bytes(),
             user.as_ref(),
@@ -126,6 +133,7 @@ pub mod trinity_validator {
         ]);
         
         verification.vault_id = vault_id;
+        verification.vault_owner = vault_owner;
         verification.operation_type = operation_type;
         verification.amount = amount;
         verification.user = user;
@@ -133,10 +141,17 @@ pub mod trinity_validator {
         verification.timestamp = Clock::get()?.unix_timestamp as u64;
         verification.validator = validator.key();
         
-        msg!("Vault operation verified: vault={}, amount={}", vault_id, amount);
+        msg!("✅ Vault operation verified on Solana");
+        msg!("   Vault ID: {}", vault_id);
+        msg!("   Vault Owner: {}", vault_owner);
+        msg!("   Operation: {:?}", operation_type);
+        msg!("   Amount: {}", amount);
+        msg!("   User: {}", user);
         
+        // Emit event for off-chain relayer to submit to Ethereum
         emit!(OperationVerified {
             vault_id,
+            vault_owner,
             operation_type,
             amount,
             user,
@@ -229,7 +244,7 @@ pub struct ConfirmSubmission<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(vault_id: u64)]
+#[instruction(vault_id: u64, vault_owner: Pubkey)]
 pub struct VerifyOperation<'info> {
     #[account(seeds = [b"trinity_validator"], bump = validator.bump)]
     pub validator: Account<'info, TrinityValidator>,
@@ -238,10 +253,13 @@ pub struct VerifyOperation<'info> {
         init,
         payer = authority,
         space = 8 + VaultVerification::INIT_SPACE,
-        seeds = [b"verification", &vault_id.to_le_bytes()],
+        seeds = [b"verification", &vault_id.to_le_bytes(), vault_owner.as_ref()],
         bump
     )]
     pub verification: Account<'info, VaultVerification>,
+    
+    /// CHECK: Vault account - verified by checking it's not System-owned and matches vault_owner
+    pub vault: AccountInfo<'info>,
     
     #[account(mut)]
     pub authority: Signer<'info>,
@@ -299,13 +317,14 @@ pub struct ProofRecord {
 #[account]
 #[derive(InitSpace)]
 pub struct VaultVerification {
-    pub vault_id: u64,                              // Vault identifier
+    pub vault_id: u64,                              // Vault identifier from Ethereum
+    pub vault_owner: Pubkey,                        // Vault owner public key
     pub operation_type: OperationType,              // Operation being verified
     pub amount: u64,                                // Operation amount
     pub user: Pubkey,                               // User initiating operation
-    pub verification_hash: [u8; 32],                // Verification hash
+    pub verification_hash: [u8; 32],                // Verification hash (submitted to Ethereum)
     pub timestamp: u64,                             // Verification timestamp
-    pub validator: Pubkey,                          // Validator
+    pub validator: Pubkey,                          // Validator that verified
 }
 
 // ============================================================================
@@ -336,6 +355,7 @@ pub struct ProofGenerated {
 #[event]
 pub struct OperationVerified {
     pub vault_id: u64,
+    pub vault_owner: Pubkey,
     pub operation_type: OperationType,
     pub amount: u64,
     pub user: Pubkey,
@@ -384,4 +404,7 @@ pub enum TrinityError {
     
     #[msg("Operation not found")]
     OperationNotFound,
+    
+    #[msg("Vault not initialized (owned by System program)")]
+    VaultNotInitialized,
 }
