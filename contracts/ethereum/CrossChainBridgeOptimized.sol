@@ -510,6 +510,17 @@ contract CrossChainBridgeOptimized is ReentrancyGuard {
         uint256 timestamp
     );
     
+    event ProofSubmitted(
+        uint256 indexed operationId,
+        uint8 indexed chainId,
+        bytes32 merkleRoot
+    );
+    
+    event ConsensusReached(
+        uint256 indexed operationId,
+        uint8 validProofCount
+    );
+    
     // Modifiers
     modifier onlyEmergencyController() {
         if (msg.sender != emergencyController) revert Unauthorized();
@@ -1615,6 +1626,124 @@ contract CrossChainBridgeOptimized is ReentrancyGuard {
                 root = keccak256(abi.encodePacked(proofElement, root));
             }
         }
+    }
+    
+    /**
+     * @notice Verifies a Merkle proof against a given root (PRODUCTION)
+     * @dev Used by Trinity Protocol to verify proofs from Solana/TON
+     * @param leaf The leaf hash to verify (operation hash)
+     * @param proof Array of sibling hashes forming the Merkle branch
+     * @param root The expected Merkle root from blockchain
+     * @return bool True if proof is valid, false otherwise
+     */
+    function verifyMerkleProof(
+        bytes32 leaf,
+        bytes32[] memory proof,
+        bytes32 root
+    ) public pure returns (bool) {
+        bytes32 computedHash = leaf;
+        
+        for (uint256 i = 0; i < proof.length; i++) {
+            bytes32 sibling = proof[i];
+            
+            if (computedHash <= sibling) {
+                // Hash(current + sibling)
+                computedHash = keccak256(abi.encodePacked(computedHash, sibling));
+            } else {
+                // Hash(sibling + current)
+                computedHash = keccak256(abi.encodePacked(sibling, computedHash));
+            }
+        }
+        
+        return computedHash == root;
+    }
+    
+    /**
+     * @notice Submit Solana proof with Merkle verification (PRODUCTION)
+     * @dev Called by Trinity Relayer with real blockchain proof data
+     * @param operationId The operation ID to verify
+     * @param merkleRoot The Merkle root from Solana blockchain
+     * @param proof Array of sibling hashes from Solana proof
+     * @return bool True if proof accepted and verified
+     */
+    function submitSolanaProof(
+        uint256 operationId,
+        bytes32 merkleRoot,
+        bytes32[] calldata proof
+    ) external whenNotPaused returns (bool) {
+        // Convert operation ID to bytes32 for storage key
+        bytes32 opId = bytes32(operationId);
+        Operation storage operation = operations[opId];
+        
+        require(operation.id == opId, "Operation not found");
+        require(operation.status == OperationStatus.PENDING, "Operation not pending");
+        require(!operation.chainVerified[2], "Solana already verified"); // ChainId 2 = Solana
+        
+        // CRITICAL FIX: Compute leaf on-chain (NEVER trust caller-supplied leaf)
+        // Canonical leaf = keccak256(operationId)
+        bytes32 computedLeaf = keccak256(abi.encodePacked(operationId));
+        
+        // CRITICAL: Verify Merkle proof with on-chain computed leaf
+        require(verifyMerkleProof(computedLeaf, proof, merkleRoot), "Invalid Merkle proof");
+        
+        // Mark Solana chain as verified
+        operation.chainVerified[2] = true;
+        operation.validProofCount++;
+        
+        // Store proof data
+        emit ProofSubmitted(operationId, 2, merkleRoot);
+        
+        // Check if 2-of-3 consensus reached
+        if (operation.validProofCount >= requiredChainConfirmations) {
+            emit ConsensusReached(operationId, operation.validProofCount);
+            _executeOperation(opId); // Execute operation when consensus reached
+        }
+        
+        return true;
+    }
+    
+    /**
+     * @notice Submit TON proof with Merkle verification (PRODUCTION)
+     * @dev Called by Trinity Relayer with real blockchain proof data
+     * @param operationId The operation ID to verify
+     * @param merkleRoot The Merkle root from TON blockchain
+     * @param proof Array of sibling hashes from TON proof
+     * @return bool True if proof is valid, false otherwise
+     */
+    function submitTONProof(
+        uint256 operationId,
+        bytes32 merkleRoot,
+        bytes32[] calldata proof
+    ) external whenNotPaused returns (bool) {
+        // Convert operation ID to bytes32 for storage key
+        bytes32 opId = bytes32(operationId);
+        Operation storage operation = operations[opId];
+        
+        require(operation.id == opId, "Operation not found");
+        require(operation.status == OperationStatus.PENDING, "Operation not pending");
+        require(!operation.chainVerified[3], "TON already verified"); // ChainId 3 = TON
+        
+        // CRITICAL FIX: Compute leaf on-chain (NEVER trust caller-supplied leaf)
+        // Canonical leaf = keccak256(operationId)
+        bytes32 computedLeaf = keccak256(abi.encodePacked(operationId));
+        
+        // CRITICAL: Verify Merkle proof with on-chain computed leaf
+        require(verifyMerkleProof(computedLeaf, proof, merkleRoot), "Invalid Merkle proof");
+        
+        // Mark TON chain as verified
+        operation.chainVerified[3] = true;
+        operation.validProofCount++;
+        
+        // Store proof data
+        emit ProofSubmitted(operationId, 3, merkleRoot);
+        
+        // Check if 2-of-3 consensus reached
+        if (operation.validProofCount >= requiredChainConfirmations) {
+            emit ConsensusReached(operationId, operation.validProofCount);
+            _executeOperation(opId); // Execute operation when consensus reached
+        }
+        
+        return true;
     }
     
     /**
