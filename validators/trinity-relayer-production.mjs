@@ -51,8 +51,8 @@ const CONFIG = {
 // Cross-Chain Bridge ABI (PRODUCTION with Merkle verification)
 const BRIDGE_ABI = [
     "function getOperationConsensus(uint256 operationId) view returns (uint8 arbitrumConfirmed, uint8 solanaConfirmed, uint8 tonConfirmed, bool consensusReached)",
-    "function submitSolanaProof(uint256 operationId, bytes32 merkleRoot, bytes32 merkleLeaf, bytes32[] calldata proof) returns (bool)",
-    "function submitTONProof(uint256 operationId, bytes32 merkleRoot, bytes32 merkleLeaf, bytes32[] calldata proof) returns (bool)",
+    "function submitSolanaProof(uint256 operationId, bytes32 merkleRoot, bytes32[] calldata proof) returns (bool)",
+    "function submitTONProof(uint256 operationId, bytes32 merkleRoot, bytes32[] calldata proof) returns (bool)",
     "function verifyMerkleProof(bytes32 leaf, bytes32[] calldata proof, bytes32 root) view returns (bool)",
     "function operations(uint256) view returns (address user, uint8 operationType, uint256 amount, uint8 status, uint8 validProofCount)",
     "event OperationInitiated(uint256 indexed operationId, address indexed user, uint8 operationType)",
