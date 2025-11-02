@@ -48,11 +48,12 @@ const CONFIG = {
     }
 };
 
-// Cross-Chain Bridge ABI
+// Cross-Chain Bridge ABI (PRODUCTION with Merkle verification)
 const BRIDGE_ABI = [
     "function getOperationConsensus(uint256 operationId) view returns (uint8 arbitrumConfirmed, uint8 solanaConfirmed, uint8 tonConfirmed, bool consensusReached)",
-    "function submitSolanaProof(uint256 operationId, bytes32 merkleRoot, bytes32[] calldata proof) returns (bool)",
-    "function submitTONProof(uint256 operationId, bytes32 merkleRoot, bytes32[] calldata proof) returns (bool)",
+    "function submitSolanaProof(uint256 operationId, bytes32 merkleRoot, bytes32 merkleLeaf, bytes32[] calldata proof) returns (bool)",
+    "function submitTONProof(uint256 operationId, bytes32 merkleRoot, bytes32 merkleLeaf, bytes32[] calldata proof) returns (bool)",
+    "function verifyMerkleProof(bytes32 leaf, bytes32[] calldata proof, bytes32 root) view returns (bool)",
     "function operations(uint256) view returns (address user, uint8 operationType, uint256 amount, uint8 status, uint8 validProofCount)",
     "event OperationInitiated(uint256 indexed operationId, address indexed user, uint8 operationType)",
     "event ConsensusReached(uint256 indexed operationId, uint8 consensusCount)",
@@ -77,6 +78,7 @@ class TrinityRelayerProduction {
 
     /**
      * FIX #3: Environment Variables Configuration
+     * PRODUCTION: Validates all required env vars and rejects placeholder values
      */
     validateConfig() {
         console.log("🔍 Validating configuration...");
@@ -88,17 +90,32 @@ class TrinityRelayerProduction {
         };
 
         const missing = [];
+        const placeholders = [
+            'your_private_key_here',
+            'your_relayer_private_key_here',  // FIX: Catch .env.example placeholder
+            'your_key_here',
+            '0x0000000000000000000000000000000000000000'
+        ];
+        
         for (const [key, value] of Object.entries(required)) {
-            if (!value || value === 'your_private_key_here') {
+            if (!value) {
                 missing.push(key);
+            } else {
+                // Check for placeholder values
+                for (const placeholder of placeholders) {
+                    if (value.toLowerCase().includes(placeholder.toLowerCase())) {
+                        missing.push(`${key} (contains placeholder "${placeholder}")`);
+                        break;
+                    }
+                }
             }
         }
 
         if (missing.length > 0) {
-            throw new Error(`Missing required environment variables: ${missing.join(', ')}\nPlease copy .env.example to .env and configure.`);
+            throw new Error(`❌ Invalid configuration!\n\nMissing or placeholder values:\n${missing.map(m => `  - ${m}`).join('\n')}\n\nPlease:\n1. Copy .env.example to .env\n2. Replace ALL placeholder values with real keys\n3. Restart the relayer`);
         }
 
-        console.log("   ✅ Configuration validated");
+        console.log("   ✅ Configuration validated - all secrets configured");
     }
 
     /**
@@ -198,12 +215,13 @@ class TrinityRelayerProduction {
 
     /**
      * FIX #1: Real Merkle Proof Generation from Solana
+     * PRODUCTION: Reads actual proof data stored on-chain by Solana program
      */
     async getSolanaProof(operationId) {
         try {
             const programId = new PublicKey(CONFIG.solana.programId);
             
-            // Derive PDA for proof record
+            // Derive PDA for proof record (matches Solana program: seeds = [b"proof", operation_id])
             const operationIdBuffer = Buffer.alloc(32);
             operationIdBuffer.writeBigUInt64BE(BigInt(operationId), 24);
             
@@ -212,7 +230,7 @@ class TrinityRelayerProduction {
                 programId
             );
             
-            // Fetch proof record from Solana
+            // Fetch REAL proof record from Solana blockchain
             const accountInfo = await this.retryOperation(() => 
                 this.solanaConnection.getAccountInfo(proofPda)
             );
@@ -222,23 +240,49 @@ class TrinityRelayerProduction {
                 return null;
             }
             
-            // Parse proof data (first 32 bytes = merkle root)
-            const merkleRoot = accountInfo.data.slice(0, 32);
+            // PRODUCTION: Parse ProofRecord structure from Solana program
+            // struct ProofRecord {
+            //     operation_id: [u8; 32],          // bytes 8-40  (anchor discriminator 8 bytes)
+            //     merkle_root: [u8; 32],           // bytes 40-72
+            //     merkle_proof: Vec<[u8; 32]>,     // bytes 72+ (vec with max 10 siblings)
+            //     ...
+            // }
             
-            // Get Solana block hash for additional verification
+            const data = accountInfo.data;
+            
+            // Skip 8-byte Anchor discriminator
+            let offset = 8;
+            
+            // Read operation_id (32 bytes) - skip it
+            offset += 32;
+            
+            // Read merkle_root (32 bytes) - THIS IS WHAT WE NEED
+            const merkleRoot = data.slice(offset, offset + 32);
+            offset += 32;
+            
+            // Read merkle_proof vector (4 bytes length + 32 bytes per sibling)
+            const proofLength = data.readUInt32LE(offset);
+            offset += 4;
+            
+            const proof = [];
+            for (let i = 0; i < proofLength; i++) {
+                const sibling = data.slice(offset, offset + 32);
+                proof.push('0x' + sibling.toString('hex'));
+                offset += 32;
+            }
+            
+            // Read slot from on-chain data for verification
             const slot = await this.solanaConnection.getSlot();
-            const blockHash = await this.solanaConnection.getRecentBlockhash();
             
-            // Generate Merkle proof array (simplified - in production, build full tree)
-            const proof = this.generateMerkleProof(operationId, merkleRoot, blockHash.blockhash);
-            
-            console.log(`   ✅ Solana proof retrieved for operation ${operationId}`);
-            console.log(`   📝 Merkle Root: 0x${Buffer.from(merkleRoot).toString('hex')}`);
+            console.log(`   ✅ REAL Solana proof retrieved for operation ${operationId}`);
+            console.log(`   📝 Merkle Root: 0x${merkleRoot.toString('hex')}`);
+            console.log(`   🌲 Proof Siblings: ${proofLength}`);
             console.log(`   📊 Slot: ${slot}`);
             
             return {
-                merkleRoot: '0x' + Buffer.from(merkleRoot).toString('hex'),
-                proof: proof,
+                merkleRoot: '0x' + merkleRoot.toString('hex'),
+                merkleLeaf: '0x' + Buffer.from(operationIdBuffer).toString('hex'),
+                proof: proof,  // REAL sibling hashes from blockchain!
                 slot: slot
             };
             
@@ -250,77 +294,100 @@ class TrinityRelayerProduction {
 
     /**
      * FIX #1: Real Merkle Proof Generation from TON
+     * PRODUCTION: Reads actual proof data from TON contract via get_proof_record() getter
      */
     async getTONProof(operationId) {
         try {
             const contractAddress = Address.parse(CONFIG.ton.contractAddress);
             
-            // Query TON contract for proof data
-            // Note: TON contract needs a getter method for specific operation proofs
+            // Convert operation ID to 256-bit integer for TON
+            const opIdBigInt = BigInt(operationId);
+            
+            // Query TON contract's get_proof_record(operation_id) method
+            // Returns: (op_id, merkle_root, merkle_proof_cell, ton_block_hash, ton_tx_hash, 
+            //           ton_block_number, timestamp, submitted, eth_tx_hash)
             const result = await this.retryOperation(() => 
-                this.tonClient.runMethod(contractAddress, 'get_total_proofs')
+                this.tonClient.runMethod(
+                    contractAddress, 
+                    'get_proof_record',
+                    [{ type: 'int', value: opIdBigInt.toString() }]
+                )
             );
-            const totalProofs = result.stack.readNumber();
             
-            // In production: TON contract should have get_proof_by_operation_id(int operation_id)
-            // For now: Generate deterministic proof based on operation ID and contract state
-            const proofData = this.generateTONMerkleRoot(operationId, totalProofs);
+            // Parse result from TON stack
+            const returnedOpId = result.stack.readBigNumber();
             
-            console.log(`   ✅ TON proof generated for operation ${operationId}`);
-            console.log(`   📝 Merkle Root: ${proofData.merkleRoot}`);
-            console.log(`   📊 Total Proofs: ${totalProofs}`);
+            // Check if proof exists (operation_id == 0 means not found)
+            if (returnedOpId.eq(0)) {
+                console.log(`   ⚠️  TON proof not found for operation ${operationId}`);
+                return null;
+            }
             
-            return proofData;
+            const merkleRoot = result.stack.readBigNumber();
+            const merkleProofCell = result.stack.readCell();
+            const tonBlockHash = result.stack.readBigNumber();
+            const tonTxHash = result.stack.readBigNumber();
+            const tonBlockNumber = result.stack.readBigNumber();
+            const timestamp = result.stack.readBigNumber();
+            const submitted = result.stack.readNumber();
+            const ethTxHash = result.stack.readBigNumber();
+            
+            // Parse Merkle proof siblings from cell
+            const proof = this.parseTONMerkleProofCell(merkleProofCell);
+            
+            console.log(`   ✅ REAL TON proof retrieved for operation ${operationId}`);
+            console.log(`   📝 Merkle Root: 0x${merkleRoot.toString(16).padStart(64, '0')}`);
+            console.log(`   🌲 Proof Siblings: ${proof.length}`);
+            console.log(`   📊 TON Block: ${tonBlockNumber.toString()}`);
+            console.log(`   ⏰ Timestamp: ${new Date(timestamp.toNumber() * 1000).toISOString()}`);
+            
+            return {
+                merkleRoot: '0x' + merkleRoot.toString(16).padStart(64, '0'),
+                merkleLeaf: '0x' + opIdBigInt.toString(16).padStart(64, '0'),
+                proof: proof,  // REAL sibling hashes from TON contract!
+                tonBlockNumber: tonBlockNumber.toString(),
+                timestamp: timestamp.toString()
+            };
             
         } catch (error) {
             console.log(`   ⚠️  Error fetching TON proof: ${error.message}`);
             return null;
         }
     }
-
+    
     /**
-     * Generate Merkle proof from blockchain data
+     * Parse Merkle proof siblings from TON cell structure
+     * TON stores proof as a cell containing sequential 256-bit hashes
      */
-    generateMerkleProof(operationId, merkleRoot, blockHash) {
-        // Generate proof array by hashing operation data
-        const leaf = ethers.keccak256(
-            ethers.AbiCoder.defaultAbiCoder().encode(
-                ['uint256', 'bytes32'],
-                [operationId, merkleRoot]
-            )
-        );
-        
-        const proof1 = ethers.keccak256(
-            ethers.concat([leaf, ethers.toUtf8Bytes(blockHash)])
-        );
-        
-        return [proof1];
+    parseTONMerkleProofCell(cell) {
+        try {
+            const slice = cell.beginParse();
+            const proof = [];
+            
+            // Read 256-bit hashes until cell is empty
+            while (slice.remainingBits >= 256) {
+                const sibling = slice.loadUintBig(256);
+                proof.push('0x' + sibling.toString(16).padStart(64, '0'));
+            }
+            
+            // Check if there are more siblings in referenced cells
+            while (slice.remainingRefs > 0) {
+                const refCell = slice.loadRef();
+                const refProof = this.parseTONMerkleProofCell(refCell);
+                proof.push(...refProof);
+            }
+            
+            return proof;
+        } catch (error) {
+            console.log(`   ⚠️  Error parsing TON proof cell: ${error.message}`);
+            return [];
+        }
     }
 
-    /**
-     * Generate TON Merkle root from contract state
-     */
-    generateTONMerkleRoot(operationId, totalProofs) {
-        // Generate deterministic merkle root based on operation ID and TON state
-        const root = ethers.keccak256(
-            ethers.AbiCoder.defaultAbiCoder().encode(
-                ['uint256', 'uint256', 'string'],
-                [operationId, totalProofs, 'TON_VALIDATOR']
-            )
-        );
-        
-        const proof = ethers.keccak256(
-            ethers.concat([root, ethers.toUtf8Bytes('TON_PROOF')])
-        );
-        
-        return {
-            merkleRoot: root,
-            proof: [proof]
-        };
-    }
 
     /**
      * FIX #2 & #6: Authenticated Proof Submission with Gas Management
+     * PRODUCTION: Submits REAL Merkle proofs with leaf + siblings
      */
     async submitProofToEthereum(operationId, chainType, proofData) {
         try {
@@ -343,12 +410,16 @@ class TrinityRelayerProduction {
             const submitFunction = chainType === 'Solana' ? 
                 'submitSolanaProof' : 'submitTONProof';
             
+            // PRODUCTION: Include merkleLeaf in proof submission
+            const merkleLeaf = proofData.merkleLeaf || proofData.merkleRoot;
+            
             // FIX #6: Gas Estimation
             let gasLimit;
             try {
                 gasLimit = await this.bridgeContract[submitFunction].estimateGas(
                     operationId,
                     proofData.merkleRoot,
+                    merkleLeaf,
                     proofData.proof
                 );
                 // Add 20% buffer
@@ -365,11 +436,12 @@ class TrinityRelayerProduction {
             
             console.log(`   ⛽ Gas price: ${ethers.formatUnits(gasPrice, 'gwei')} gwei`);
             
-            // Submit transaction
+            // Submit transaction with REAL proof data
             const tx = await this.retryOperation(() => 
                 this.bridgeContract[submitFunction](
                     operationId,
                     proofData.merkleRoot,
+                    merkleLeaf,
                     proofData.proof,
                     {
                         gasLimit: gasLimit,
@@ -384,7 +456,7 @@ class TrinityRelayerProduction {
             const receipt = await tx.wait();
             
             if (receipt.status === 1) {
-                console.log(`   ✅ Proof submitted successfully!`);
+                console.log(`   ✅ REAL proof submitted successfully!`);
                 console.log(`   ⛽ Gas used: ${receipt.gasUsed.toString()}`);
                 this.stats.proofsSubmitted++;
                 return true;
@@ -401,6 +473,9 @@ class TrinityRelayerProduction {
                 console.log(`   💰 Insufficient funds. Please fund wallet: ${this.ethWallet.address}`);
             } else if (error.message.includes('nonce')) {
                 console.log(`   ⚠️  Nonce error - transaction may be pending`);
+            } else if (error.message.includes('Invalid Merkle proof')) {
+                console.log(`   ❌ CRITICAL: Merkle proof verification failed on-chain!`);
+                console.log(`   📊 Proof data: root=${proofData.merkleRoot}, leaf=${merkleLeaf}, siblings=${proofData.proof.length}`);
             }
             
             throw error;
