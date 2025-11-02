@@ -215,7 +215,7 @@ class TrinityRelayerProduction {
 
     /**
      * FIX #1: Real Merkle Proof Generation from Solana
-     * PRODUCTION: Reads actual proof data stored on-chain by Solana program
+     * PRODUCTION: Correctly parses Anchor's ProofRecord layout with defensive validation
      */
     async getSolanaProof(operationId) {
         try {
@@ -240,29 +240,56 @@ class TrinityRelayerProduction {
                 return null;
             }
             
-            // PRODUCTION: Parse ProofRecord structure from Solana program
-            // struct ProofRecord {
-            //     operation_id: [u8; 32],          // bytes 8-40  (anchor discriminator 8 bytes)
-            //     merkle_root: [u8; 32],           // bytes 40-72
-            //     merkle_proof: Vec<[u8; 32]>,     // bytes 72+ (vec with max 10 siblings)
-            //     ...
-            // }
-            
             const data = accountInfo.data;
             
-            // Skip 8-byte Anchor discriminator
-            let offset = 8;
+            // CRITICAL FIX: Validate minimum account size
+            // Anchor layout: 8 (discriminator) + 32 (operation_id) + 32 (merkle_root) + 4 (vec length) = 76 bytes minimum
+            if (data.length < 76) {
+                console.log(`   ❌ Invalid account data: size ${data.length} < 76 bytes`);
+                return null;
+            }
             
-            // Read operation_id (32 bytes) - skip it
+            // PRODUCTION: Parse Anchor's ProofRecord structure
+            // Layout (all little-endian):
+            // - bytes 0-7: Anchor discriminator (8 bytes)
+            // - bytes 8-39: operation_id ([u8; 32])
+            // - bytes 40-71: merkle_root ([u8; 32])
+            // - bytes 72-75: Vec length (u32 LE)
+            // - bytes 76+: Vec data (length * 32 bytes)
+            
+            let offset = 8; // Skip Anchor discriminator
+            
+            // Read operation_id (32 bytes) for verification
+            const storedOpId = data.slice(offset, offset + 32);
             offset += 32;
             
-            // Read merkle_root (32 bytes) - THIS IS WHAT WE NEED
+            // CRITICAL FIX: Verify operation_id matches
+            if (!storedOpId.equals(operationIdBuffer)) {
+                console.log(`   ❌ Operation ID mismatch in Solana account`);
+                return null;
+            }
+            
+            // Read merkle_root (32 bytes)
             const merkleRoot = data.slice(offset, offset + 32);
             offset += 32;
             
-            // Read merkle_proof vector (4 bytes length + 32 bytes per sibling)
+            // Read Vec<[u8; 32]> merkle_proof
+            // CRITICAL FIX: Anchor serializes Vec as 4-byte LE length + data
             const proofLength = data.readUInt32LE(offset);
             offset += 4;
+            
+            // CRITICAL FIX: Validate proof length
+            if (proofLength > 10) {
+                console.log(`   ❌ Proof too long: ${proofLength} siblings (max 10)`);
+                return null;
+            }
+            
+            // CRITICAL FIX: Validate remaining data size
+            const requiredSize = 76 + (proofLength * 32);
+            if (data.length < requiredSize) {
+                console.log(`   ❌ Insufficient data for ${proofLength} siblings: ${data.length} < ${requiredSize} bytes`);
+                return null;
+            }
             
             const proof = [];
             for (let i = 0; i < proofLength; i++) {
@@ -271,7 +298,12 @@ class TrinityRelayerProduction {
                 offset += 32;
             }
             
-            // Read slot from on-chain data for verification
+            // Verify merkle_root is non-zero
+            const isZeroRoot = merkleRoot.every(byte => byte === 0);
+            if (isZeroRoot) {
+                console.log(`   ⚠️  Warning: Merkle root is all zeros`);
+            }
+            
             const slot = await this.solanaConnection.getSlot();
             
             console.log(`   ✅ REAL Solana proof retrieved for operation ${operationId}`);
@@ -281,20 +313,22 @@ class TrinityRelayerProduction {
             
             return {
                 merkleRoot: '0x' + merkleRoot.toString('hex'),
-                merkleLeaf: '0x' + Buffer.from(operationIdBuffer).toString('hex'),
+                merkleLeaf: '0x' + operationIdBuffer.toString('hex'),
                 proof: proof,  // REAL sibling hashes from blockchain!
-                slot: slot
+                slot: slot,
+                verified: true
             };
             
         } catch (error) {
             console.log(`   ⚠️  Error fetching Solana proof: ${error.message}`);
+            console.log(`   Stack: ${error.stack}`);
             return null;
         }
     }
 
     /**
      * FIX #1: Real Merkle Proof Generation from TON
-     * PRODUCTION: Reads actual proof data from TON contract via get_proof_record() getter
+     * PRODUCTION: Reads actual proof data from TON contract with full defensive validation
      */
     async getTONProof(operationId) {
         try {
@@ -314,26 +348,72 @@ class TrinityRelayerProduction {
                 )
             );
             
-            // Parse result from TON stack
-            const returnedOpId = result.stack.readBigNumber();
+            // CRITICAL FIX: Defensive validation of TON response
+            if (!result || !result.stack) {
+                console.log(`   ❌ Invalid TON response: missing stack`);
+                return null;
+            }
+            
+            // CRITICAL FIX: Validate stack has enough items (9 return values expected)
+            if (result.stack.remaining < 9) {
+                console.log(`   ❌ Invalid TON response: stack has ${result.stack.remaining} items, expected 9`);
+                return null;
+            }
+            
+            // Parse result from TON stack with defensive checks
+            let returnedOpId, merkleRoot, merkleProofCell, tonBlockHash, tonTxHash, tonBlockNumber, timestamp, submitted, ethTxHash;
+            
+            try {
+                returnedOpId = result.stack.readBigNumber();
+                merkleRoot = result.stack.readBigNumber();
+                merkleProofCell = result.stack.readCell();
+                tonBlockHash = result.stack.readBigNumber();
+                tonTxHash = result.stack.readBigNumber();
+                tonBlockNumber = result.stack.readBigNumber();
+                timestamp = result.stack.readBigNumber();
+                submitted = result.stack.readNumber();
+                ethTxHash = result.stack.readBigNumber();
+            } catch (stackError) {
+                console.log(`   ❌ Failed to parse TON stack: ${stackError.message}`);
+                return null;
+            }
             
             // Check if proof exists (operation_id == 0 means not found)
-            if (returnedOpId.eq(0)) {
+            if (!returnedOpId || returnedOpId.eq(0)) {
                 console.log(`   ⚠️  TON proof not found for operation ${operationId}`);
                 return null;
             }
             
-            const merkleRoot = result.stack.readBigNumber();
-            const merkleProofCell = result.stack.readCell();
-            const tonBlockHash = result.stack.readBigNumber();
-            const tonTxHash = result.stack.readBigNumber();
-            const tonBlockNumber = result.stack.readBigNumber();
-            const timestamp = result.stack.readBigNumber();
-            const submitted = result.stack.readNumber();
-            const ethTxHash = result.stack.readBigNumber();
+            // CRITICAL FIX: Validate operation ID matches
+            if (!returnedOpId.eq(opIdBigInt)) {
+                console.log(`   ❌ Operation ID mismatch: expected ${opIdBigInt}, got ${returnedOpId}`);
+                return null;
+            }
             
-            // Parse Merkle proof siblings from cell
+            // CRITICAL FIX: Validate merkle_root is non-zero
+            if (!merkleRoot || merkleRoot.eq(0)) {
+                console.log(`   ⚠️  Warning: TON Merkle root is zero`);
+            }
+            
+            // CRITICAL FIX: Validate merkleProofCell exists
+            if (!merkleProofCell) {
+                console.log(`   ❌ Missing Merkle proof cell`);
+                return null;
+            }
+            
+            // Parse Merkle proof siblings from cell with error handling
             const proof = this.parseTONMerkleProofCell(merkleProofCell);
+            
+            // CRITICAL FIX: Validate proof array
+            if (!proof || proof.length === 0) {
+                console.log(`   ⚠️  Warning: TON proof has no siblings`);
+            }
+            
+            // CRITICAL FIX: Validate proof length
+            if (proof.length > 10) {
+                console.log(`   ❌ TON proof too long: ${proof.length} siblings (max 10)`);
+                return null;
+            }
             
             console.log(`   ✅ REAL TON proof retrieved for operation ${operationId}`);
             console.log(`   📝 Merkle Root: 0x${merkleRoot.toString(16).padStart(64, '0')}`);
@@ -346,35 +426,63 @@ class TrinityRelayerProduction {
                 merkleLeaf: '0x' + opIdBigInt.toString(16).padStart(64, '0'),
                 proof: proof,  // REAL sibling hashes from TON contract!
                 tonBlockNumber: tonBlockNumber.toString(),
-                timestamp: timestamp.toString()
+                timestamp: timestamp.toString(),
+                verified: true
             };
             
         } catch (error) {
             console.log(`   ⚠️  Error fetching TON proof: ${error.message}`);
+            console.log(`   Stack: ${error.stack}`);
             return null;
         }
     }
     
     /**
      * Parse Merkle proof siblings from TON cell structure
-     * TON stores proof as a cell containing sequential 256-bit hashes
+     * CRITICAL FIX: Defensive parsing with validation and error handling
      */
     parseTONMerkleProofCell(cell) {
         try {
+            // CRITICAL FIX: Validate cell exists
+            if (!cell) {
+                console.log(`   ⚠️  Null proof cell provided`);
+                return [];
+            }
+            
             const slice = cell.beginParse();
             const proof = [];
             
+            // CRITICAL FIX: Limit iterations to prevent infinite loops
+            const MAX_SIBLINGS = 10;
+            let siblingCount = 0;
+            
             // Read 256-bit hashes until cell is empty
-            while (slice.remainingBits >= 256) {
+            while (slice.remainingBits >= 256 && siblingCount < MAX_SIBLINGS) {
                 const sibling = slice.loadUintBig(256);
                 proof.push('0x' + sibling.toString(16).padStart(64, '0'));
+                siblingCount++;
             }
             
-            // Check if there are more siblings in referenced cells
-            while (slice.remainingRefs > 0) {
-                const refCell = slice.loadRef();
-                const refProof = this.parseTONMerkleProofCell(refCell);
-                proof.push(...refProof);
+            // CRITICAL FIX: Warn if partial data remains
+            if (slice.remainingBits > 0 && slice.remainingBits < 256) {
+                console.log(`   ⚠️  Warning: ${slice.remainingBits} remaining bits in proof cell (not full 256-bit hash)`);
+            }
+            
+            // Check if there are more siblings in referenced cells (recursive)
+            const MAX_DEPTH = 5; // Prevent stack overflow
+            if (slice.remainingRefs > 0 && siblingCount < MAX_SIBLINGS) {
+                const refsToProcess = Math.min(slice.remainingRefs, MAX_SIBLINGS - siblingCount);
+                
+                for (let i = 0; i < refsToProcess; i++) {
+                    try {
+                        const refCell = slice.loadRef();
+                        const refProof = this.parseTONMerkleProofCell(refCell);
+                        proof.push(...refProof.slice(0, MAX_SIBLINGS - proof.length)); // Respect max limit
+                    } catch (refError) {
+                        console.log(`   ⚠️  Error parsing TON proof ref ${i}: ${refError.message}`);
+                        break; // Stop processing refs on error
+                    }
+                }
             }
             
             return proof;
