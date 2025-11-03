@@ -5,6 +5,9 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "./libraries/Errors.sol";
+import "./libraries/FeeAccounting.sol";
+import "./libraries/ProofValidation.sol";
 
 /**
  * @title IChronosVault - Interface for vault type integration
@@ -923,15 +926,8 @@ contract CrossChainBridgeOptimized is ReentrancyGuard {
         // CRITICAL FIX v2.1: Prevent same-chain operations
         if (keccak256(bytes(sourceChain)) == keccak256(bytes(destinationChain))) revert InvalidChain();
         
-        // Calculate fee
-        uint256 fee = BASE_FEE;
-        if (prioritizeSpeed) {
-            fee = (fee * SPEED_PRIORITY_MULTIPLIER) / 10000;
-        }
-        if (prioritizeSecurity) {
-            fee = (fee * SECURITY_PRIORITY_MULTIPLIER) / 10000;
-        }
-        if (fee > MAX_FEE) fee = MAX_FEE;
+        // Calculate fee using FeeAccounting library
+        uint256 fee = FeeAccounting.calculateOperationFee(BASE_FEE, prioritizeSpeed, prioritizeSecurity);
         if (msg.value < fee) revert InsufficientFee();
         
         // SECURITY FIX H-03: Track fees in current epoch (v1.5-PRODUCTION)
@@ -1035,9 +1031,9 @@ contract CrossChainBridgeOptimized is ReentrancyGuard {
         // Input validation
         if (_amount == 0) revert InvalidAmount();
         if (!supportedChains[_destChain]) revert InvalidChain();
-        if (_validatorAddresses.length < 2) revert("Insufficient validators - need 2-of-3 consensus");
-        if (_validatorAddresses.length != _signatures.length) revert("Validator/signature mismatch");
-        if (_validatorAddresses.length != _merkleRoots.length) revert("Validator/merkle mismatch");
+        if (_validatorAddresses.length < 2) revert Errors.InsufficientValidators();
+        if (_validatorAddresses.length != _signatures.length) revert Errors.ValidatorSignatureMismatch();
+        if (_validatorAddresses.length != _merkleRoots.length) revert Errors.ValidatorMerkleMismatch();
         
         // FIX #7: Rolling window rate limiting (prevents day-boundary bypass)
         _checkRateLimit(msg.sender);
@@ -1056,7 +1052,7 @@ contract CrossChainBridgeOptimized is ReentrancyGuard {
         for (uint256 i = 0; i < _validatorAddresses.length; i++) {
             // Prevent signature replay
             bytes32 sigHash = keccak256(_signatures[i]);
-            if (usedSignatures[sigHash]) revert("Signature already used");
+            if (usedSignatures[sigHash]) revert Errors.DuplicateSignature();
             usedSignatures[sigHash] = true;
             
             // Verify signature - recreate Ethereum signed message hash manually
@@ -1073,7 +1069,7 @@ contract CrossChainBridgeOptimized is ReentrancyGuard {
         }
         
         // Require at least 2 valid signatures (2-of-3 consensus)
-        if (validSignatures < 2) revert("Insufficient consensus - need 2-of-3");
+        if (validSignatures < 2) revert Errors.InsufficientConsensus();
         
         // Calculate fee (FIX #6: 80% validators, 20% protocol)
         uint256 fee = BASE_FEE;
@@ -1175,12 +1171,8 @@ contract CrossChainBridgeOptimized is ReentrancyGuard {
         // CRITICAL FIX v2.1: Prevent same-chain operations
         if (keccak256(bytes(sourceChain)) == keccak256(bytes(destinationChain))) revert InvalidChain();
         
-        // Calculate fee
-        uint256 fee = BASE_FEE;
-        if (prioritizeSecurity) {
-            fee = (fee * SECURITY_PRIORITY_MULTIPLIER) / 10000;
-        }
-        if (fee > MAX_FEE) fee = MAX_FEE;
+        // Calculate fee using FeeAccounting library
+        uint256 fee = FeeAccounting.calculateOperationFee(BASE_FEE, false, prioritizeSecurity);
         if (msg.value < fee) revert InsufficientFee();
         
         // SECURITY FIX H-03: Track fees in current epoch (v1.5-PRODUCTION)
@@ -1731,47 +1723,10 @@ contract CrossChainBridgeOptimized is ReentrancyGuard {
         }
     }
     
-    /**
-     * @notice Verifies a Merkle proof against a given root (PRODUCTION v2.1)
-     * @dev Used by Trinity Protocol to verify proofs from Solana/TON
-     * @param leaf The leaf hash to verify (operation hash)
-     * @param proof Array of sibling hashes forming the Merkle branch
-     * @param root The expected Merkle root from blockchain
-     * @return bool True if proof is valid, false otherwise
-     */
-    function verifyMerkleProof(
-        bytes32 leaf,
-        bytes32[] memory proof,
-        bytes32 root
-    ) public pure returns (bool) {
-        // CRITICAL FIX v2.1: Prevent DoS with deep proofs (Chronos Vault audit)
-        if (proof.length > MAX_MERKLE_DEPTH) revert ProofTooDeep();
-        
-        bytes32 computedHash = leaf;
-        
-        for (uint256 i = 0; i < proof.length; i++) {
-            bytes32 sibling = proof[i];
-            
-            if (computedHash <= sibling) {
-                // Hash(current + sibling)
-                computedHash = keccak256(abi.encodePacked(computedHash, sibling));
-            } else {
-                // Hash(sibling + current)
-                computedHash = keccak256(abi.encodePacked(sibling, computedHash));
-            }
-        }
-        
-        return computedHash == root;
-    }
     
     /**
-     * @notice Submit Solana proof with Merkle verification (PRODUCTION v2.1)
+     * @notice Submit Solana proof with Merkle verification (PRODUCTION v3.1)
      * @dev SECURITY: Requires validator signature on merkleRoot to prevent forgery
-     * @param operationId The operation ID to verify
-     * @param merkleRoot The Merkle root from Solana blockchain
-     * @param proof Array of sibling hashes from Solana proof
-     * @param validatorSignature Validator's signature on merkleRoot (prevents forgery)
-     * @return bool True if proof accepted and verified
      */
     function submitSolanaProof(
         uint256 operationId,
@@ -1779,16 +1734,13 @@ contract CrossChainBridgeOptimized is ReentrancyGuard {
         bytes32[] calldata proof,
         bytes memory validatorSignature
     ) external whenNotPaused returns (bool) {
-        // Convert operation ID to bytes32 for storage key
         bytes32 opId = bytes32(operationId);
         Operation storage operation = operations[opId];
         
         if (operation.id != opId) revert OperationNotFound();
         if (operation.status != OperationStatus.PENDING) revert OperationNotPending();
-        if (operation.chainVerified[2]) revert ChainAlreadyVerified(); // ChainId 2 = Solana
+        if (operation.chainVerified[2]) revert ChainAlreadyVerified();
         
-        // CRITICAL SECURITY: Verify validator signed this merkleRoot
-        // This prevents attackers from submitting fake roots
         bytes32 rootHash = keccak256(abi.encodePacked(
             "SOLANA_MERKLE_ROOT",
             block.chainid,
@@ -1802,33 +1754,22 @@ contract CrossChainBridgeOptimized is ReentrancyGuard {
         ));
         
         address validator = ECDSA.recover(ethSignedMessageHash, validatorSignature);
-        if (!authorizedValidators[2][validator]) revert UnauthorizedSolanaValidator();
+        if (!authorizedValidators[2][validator]) revert Errors.UnauthorizedSolanaValidator();
         
-        // CRITICAL FIX: Compute leaf on-chain (NEVER trust caller-supplied leaf)
         bytes32 computedLeaf = keccak256(abi.encodePacked(operationId));
+        if (proof.length > MAX_MERKLE_DEPTH) revert ProofTooDeep();
+        if (!ProofValidation.verifyMerkleProof(computedLeaf, proof, merkleRoot)) revert MerkleProofInvalid();
         
-        // CRITICAL: Verify Merkle proof with on-chain computed leaf
-        if (!verifyMerkleProof(computedLeaf, proof, merkleRoot)) revert MerkleProofInvalid();
-        
-        // Mark Solana chain as verified
         operation.chainVerified[2] = true;
         operation.validProofCount++;
-        
-        // Store proof data
         emit ProofSubmitted(operationId, 2, merkleRoot);
         
-        // Check if 2-of-3 consensus reached
         if (operation.validProofCount >= requiredChainConfirmations) {
-            // CRITICAL FIX #1: Vault validation enforcement
             if (operation.vaultAddress != address(0)) {
                 _validateVaultTypeForOperation(operation.vaultAddress);
             }
-            
-            // CRITICAL FIX #1: Actually release funds via _executeOperation
-            // Trinity Protocol invariant: 2-of-3 consensus proven
             assert(operation.validProofCount >= 2);
             _executeOperation(opId);
-            
             emit ConsensusReached(operationId, operation.validProofCount);
         }
         
@@ -1836,13 +1777,8 @@ contract CrossChainBridgeOptimized is ReentrancyGuard {
     }
     
     /**
-     * @notice Submit TON proof with Merkle verification (PRODUCTION v2.1)
+     * @notice Submit TON proof with Merkle verification (PRODUCTION v3.1)
      * @dev SECURITY: Requires validator signature on merkleRoot to prevent forgery
-     * @param operationId The operation ID to verify
-     * @param merkleRoot The Merkle root from TON blockchain
-     * @param proof Array of sibling hashes from TON proof
-     * @param validatorSignature Validator's signature on merkleRoot (prevents forgery)
-     * @return bool True if proof is valid, false otherwise
      */
     function submitTONProof(
         uint256 operationId,
@@ -1850,16 +1786,13 @@ contract CrossChainBridgeOptimized is ReentrancyGuard {
         bytes32[] calldata proof,
         bytes memory validatorSignature
     ) external whenNotPaused returns (bool) {
-        // Convert operation ID to bytes32 for storage key
         bytes32 opId = bytes32(operationId);
         Operation storage operation = operations[opId];
         
         if (operation.id != opId) revert OperationNotFound();
         if (operation.status != OperationStatus.PENDING) revert OperationNotPending();
-        if (operation.chainVerified[3]) revert ChainAlreadyVerified(); // ChainId 3 = TON
+        if (operation.chainVerified[3]) revert ChainAlreadyVerified();
         
-        // CRITICAL SECURITY: Verify validator signed this merkleRoot
-        // This prevents attackers from submitting fake roots
         bytes32 rootHash = keccak256(abi.encodePacked(
             "TON_MERKLE_ROOT",
             block.chainid,
@@ -1873,33 +1806,22 @@ contract CrossChainBridgeOptimized is ReentrancyGuard {
         ));
         
         address validator = ECDSA.recover(ethSignedMessageHash, validatorSignature);
-        if (!authorizedValidators[3][validator]) revert UnauthorizedTONValidator();
+        if (!authorizedValidators[3][validator]) revert Errors.UnauthorizedTONValidator();
         
-        // CRITICAL FIX: Compute leaf on-chain (NEVER trust caller-supplied leaf)
         bytes32 computedLeaf = keccak256(abi.encodePacked(operationId));
+        if (proof.length > MAX_MERKLE_DEPTH) revert ProofTooDeep();
+        if (!ProofValidation.verifyMerkleProof(computedLeaf, proof, merkleRoot)) revert MerkleProofInvalid();
         
-        // CRITICAL: Verify Merkle proof with on-chain computed leaf
-        if (!verifyMerkleProof(computedLeaf, proof, merkleRoot)) revert MerkleProofInvalid();
-        
-        // Mark TON chain as verified
         operation.chainVerified[3] = true;
         operation.validProofCount++;
-        
-        // Store proof data
         emit ProofSubmitted(operationId, 3, merkleRoot);
         
-        // Check if 2-of-3 consensus reached
         if (operation.validProofCount >= requiredChainConfirmations) {
-            // CRITICAL FIX #1: Vault validation enforcement
             if (operation.vaultAddress != address(0)) {
                 _validateVaultTypeForOperation(operation.vaultAddress);
             }
-            
-            // CRITICAL FIX #1: Actually release funds via _executeOperation
-            // Trinity Protocol invariant: 2-of-3 consensus proven
             assert(operation.validProofCount >= 2);
             _executeOperation(opId);
-            
             emit ConsensusReached(operationId, operation.validProofCount);
         }
         
