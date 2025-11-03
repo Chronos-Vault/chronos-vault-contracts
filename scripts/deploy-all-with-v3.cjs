@@ -1,5 +1,5 @@
 /**
- * Chronos Vault - Deploy All Contracts with Trinity v3.0
+ * Chronos Vault - Deploy All Contracts with Trinity v3.1
  * Unified deployment script for entire Trinity Protocol ecosystem
  * November 3, 2025
  */
@@ -7,11 +7,11 @@
 const hre = require("hardhat");
 const fs = require("fs");
 
-// Trinity Protocol v3.0 Configuration
+// Trinity Protocol v3.1 Configuration
 const TRINITY_V3_CONFIG = {
   network: "arbitrum-sepolia",
   chainId: 421614,
-  bridge: "0x4a8Bc58f441Ae7E7eC2879e434D9D7e31CF80e30",
+  bridge: "0x3E205dc9881Cf0E9377683aDd22bC1aBDBdF462D",
   validator: "0x66e5046d136e82d17cbeb2ffea5bd5205d962906",
   solana: "5oD8S1TtkdJbAX7qhsGticU7JKxjwY4AbEeBdnkUrrKY",
   ton: "EQDx6yH5WH3Ex47h0PBnOBMzPCsmHdnL2snts3DZBO5CYVVJ"
@@ -219,7 +219,7 @@ async function main() {
     console.log(`✅ HTLCBridge: ${htlcBridge.address}`);
     console.log("═══════════════════════════════════════════════════════════");
     console.log(`💾 Deployment saved: ${filename}`);
-    console.log("\n🔱 Trinity Protocol v3.0 - All Contracts Deployed!");
+    console.log("\n🔱 Trinity Protocol v3.1 - All Contracts Deployed!");
     console.log("   All contracts integrated with CrossChainBridgeOptimized v2.2");
     console.log(`   2-of-3 Consensus Matrix: ACTIVE`);
     
