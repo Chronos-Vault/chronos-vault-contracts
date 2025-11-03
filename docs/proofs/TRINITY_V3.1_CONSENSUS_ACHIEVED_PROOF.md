@@ -394,8 +394,8 @@ The Arbitrum contract successfully enforces 2-of-3 consensus. The Solana and TON
 **Motto**: Trust Math, Not Humans  
 
 **GitHub**: github.com/ChronosVault  
-**Documentation**: docs.chronosvault.io  
-**Website**: chronosvault.io  
+**Documentation**: [docs.chronosvault.org ](https://chronosvault.org/documentation)
+**Website**: chronosvault.org 
 
 ---
 
