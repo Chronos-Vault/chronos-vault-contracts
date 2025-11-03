@@ -70,6 +70,9 @@ contract HTLCBridge is IHTLC, ReentrancyGuard {
     /// @notice Required Trinity consensus (2-of-3)
     uint8 public constant REQUIRED_CONSENSUS = 2;
 
+    /// @notice Minimum HTLC amount (prevents dust attacks)
+    uint256 public constant MIN_HTLC_AMOUNT = 1000;  // 1000 wei minimum
+
     // ===== CONSTRUCTOR =====
 
     /**
@@ -96,7 +99,7 @@ contract HTLCBridge is IHTLC, ReentrancyGuard {
     ) external payable override nonReentrant returns (bytes32 swapId, bytes32 operationId) {
         // Input validation
         require(recipient != address(0), "Invalid recipient");
-        require(amount > 0, "Amount must be positive");
+        require(amount >= MIN_HTLC_AMOUNT, "Amount below minimum");  // SECURITY FIX: Prevent dust attacks
         require(secretHash != bytes32(0), "Invalid secret hash");
         require(timelock >= block.timestamp + MIN_TIMELOCK, "Timelock too short");
         require(timelock <= block.timestamp + MAX_TIMELOCK, "Timelock too long");
