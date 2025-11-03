@@ -28,7 +28,7 @@
 ║                                                               ║
 ║          The Heart That Secures Everything                    ║
 ║                                                               ║
-║  📍 Address: 0x4a8Bc58f441Ae7E7eC2879e434D9D7e31CF80e30     ║
+║  📍 Address: 0x3E205dc9881Cf0E9377683aDd22bC1aBDBdF462D     ║
 ║  🔒 Security: 2-of-3 Multi-Chain Consensus                   ║
 ║  ✅ Status: PRODUCTION-READY                                 ║
 ║                                                               ║
@@ -147,7 +147,7 @@ function setTrinityBridge(address _bridge) external onlyOwner {
 
 ```javascript
 // The ONLY address developers need to remember
-const TRINITY_PROTOCOL = "0x4a8Bc58f441Ae7E7eC2879e434D9D7e31CF80e30";
+const TRINITY_PROTOCOL = "0x3E205dc9881Cf0E9377683aDd22bC1aBDBdF462D";
 
 // Pass it to ChronosVault
 await ChronosVault.deploy(name, type, level, TRINITY_PROTOCOL);
@@ -188,7 +188,7 @@ npx hardhat run scripts/deploy-all-with-v3.cjs --network arbitrumSepolia
 
 ---
 
-**Trinity Protocol v3.0** = The heart pumping security through Chronos Vault
+**Trinity Protocol v3.1** = The heart pumping security through Chronos Vault
 
 ```
     ❤️
