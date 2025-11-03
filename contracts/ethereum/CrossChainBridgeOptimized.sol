@@ -332,6 +332,9 @@ contract CrossChainBridgeOptimized is ReentrancyGuard {
     uint256 public constant MAX_OPS_PER_WINDOW = 100;
     uint256 public constant MAX_MERKLE_DEPTH = 32;
     
+    // SECURITY FIX: Minimum operation amount (prevents dust attacks)
+    uint256 public constant MIN_OPERATION_AMOUNT = 1000;  // 1000 wei minimum
+    
     // FIX #8: Operation cancellation
     uint256 public constant CANCELLATION_DELAY = 24 hours;
     uint256 public constant CANCELLATION_PENALTY = 20; // 20% penalty
@@ -898,7 +901,7 @@ contract CrossChainBridgeOptimized is ReentrancyGuard {
         bool prioritizeSecurity,
         uint256 slippageTolerance
     ) external payable nonReentrant whenNotPaused returns (bytes32 operationId) {
-        if (amount == 0) revert InvalidAmount();
+        if (amount < MIN_OPERATION_AMOUNT) revert InvalidAmount();  // SECURITY FIX: Prevent dust attacks
         if (!supportedChains[destinationChain]) revert InvalidChain();
         
         // FIX #7: Rolling window rate limiting (prevents day-boundary bypass)
@@ -1029,7 +1032,7 @@ contract CrossChainBridgeOptimized is ReentrancyGuard {
         bytes32[] calldata _merkleRoots
     ) external payable nonReentrant whenNotPaused returns (bytes32 operationId) {
         // Input validation
-        if (_amount == 0) revert InvalidAmount();
+        if (_amount < MIN_OPERATION_AMOUNT) revert InvalidAmount();  // SECURITY FIX: Prevent dust attacks
         if (!supportedChains[_destChain]) revert InvalidChain();
         if (_validatorAddresses.length < 2) revert Errors.InsufficientValidators();
         if (_validatorAddresses.length != _signatures.length) revert Errors.ValidatorSignatureMismatch();
