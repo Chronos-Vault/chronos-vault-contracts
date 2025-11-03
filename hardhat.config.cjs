@@ -9,9 +9,9 @@ module.exports = {
     settings: {
       optimizer: {
         enabled: true,
-        runs: 200
+        runs: 1  // Minimum runs for smallest deployment size
       },
-      viaIR: true,
+      viaIR: true,  // Required to avoid stack too deep errors
       evmVersion: "paris"
     }
   },
