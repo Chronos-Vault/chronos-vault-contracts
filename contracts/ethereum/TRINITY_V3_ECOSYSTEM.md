@@ -1,15 +1,15 @@
-# Trinity Protocol v3.0 - Complete Ecosystem Overview
+# Trinity Protocol v3.1 - Complete Ecosystem Overview
 
 ## 🔱 Executive Summary
 
-Trinity Protocol v3.0 is **PRODUCTION-READY** with all smart contracts fully integrated and working together through the CrossChainBridgeOptimized v2.2 contract deployed at `0x4a8Bc58f441Ae7E7eC2879e434D9D7e31CF80e30`.
+Trinity Protocol v3.1 is **PRODUCTION-READY** with all smart contracts fully integrated and working together through the CrossChainBridgeOptimized v2.2 contract deployed at `0x3E205dc9881Cf0E9377683aDd22bC1aBDBdF462D`.
 
 ## 🌐 Multi-Chain Consensus Architecture
 
 ### Core Consensus Bridge
 ```
 CrossChainBridgeOptimized v2.2
-├─ Address: 0x4a8Bc58f441Ae7E7eC2879e434D9D7e31CF80e30
+├─ Address: 0x3E205dc9881Cf0E9377683aDd22bC1aBDBdF462D
 ├─ Network: Arbitrum Sepolia
 ├─ Status: PRODUCTION-READY
 ├─ Size: <24KB (EIP-170 compliant)
@@ -28,7 +28,7 @@ CrossChainBridgeOptimized v2.2
 ### Chain Validators
 ```
 Multi-Chain Deployment
-├─ Ethereum/Arbitrum: 0x4a8Bc58f441Ae7E7eC2879e434D9D7e31CF80e30
+├─ Ethereum/Arbitrum: 0x3E205dc9881Cf0E9377683aDd22bC1aBDBdF462D
 ├─ Solana Devnet:     5oD8S1TtkdJbAX7qhsGticU7JKxjwY4AbEeBdnkUrrKY
 └─ TON Testnet:       EQDx6yH5WH3Ex47h0PBnOBMzPCsmHdnL2snts3DZBO5CYVVJ
 ```
@@ -46,7 +46,7 @@ constructor(
     string memory _name,
     VaultType _vaultType,
     uint8 _securityLevel,
-    address _trinityBridge  // ← Trinity v3.0 address
+    address _trinityBridge  // ← Trinity v3.1 address
 )
 ```
 
@@ -56,7 +56,7 @@ const vault = await ChronosVault.deploy(
     "My Vault",
     0, // STANDARD_VAULT
     3, // Security Level 3 (requires 2-of-3 consensus)
-    "0x4a8Bc58f441Ae7E7eC2879e434D9D7e31CF80e30" // Trinity v3.0
+    "0x3E205dc9881Cf0E9377683aDd22bC1aBDBdF462D" // Trinity v3.1
 );
 ```
 
@@ -95,7 +95,7 @@ const vault = await ChronosVaultOptimized.deploy(
 );
 
 // 2. Configure Trinity Bridge
-await vault.setTrinityBridge("0x4a8Bc58f441Ae7E7eC2879e434D9D7e31CF80e30");
+await vault.setTrinityBridge("0x3E205dc9881Cf0E9377683aDd22bC1aBDBdF462D");
 ```
 
 **Features**:
@@ -123,7 +123,7 @@ constructor(address _trinityBridge) {
 **Deployment**:
 ```javascript
 const htlc = await HTLCBridge.deploy(
-    "0x4a8Bc58f441Ae7E7eC2879e434D9D7e31CF80e30" // Trinity v3.0
+    "0x3E205dc9881Cf0E9377683aDd22bC1aBDBdF462D" // Trinity v3.1
 );
 ```
 
@@ -162,7 +162,7 @@ const htlc = await HTLCBridge.deploy(
 ### Quick Start - Deploy Entire Ecosystem
 
 ```bash
-# Deploy all contracts with Trinity v3.0 integration
+# Deploy all contracts with Trinity v3.1 integration
 npx hardhat run scripts/deploy-all-with-v3.cjs --network arbitrumSepolia
 ```
 
@@ -192,8 +192,8 @@ This deploys:
                      │
                      ▼
 ┌─────────────────────────────────────────────────────────────┐
-│      CrossChainBridgeOptimized v2.2 (Trinity v3.0)         │
-│    Address: 0x4a8Bc58f441Ae7E7eC2879e434D9D7e31CF80e30     │
+│      CrossChainBridgeOptimized v2.2 (Trinity v3.1)         │
+│    Address: 0x3E205dc9881Cf0E9377683aDd22bC1aBDBdF462D     │
 │         createOperation() → Requires 2-of-3 Consensus       │
 └────────────────────┬────────────────────────────────────────┘
                      │
@@ -272,7 +272,7 @@ This deploys:
 
 ## ✅ Production Readiness Checklist
 
-- [x] CrossChainBridgeOptimized deployed (0x4a8Bc58f441Ae7E7eC2879e434D9D7e31CF80e30)
+- [x] CrossChainBridgeOptimized deployed (0x3E205dc9881Cf0E9377683aDd22bC1aBDBdF462D)
 - [x] Contract size <24KB (EIP-170 compliant)
 - [x] All 71 custom errors implemented
 - [x] 78/78 Lean 4 formal verification theorems proven
