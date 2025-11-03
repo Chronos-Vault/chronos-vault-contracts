@@ -10,15 +10,15 @@
  */
 
 import { toNano, Address, beginCell, Cell } from '@ton/core';
-import { TrinityConsensus } from '../wrappers/TrinityConsensus';
+import { TrinityConsensus } from './wrappers/TrinityConsensus';
 import { NetworkProvider } from '@ton/blueprint';
 
 // Ethereum CrossChainBridgeOptimized address (Arbitrum Sepolia)
-const ETHEREUM_BRIDGE_ADDRESS_TESTNET = "0x499B24225a4d15966E118bfb86B2E421d57f4e21";
+const ETHEREUM_BRIDGE_ADDRESS_TESTNET = "0x4a8Bc58f441Ae7E7eC2879e434D9D7e31CF80e30";
 const ETHEREUM_BRIDGE_ADDRESS_MAINNET = "0xMAINNET_BRIDGE_ADDRESS"; // Update for mainnet
 
-// Validator Ethereum address
-const VALIDATOR_ETHEREUM_ADDRESS = process.env.VALIDATOR_ETHEREUM_ADDRESS || "0x0000000000000000000000000000000000000000";
+// Validator Ethereum address (Chronos Vault deployer)
+const VALIDATOR_ETHEREUM_ADDRESS = process.env.VALIDATOR_ETHEREUM_ADDRESS || "0x66e5046d136e82d17cbeb2ffea5bd5205d962906";
 
 // Arbitrum RPC URLs
 const ARBITRUM_RPC_TESTNET = "https://arb-sepolia.g.alchemy.com/v2/YOUR_KEY";
@@ -120,15 +120,9 @@ export async function run(provider: NetworkProvider) {
     // Deploy/Initialize
     console.log("🔧 Deploying Trinity Consensus contract...");
     
-    await trinityConsensus.send(
+    await trinityConsensus.sendDeploy(
         provider.sender(),
-        {
-            value: toNano('0.5'), // Deploy with 0.5 TON for storage
-        },
-        {
-            $$type: 'Deploy',
-            queryId: 0n,
-        }
+        toNano('0.5') // Deploy with 0.5 TON for storage
     );
 
     await provider.waitForDeploy(trinityConsensus.address);
@@ -139,21 +133,13 @@ export async function run(provider: NetworkProvider) {
     // Initialize with configuration
     console.log("🔧 Initializing contract...");
     
-    const initMessage = beginCell()
-        .storeUint(0x01, 32)                                    // op: initialize
-        .storeBits(ethereumBridgeBits)                          // eth_bridge_addr
-        .storeBits(validatorEthBits)                            // validator_eth_addr
-        .storeRef(arbitrumRpcCell)                              // arbitrum_rpc
-        .storeUint(ML_KEM_PUBLIC_KEY, 256)                     // ml_kem_pubkey
-        .storeUint(DILITHIUM_PUBLIC_KEY, 256)                  // dilithium_pubkey
-        .endCell();
-
-    await trinityConsensus.send(
+    await trinityConsensus.sendInitialize(
         provider.sender(),
-        {
-            value: toNano('0.05'),
-        },
-        initMessage
+        ETHEREUM_BRIDGE_ADDRESS_TESTNET,
+        VALIDATOR_ETHEREUM_ADDRESS,
+        arbitrumRpcUrl,
+        ML_KEM_PUBLIC_KEY,
+        DILITHIUM_PUBLIC_KEY
     );
 
     console.log("✅ Contract initialized!\n");
