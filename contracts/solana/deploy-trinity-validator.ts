@@ -19,7 +19,7 @@ import path from "path";
 const TRINITY_VALIDATOR_PROGRAM_ID = "TrNtyV4L1D4T0RSoLAN4C0nsENSuS1111111111111";
 
 // Ethereum CrossChainBridgeOptimized address (Arbitrum Sepolia)
-const ETHEREUM_BRIDGE_ADDRESS_TESTNET = "0x499B24225a4d15966E118bfb86B2E421d57f4e21";
+const ETHEREUM_BRIDGE_ADDRESS_TESTNET = "0x4a8Bc58f441Ae7E7eC2879e434D9D7e31CF80e30";
 
 // Ethereum validator address (your Ethereum wallet)
 const VALIDATOR_ETHEREUM_ADDRESS = process.env.VALIDATOR_ETHEREUM_ADDRESS || "0x0000000000000000000000000000000000000000";
@@ -171,8 +171,9 @@ async function deployTrinityValidator() {
         throw new Error("Invalid Ethereum address format");
     }
 
-    // Initialize validator
-    console.log("🔧 Initializing Trinity Validator...");
+    // Initialize validator WITH METADATA
+    console.log("🔧 Initializing Trinity Validator with Metadata...");
+    console.log(`   Name: Chronos Vault Trinity Validator`);
     console.log(`   Ethereum Bridge: ${config.ethereumBridgeAddress}`);
     console.log(`   Validator ETH Address: ${VALIDATOR_ETHEREUM_ADDRESS}`);
     console.log(`   Arbitrum RPC: ${config.arbitrumRpcUrl}\n`);
