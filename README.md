@@ -311,7 +311,7 @@ lake build
 
 # Expected output:
 # ✅ All 78/78 theorems verified successfully!
-# ✅ No 'sorry' placeholders - all proofs complete
+# ✅ No '' placeholders - all proofs complete
 ```
 
 ### Proven Security Properties
