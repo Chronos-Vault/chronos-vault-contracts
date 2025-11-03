@@ -9,7 +9,7 @@
 ![FunC](https://img.shields.io/badge/FunC-TON-0088CC?style=for-the-badge)
 ![Lean 4](https://img.shields.io/badge/Lean_4-Formally_Verified-brightgreen?style=for-the-badge&logo=lean)
 
-🎯 **Trinity Protocol v3.0** • 🔒 **78/78 Theorems Proven** • ⚛️ **Quantum Resistant** • 🌐 **Multi-Chain**
+🎯 **Trinity Protocol v3.1** • 🔒 **78/78 Theorems Proven** • ⚛️ **Quantum Resistant** • 🌐 **Multi-Chain**
 
 [Documentation](#-documentation) • [Security Audits](#-security-audits) • [SDK](#-sdk)
 
@@ -70,7 +70,7 @@
 
 Chronos Vault smart contracts are **mathematically proven secure** using Lean 4 theorem prover with **100% formal verification coverage**. Every security claim is provable, not just audited - following our philosophy: **"Trust Math, Not Humans"**.
 
-### Trinity Protocol v3.0 - Production Ready
+### Trinity Protocol v3.1 - Production Ready
 
 - ✅ **78/78 Lean 4 formal proofs complete** (100%)
 - ✅ **All 4 critical security vulnerabilities fixed**
@@ -173,13 +173,13 @@ by
 
 ---
 
-## 📍 Deployed Contracts - Trinity Protocol v3.0
+## 📍 Deployed Contracts - Trinity Protocol v3.1
 
 ### Arbitrum Sepolia (Testnet)
 
 | Contract | Address | Version | Explorer |
 |----------|---------|---------|----------|
-| **CrossChainBridgeOptimized** | `0x4a8Bc58f441Ae7E7eC2879e434D9D7e31CF80e30` | v2.2 | [View →](https://sepolia.arbiscan.io/address/0x4a8Bc58f441Ae7E7eC2879e434D9D7e31CF80e30) |
+| **CrossChainBridgeOptimized** | `0x3E205dc9881Cf0E9377683aDd22bC1aBDBdF462D` | v2.2 | [View →](https://sepolia.arbiscan.io/address/0x3E205dc9881Cf0E9377683aDd22bC1aBDBdF462D) |
 | **HTLCBridge** | `0x6cd3B1a72F67011839439f96a70290051fd66D57` | v2.0 | [View →](https://sepolia.arbiscan.io/address/0x6cd3B1a72F67011839439f96a70290051fd66D57) |
 | **ChronosVault** | `0x99444B0B1d6F7b21e9234229a2AC2bC0150B9d91` | v3.0 | [View →](https://sepolia.arbiscan.io/address/0x99444B0B1d6F7b21e9234229a2AC2bC0150B9d91) |
 | **CVT Token** | `0xFb419D8E32c14F774279a4dEEf330dc893257147` | - | [View →](https://sepolia.arbiscan.io/address/0xFb419D8E32c14F774279a4dEEf330dc893257147) |
@@ -447,7 +447,7 @@ npm run deploy:ton:testnet
 ### Deployment Guides
 
 - **[TESTNET_DEPLOYMENT.md](https://github.com/Chronos-Vault/chronos-vault-docs/blob/main/docs/deployment/TESTNET_DEPLOYMENT.md)** - Complete testnet deployment guide
-- **[DEPLOY_WITH_V3.md](https://github.com/Chronos-Vault/chronos-vault-contracts/blob/main/contracts/ethereum/DEPLOY_WITH_V3.md)** - Trinity v3.0 integration guide
+- **[DEPLOY_WITH_V3.md](https://github.com/Chronos-Vault/chronos-vault-contracts/blob/main/contracts/ethereum/DEPLOY_WITH_V3.md)** - Trinity v3.1 integration guide
 
 ---
 
