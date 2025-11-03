@@ -14,7 +14,7 @@ import { TrinityConsensus } from './wrappers/TrinityConsensus';
 import { NetworkProvider } from '@ton/blueprint';
 
 // Ethereum CrossChainBridgeOptimized address (Arbitrum Sepolia)
-const ETHEREUM_BRIDGE_ADDRESS_TESTNET = "0x4a8Bc58f441Ae7E7eC2879e434D9D7e31CF80e30";
+const ETHEREUM_BRIDGE_ADDRESS_TESTNET = "0x3E205dc9881Cf0E9377683aDd22bC1aBDBdF462D";
 const ETHEREUM_BRIDGE_ADDRESS_MAINNET = "0xMAINNET_BRIDGE_ADDRESS"; // Update for mainnet
 
 // Validator Ethereum address (Chronos Vault deployer)
