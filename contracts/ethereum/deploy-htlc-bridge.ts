@@ -7,10 +7,10 @@
 import { ethers } from 'hardhat';
 
 async function main() {
-    console.log('🚀 Deploying HTLCBridge with Trinity Protocol v3.0 integration...\n');
+    console.log('🚀 Deploying HTLCBridge with Trinity Protocol v3.1 integration...\n');
 
     // CrossChainBridgeOptimized v2.2 (v3.0) address (Arbitrum Sepolia)
-    const TRINITY_BRIDGE_ADDRESS = '0x4a8Bc58f441Ae7E7eC2879e434D9D7e31CF80e30';
+    const TRINITY_BRIDGE_ADDRESS = '0x3E205dc9881Cf0E9377683aDd22bC1aBDBdF462D';
 
     console.log('📋 Configuration:');
     console.log(`- Trinity Bridge v3.0: ${TRINITY_BRIDGE_ADDRESS}`);
@@ -63,7 +63,7 @@ async function main() {
     console.log('1. Update deployment-v3.0.json with HTLCBridge address');
     console.log('2. Update atomic-swap-service.ts with new contract address');
     console.log('3. Verify contract on Arbiscan');
-    console.log('4. Test HTLC swap flow with Trinity Protocol v3.0');
+    console.log('4. Test HTLC swap flow with Trinity Protocol v3.1');
     console.log('');
     console.log('🔗 Contract addresses to update:');
     console.log(`HTLC_BRIDGE_ADDRESS="${htlcAddress}"`);
