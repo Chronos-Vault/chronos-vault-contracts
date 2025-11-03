@@ -1,4 +1,4 @@
-# Trinity Protocol v3.0 - The Heart of Chronos Vault
+# Trinity Protocol v3.1 - The Heart of Chronos Vault
 
 ## 🔱 What is Trinity Protocol?
 
@@ -6,7 +6,7 @@
 
 ```
                     ┌─────────────────────────────┐
-                    │   Trinity Protocol v3.0     │
+                    │   Trinity Protocol v3.1     │
                     │  2-of-3 Multi-Chain Oracle  │
                     │                             │
                     │  0x4a8Bc58...31CF80e30     │
@@ -29,11 +29,11 @@ Every contract connects to Trinity. Every operation requires Trinity consensus. 
 
 ---
 
-## 🌐 Trinity Protocol v3.0 Deployment
+## 🌐 Trinity Protocol v3.1 Deployment
 
 | Component | Address | Network |
 |-----------|---------|---------|
-| **Trinity Bridge (Core)** | `0x4a8Bc58f441Ae7E7eC2879e434D9D7e31CF80e30` | Arbitrum Sepolia |
+| **Trinity Bridge (Core)** | `0x3E205dc9881Cf0E9377683aDd22bC1aBDBdF462D` | Arbitrum Sepolia |
 | **Solana Validator** | `5oD8S1TtkdJbAX7qhsGticU7JKxjwY4AbEeBdnkUrrKY` | Solana Devnet |
 | **TON Validator** | `EQDx6yH5WH3Ex47h0PBnOBMzPCsmHdnL2snts3DZBO5CYVVJ` | TON Testnet |
 | **Validator Authority** | `0x66e5046d136e82d17cbeb2ffea5bd5205d962906` | All Chains |
@@ -47,7 +47,7 @@ Every contract connects to Trinity. Every operation requires Trinity consensus. 
 ### Core Concept
 ```javascript
 // Every Chronos Vault contract MUST reference Trinity Protocol
-const TRINITY_BRIDGE = "0x4a8Bc58f441Ae7E7eC2879e434D9D7e31CF80e30";
+const TRINITY_BRIDGE = "0x3E205dc9881Cf0E9377683aDd22bC1aBDBdF462D";
 ```
 
 All contracts implement the same interface to communicate with Trinity:
@@ -97,7 +97,7 @@ const vault = await ChronosVault.deploy(
     "My Vault",
     0, // STANDARD_VAULT
     3, // Security Level (requires Trinity)
-    "0x4a8Bc58f441Ae7E7eC2879e434D9D7e31CF80e30" // Trinity Bridge
+    "0x3E205dc9881Cf0E9377683aDd22bC1aBDBdF462D" // Trinity Bridge
 );
 ```
 
@@ -134,7 +134,7 @@ npx hardhat console --network arbitrumSepolia
 
 ```javascript
 const vault = await ethers.getContractAt("ChronosVaultOptimized", "VAULT_ADDRESS");
-await vault.setTrinityBridge("0x4a8Bc58f441Ae7E7eC2879e434D9D7e31CF80e30");
+await vault.setTrinityBridge("0x3E205dc9881Cf0E9377683aDd22bC1aBDBdF462D");
 // ✅ Vault now connected to Trinity Protocol
 ```
 
@@ -157,7 +157,7 @@ constructor(address _trinityBridge) {
 
 **Deployment**:
 ```typescript
-const TRINITY_BRIDGE = "0x4a8Bc58f441Ae7E7eC2879e434D9D7e31CF80e30";
+const TRINITY_BRIDGE = "0x3E205dc9881Cf0E9377683aDd22bC1aBDBdF462D";
 const htlc = await HTLCBridge.deploy(TRINITY_BRIDGE);
 ```
 
@@ -253,7 +253,7 @@ trinityBridge.createOperation(
 | **Trinity Bridge Contract** | [CrossChainBridgeOptimized.sol](./CrossChainBridgeOptimized.sol) |
 | **Deployment Config** | [TRINITY_V3_DEPLOYMENT_CONFIG.json](./TRINITY_V3_DEPLOYMENT_CONFIG.json) |
 | **Ecosystem Overview** | [TRINITY_V3_ECOSYSTEM.md](./TRINITY_V3_ECOSYSTEM.md) |
-| **Block Explorer** | [Arbiscan](https://sepolia.arbiscan.io/address/0x4a8Bc58f441Ae7E7eC2879e434D9D7e31CF80e30) |
+| **Block Explorer** | [Arbiscan](https://sepolia.arbiscan.io/address/0x3E205dc9881Cf0E9377683aDd22bC1aBDBdF462D) |
 | **GitHub Repo** | [chronos-vault-contracts](https://github.com/Chronos-Vault/chronos-vault-contracts) |
 
 ---
@@ -261,10 +261,10 @@ trinityBridge.createOperation(
 ## ⚙️ Configuration Reference
 
 ```javascript
-// Trinity Protocol v3.0 Configuration
+// Trinity Protocol v3.1 Configuration
 const TRINITY_CONFIG = {
   // Core Trinity Bridge (required for all contracts)
-  bridge: "0x4a8Bc58f441Ae7E7eC2879e434D9D7e31CF80e30",
+  bridge: "0x3E205dc9881Cf0E9377683aDd22bC1aBDBdF462D",
   
   // Multi-chain validators
   validator: "0x66e5046d136e82d17cbeb2ffea5bd5205d962906",
@@ -281,7 +281,7 @@ const TRINITY_CONFIG = {
 
 ## ⚠️ Critical Developer Notes
 
-1. **Trinity Bridge is Required**: No contract works without connecting to Trinity Protocol at `0x4a8Bc58f441Ae7E7eC2879e434D9D7e31CF80e30`
+1. **Trinity Bridge is Required**: No contract works without connecting to Trinity Protocol at `0x3E205dc9881Cf0E9377683aDd22bC1aBDBdF462D`
 
 2. **Immutable vs Configurable**:
    - HTLCBridge: Immutable (can't change Trinity address after deployment)
@@ -297,13 +297,13 @@ const TRINITY_CONFIG = {
 ## 🎯 Quick Start Checklist
 
 - [ ] Clone [chronos-vault-contracts](https://github.com/Chronos-Vault/chronos-vault-contracts)
-- [ ] Set `TRINITY_BRIDGE = "0x4a8Bc58f441Ae7E7eC2879e434D9D7e31CF80e30"` in deployment script
+- [ ] Set `TRINITY_BRIDGE = "0x3E205dc9881Cf0E9377683aDd22bC1aBDBdF462D"` in deployment script
 - [ ] Deploy contracts using `scripts/deploy-all-with-v3.cjs`
 - [ ] Verify Trinity Bridge is configured on all contracts
 - [ ] Test operations trigger 2-of-3 consensus flow
 
 ---
 
-**Trinity Protocol v3.0** - The heart that keeps Chronos Vault beating securely across 3 blockchains.
+**Trinity Protocol v3.1** - The heart that keeps Chronos Vault beating securely across 3 blockchains.
 
 **Trust Math, Not Humans** 🔱
