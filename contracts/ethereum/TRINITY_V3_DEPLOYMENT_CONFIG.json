@@ -3,14 +3,14 @@
   "network": "arbitrum-sepolia",
   "chainId": 421614,
   "deployedAt": "2025-11-03",
-  "description": "Trinity Protocol v3.0 - Production-ready deployment with all security fixes",
+  "description": "Trinity Protocol v3.1 - Production-ready deployment with all security fixes",
   
   "contracts": {
     "CrossChainBridgeOptimized": {
-      "address": "0x4a8Bc58f441Ae7E7eC2879e434D9D7e31CF80e30",
+      "address": "0x3E205dc9881Cf0E9377683aDd22bC1aBDBdF462D",
       "version": "2.2",
       "status": "PRODUCTION-READY",
-      "explorer": "https://sepolia.arbiscan.io/address/0x4a8Bc58f441Ae7E7eC2879e434D9D7e31CF80e30",
+      "explorer": "https://sepolia.arbiscan.io/address/0x3E205dc9881Cf0E9377683aDd22bC1aBDBdF462D",
       "features": [
         "Size: <24KB (EIP-170 compliant)",
         "71 custom errors",
@@ -30,7 +30,7 @@
       "arbitrum": {
         "chainId": 421614,
         "network": "sepolia",
-        "bridge": "0x4a8Bc58f441Ae7E7eC2879e434D9D7e31CF80e30"
+        "bridge": "0x3E205dc9881Cf0E9377683aDd22bC1aBDBdF462D"
       },
       "solana": {
         "network": "devnet",
@@ -46,19 +46,19 @@
   "integration": {
     "ChronosVault": {
       "deploymentScript": "deploy-chronos-vault-optimized.cjs",
-      "trinityBridgeParameter": "0x4a8Bc58f441Ae7E7eC2879e434D9D7e31CF80e30",
+      "trinityBridgeParameter": "0x3E205dc9881Cf0E9377683aDd22bC1aBDBdF462D",
       "description": "Pass Trinity Bridge address in constructor"
     },
     
     "ChronosVaultOptimized": {
       "deploymentScript": "deploy-chronos-vault-optimized.cjs",
       "configuration": "Call setTrinityBridge() after deployment",
-      "trinityBridgeAddress": "0x4a8Bc58f441Ae7E7eC2879e434D9D7e31CF80e30"
+      "trinityBridgeAddress": "0x3E205dc9881Cf0E9377683aDd22bC1aBDBdF462D"
     },
     
     "HTLCBridge": {
       "deploymentScript": "deploy-htlc-bridge.ts",
-      "trinityBridgeParameter": "0x4a8Bc58f441Ae7E7eC2879e434D9D7e31CF80e30",
+      "trinityBridgeParameter": "0x3E205dc9881Cf0E9377683aDd22bC1aBDBdF462D",
       "description": "Pass Trinity Bridge address in constructor (immutable)"
     },
     
@@ -76,8 +76,8 @@
   },
   
   "usage": {
-    "deployChronosVault": "Pass 0x4a8Bc58f441Ae7E7eC2879e434D9D7e31CF80e30 as _trinityBridge parameter",
-    "deployHTLCBridge": "Pass 0x4a8Bc58f441Ae7E7eC2879e434D9D7e31CF80e30 as _trinityBridge parameter",
-    "configureVaultOptimized": "Call setTrinityBridge(0x4a8Bc58f441Ae7E7eC2879e434D9D7e31CF80e30) after deployment"
+    "deployChronosVault": "Pass 0x3E205dc9881Cf0E9377683aDd22bC1aBDBdF462D as _trinityBridge parameter",
+    "deployHTLCBridge": "Pass 0x3E205dc9881Cf0E9377683aDd22bC1aBDBdF462D as _trinityBridge parameter",
+    "configureVaultOptimized": "Call setTrinityBridge(0x3E205dc9881Cf0E9377683aDd22bC1aBDBdF462D) after deployment"
   }
 }
