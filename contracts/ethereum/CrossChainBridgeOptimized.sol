@@ -27,7 +27,7 @@ interface IChronosVault {
 }
 
 /**
- * @title Chronos Vault - Trinity Protocol™ Multi-Chain Consensus Verification System v1.5-PRODUCTION
+ * @title Chronos Vault - Trinity Protocol™ Multi-Chain Consensus Verification System v3.2-PRODUCTION
  * @author Chronos Vault Team (https://chronosvault.org)
  * 
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -79,6 +79,31 @@ interface IChronosVault {
  *    - createOperation: Now properly tracks fees in collectedFees + epochFeePool
  *    - distributeFees: Validates epoch fee pool matches collected fees
  *    - Validators can now claim proportional rewards without fee loss
+ * 
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * 🔐 SECURITY HARDENING v3.2 (November 4, 2025) - PRODUCTION-READY
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * 
+ * ✅ SECURITY FIX v3.2 #1: Validator Rate Limiting (prevents DoS via circuit breaker spam)
+ *    - Added 30-second cooldown between proofs per validator
+ *    - Prevents rapid-fire proof submission attacks
+ *    - Protects circuit breaker from manipulation
+ * 
+ * ✅ SECURITY FIX v3.2 #2: Daily Validator Proof Limit (prevents circuit breaker gaming)
+ *    - Maximum 200 proofs per validator per day
+ *    - Prevents single validator from flooding system
+ *    - Maintains fair fee distribution across validators
+ * 
+ * ✅ SECURITY FIX v3.2 #3: Enhanced Merkle Proof Verification (prevents amount/address forgery)
+ *    - Merkle leaf now includes: operationId, chainId, amount, user address, txHash
+ *    - Previously only verified: operationId + chainId (INSUFFICIENT!)
+ *    - Prevents malicious validators from submitting valid proofs with wrong amounts
+ *    - Critical fix: Merkle proof now cryptographically binds to full operation data
+ * 
+ * AUDIT RESPONSE: External security audit identified 3 HIGH vulnerabilities:
+ * 1. DoS via Circuit Breaker Spam → FIXED via rate limiting (#1, #2)
+ * 2. Weak Merkle Proof Verification → FIXED via enhanced proof (#3)
+ * 3. Validator Fee Gaming → FIXED via daily limits (#2)
  * 
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  * 🔐 CRITICAL SECURITY FIXES v2.2 (November 2, 2025)
@@ -283,6 +308,8 @@ contract CrossChainBridgeOptimized is ReentrancyGuard {
     error MustWait24Hours();
     error RecentProofActivity();
     error AmountExceedsMax();
+    error ValidatorCooldownActive();
+    error DailyProofLimitExceeded();
     
     // TRINITY PROTOCOL: Mathematical constants
     uint8 public constant ETHEREUM_CHAIN_ID = 1;
@@ -338,6 +365,14 @@ contract CrossChainBridgeOptimized is ReentrancyGuard {
     // FIX #8: Operation cancellation
     uint256 public constant CANCELLATION_DELAY = 24 hours;
     uint256 public constant CANCELLATION_PENALTY = 20; // 20% penalty
+    
+    // SECURITY FIX v3.2 #1: Validator rate limiting (prevents DoS via circuit breaker spam)
+    mapping(address => uint256) public validatorLastProofTime;
+    uint256 public constant VALIDATOR_PROOF_COOLDOWN = 30 seconds; // Minimum time between proofs per validator
+    
+    // SECURITY FIX v3.2 #2: Daily proof limit per validator (prevents circuit breaker manipulation)
+    mapping(address => mapping(uint256 => uint256)) public validatorDailyProofs; // validator => day => count
+    uint256 public constant MAX_PROOFS_PER_VALIDATOR_PER_DAY = 200; // Max proofs per validator per day
     
     // FIX #5: Circuit breaker event tracking for resume approval
     struct CircuitBreakerEvent {
@@ -1263,6 +1298,41 @@ contract CrossChainBridgeOptimized is ReentrancyGuard {
         if (operation.status != OperationStatus.PENDING) revert OperationNotPending();
         if (operation.chainVerified[chainProof.chainId]) revert ChainAlreadyVerified();
         
+        // SECURITY FIX v3.2 #1: Validator rate limiting (prevents DoS via spam)
+        // First recover the validator address to check their rate limits
+        address validator = ECDSA.recover(
+            keccak256(abi.encodePacked(
+                "\x19Ethereum Signed Message:\n32",
+                keccak256(abi.encodePacked(
+                    "CHAIN_PROOF",
+                    block.chainid,
+                    chainProof.chainId,
+                    operationId,
+                    chainProof.merkleRoot,
+                    chainProof.blockHash,
+                    chainProof.txHash,
+                    chainProof.timestamp,
+                    chainProof.blockNumber
+                ))
+            )),
+            chainProof.validatorSignature
+        );
+        
+        // Check validator cooldown (prevents rapid-fire spam)
+        if (block.timestamp < validatorLastProofTime[validator] + VALIDATOR_PROOF_COOLDOWN) {
+            revert ValidatorCooldownActive();
+        }
+        
+        // SECURITY FIX v3.2 #2: Daily proof limit per validator
+        uint256 currentDay = block.timestamp / 1 days;
+        if (validatorDailyProofs[validator][currentDay] >= MAX_PROOFS_PER_VALIDATOR_PER_DAY) {
+            revert DailyProofLimitExceeded();
+        }
+        
+        // Update rate limiting state
+        validatorLastProofTime[validator] = block.timestamp;
+        validatorDailyProofs[validator][currentDay]++;
+        
         // SMT PRE-CONDITIONS: ChainId binding (Trinity Protocol)
         assert(chainProof.chainId >= 1 && chainProof.chainId <= 3); // Valid chains only
         assert(!operation.chainVerified[chainProof.chainId]); // Not already verified
@@ -1319,23 +1389,7 @@ contract CrossChainBridgeOptimized is ReentrancyGuard {
         operation.lastProofTimestamp = block.timestamp;
         
         // FIX #6 + SECURITY FIX H-02: Track validator contribution for fee distribution
-        address validator = ECDSA.recover(
-            keccak256(abi.encodePacked(
-                "\x19Ethereum Signed Message:\n32",
-                keccak256(abi.encodePacked(
-                    "CHAIN_PROOF",
-                    block.chainid,
-                    chainProof.chainId,
-                    operationId,
-                    chainProof.merkleRoot,
-                    chainProof.blockHash,
-                    chainProof.txHash,
-                    chainProof.timestamp,
-                    chainProof.blockNumber
-                ))
-            )),
-            chainProof.validatorSignature
-        );
+        // (validator address already recovered earlier for rate limiting)
         validatorProofsSubmitted[validator]++;
         totalProofsSubmitted++;
         
@@ -1680,7 +1734,17 @@ contract CrossChainBridgeOptimized is ReentrancyGuard {
         assert(usedSignatures[messageHash]); // Signature now marked as used
         
         // Step 2: Verify Merkle proof against TRUSTED root
-        bytes32 operationHash = keccak256(abi.encodePacked(block.chainid, operationId, proof.chainId));
+        // SECURITY FIX v3.2 #3: Enhanced Merkle proof - include full operation data
+        // This prevents malicious validators from submitting valid proofs with incorrect amounts/addresses
+        Operation storage op = operations[operationId];
+        bytes32 operationHash = keccak256(abi.encodePacked(
+            block.chainid,
+            operationId,
+            proof.chainId,
+            op.amount,        // CRITICAL: Verify amount matches
+            op.user,          // CRITICAL: Verify destination address matches
+            proof.txHash      // CRITICAL: Verify transaction hash matches
+        ));
         
         CachedRoot memory cached = merkleCache[operationHash];
         bytes32 computedRoot;
