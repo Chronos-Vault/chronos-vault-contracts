@@ -22,7 +22,7 @@ pragma solidity ^0.8.20;
  */
 library Errors {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // 🔐 ACCESS CONTROL ERRORS (11)
+    // 🔐 ACCESS CONTROL ERRORS (15) - Updated in v3.3
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     
     error Unauthorized();
@@ -31,11 +31,15 @@ library Errors {
     error UnauthorizedTONValidator();
     error NotOperationOwner();
     error InvalidAddress();
+    error ZeroAddress(); // v3.3: Validator rotation
     error InvalidEmergencyController();
     error InvalidVaultAddress();
     error NoEthereumValidators();
     error NoSolanaValidators();
     error NoTONValidators();
+    error ValidatorAlreadyAuthorized(); // v3.3: Validator rotation
+    error ValidatorNotFound(); // v3.3: Validator rotation
+    error AlreadyConfirmed(); // v3.3: Proposal confirmation
     
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // ⚙️  OPERATION LIFECYCLE ERRORS (13)
@@ -56,7 +60,7 @@ library Errors {
     error RefundFailed();
     
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // 🔍 PROOF VALIDATION ERRORS (16)
+    // 🔍 PROOF VALIDATION ERRORS (18) - Updated in v3.3
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     
     error InvalidProof();
@@ -75,6 +79,8 @@ library Errors {
     error ProofTooDeep();
     error NoTrustedRoot();
     error MerkleProofInvalid();
+    error ProposalNotFound(); // v3.3: Proposal management
+    error ProposalExpired(); // v3.3: Proposal management
     
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // 💰 FEE MANAGEMENT ERRORS (8)
