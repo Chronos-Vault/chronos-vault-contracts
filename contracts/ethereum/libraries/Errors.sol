@@ -22,11 +22,12 @@ pragma solidity ^0.8.20;
  */
 library Errors {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // 🔐 ACCESS CONTROL ERRORS (15) - Updated in v3.3
+    // 🔐 ACCESS CONTROL ERRORS (21) - Updated in v3.3
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     
     error Unauthorized();
     error NotAuthorizedValidator();
+    error UnauthorizedValidator(address validator); // v3.3: With parameter
     error UnauthorizedSolanaValidator();
     error UnauthorizedTONValidator();
     error NotOperationOwner();
@@ -34,22 +35,28 @@ library Errors {
     error ZeroAddress(); // v3.3: Validator rotation
     error InvalidEmergencyController();
     error InvalidVaultAddress();
+    error InvalidValidatorAddress(); // v3.3: Validator rotation
     error NoEthereumValidators();
     error NoSolanaValidators();
     error NoTONValidators();
     error ValidatorAlreadyAuthorized(); // v3.3: Validator rotation
     error ValidatorNotFound(); // v3.3: Validator rotation
-    error AlreadyConfirmed(); // v3.3: Proposal confirmation
+    error ValidatorMismatch(address provided, address expected); // v3.3
+    error AlreadyConfirmed(address validator); // v3.3: Proposal confirmation
+    error OnlyEmergencyController(address caller, address controller); // v3.3
+    error InvalidValidatorSignature(address signer, address expected); // v3.3
+    error ProofAlreadySubmitted(bytes32 operationId, uint8 chainId); // v3.3
     
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // ⚙️  OPERATION LIFECYCLE ERRORS (13)
+    // ⚙️  OPERATION LIFECYCLE ERRORS (15) - Updated in v3.3
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     
-    error InvalidAmount();
+    error InvalidAmount(uint256 amount); // v3.3: With parameter
     error InsufficientBalance();
-    error OperationNotFound();
-    error OperationAlreadyExecuted();
+    error OperationNotFound(bytes32 operationId); // v3.3: With parameter
+    error OperationAlreadyExecuted(bytes32 operationId); // v3.3: With parameter
     error OperationAlreadyCanceled();
+    error OperationExpired(uint256 deadline, uint256 currentTime); // v3.3: New
     error OperationNotPending();
     error CannotCancelNonPendingOperation();
     error MustWait24Hours();
@@ -58,9 +65,10 @@ library Errors {
     error AmountExceedsUint128();
     error VolumeOverflow();
     error RefundFailed();
+    error InsufficientFee(uint256 provided, uint256 required); // v3.3: With parameters
     
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // 🔍 PROOF VALIDATION ERRORS (18) - Updated in v3.3
+    // 🔍 PROOF VALIDATION ERRORS (21) - Updated in v3.3
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     
     error InvalidProof();
@@ -70,6 +78,7 @@ library Errors {
     error InvalidBlockNumber();
     error InvalidBlockHash();
     error InvalidMerkleRoot();
+    error InvalidMerkleProof(bytes32 operationId, uint8 chainId); // v3.3: With parameters
     error InvalidNonceSequence();
     error SignatureAlreadyUsed();
     error NoProofsSubmitted();
@@ -79,14 +88,14 @@ library Errors {
     error ProofTooDeep();
     error NoTrustedRoot();
     error MerkleProofInvalid();
-    error ProposalNotFound(); // v3.3: Proposal management
-    error ProposalExpired(); // v3.3: Proposal management
+    error ProposalNotFound(bytes32 proposalId); // v3.3: With parameter
+    error ProposalExpired(uint256 proposedAt); // v3.3: With parameter
+    error ProposalAlreadyExecuted(bytes32 proposalId); // v3.3: New
     
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // 💰 FEE MANAGEMENT ERRORS (8)
+    // 💰 FEE MANAGEMENT ERRORS (7) - Moved InsufficientFee to Operation Lifecycle
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     
-    error InsufficientFee();
     error FeeTooHigh();
     error NoFeesToDistribute();
     error FeeMismatch();
@@ -113,7 +122,7 @@ library Errors {
     error InvalidChain();
     
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // 🔱 CONSENSUS VALIDATION ERRORS (6) - NEW IN v3.1
+    // 🔱 CONSENSUS VALIDATION ERRORS (7) - NEW IN v3.1, Updated in v3.3
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     
     error InsufficientValidators();
@@ -121,5 +130,6 @@ library Errors {
     error ValidatorMerkleMismatch();
     error DuplicateSignature();
     error InsufficientConsensus();
+    error InsufficientConfirmations(uint8 current, uint8 required); // v3.3: New
     error InvalidChainID();
 }
