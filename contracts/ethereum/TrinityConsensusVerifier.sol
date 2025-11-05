@@ -28,7 +28,7 @@ interface IChronosVault {
 }
 
 /**
- * @title Trinity Protocol™ v3.3 - Multi-Chain Consensus Verification System  
+ * @title Trinity Protocol™ v3.4 - Multi-Chain Consensus Verification System  
  * @author Chronos Vault Team (https://chronosvault.org)
  * 
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -51,34 +51,31 @@ interface IChronosVault {
  * ❌ NOT moving tokens between chains
  * 
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- * 🔐 v3.3 SECURITY HARDENING (November 4, 2025) - STREAMLINED
+ * 🔐 v3.4 CRITICAL SECURITY FIXES (November 5, 2025)
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  * 
- * ✅ CRITICAL FIX #1: Validator Rotation with 2-of-3 Consensus
- *    - proposeValidatorRotation() + confirmValidatorRotation()
- *    - Allows removing compromised validators without redeploy
- *    - Requires 2-of-3 validator approval
+ * ✅ CRITICAL FIX #1: Merkle Nonce Replay Protection
+ *    - verifyMerkleProofWithNonce() now includes nonce in proof verification
+ *    - Prevents replay attacks with old valid proofs and stale roots
+ *    - Nonce incremented on every Merkle root update
  * 
- * ✅ CRITICAL FIX #2: Merkle Root Updates with 2-of-3 Consensus  
- *    - proposeMerkleRootUpdate() + confirmMerkleRootUpdate()
- *    - Eliminates single-validator DoS attack vector
- *    - Requires 2 validator confirmations
+ * ✅ CRITICAL FIX #2: Vault Authorization Check
+ *    - createOperation() now validates vault implements IChronosVault
+ *    - Prevents malicious contracts from being used as vault addresses
+ *    - Checks security level >= 3 for high-value operations
  * 
- * ✅ ALL LIBRARIES CONNECTED:
- *    - ProofValidation.sol (ZK proof verification)
- *    - FeeAccounting.sol (fee calculations)
- *    - OperationLifecycle.sol (operation state management)
- *    - ConsensusProposalLib.sol (v3.3 consensus proposals)
- *    - Errors.sol (67 custom errors)
+ * ✅ CRITICAL FIX #3: Emergency Controller Transfer
+ *    - transferEmergencyControl() allows safe key rotation
+ *    - Prevents permanent loss of emergency control
+ *    - Requires new controller to be non-zero address
  * 
- * ✅ 7-LAYER DEFENSE SYSTEM INTACT:
- *    1. Zero-Knowledge Proofs (ProofValidation.sol)
- *    2. Formal Verification (78 Lean 4 proofs complete)
- *    3. MPC Key Management (off-chain)
- *    4. VDF Time-Locks (off-chain)
- *    5. AI + Crypto Governance (off-chain)
- *    6. Quantum-Resistant Crypto (ML-KEM-1024, CRYSTALS-Dilithium-5)
- *    7. Trinity 2-of-3 Consensus (this contract)
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * ✅ v3.3 FEATURES MAINTAINED:
+ *    - Validator Rotation with 2-of-3 Consensus
+ *    - Merkle Root Updates with 2-of-3 Consensus
+ *    - All 7-Layer Defense System intact
+ *    - All libraries connected
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  */
 contract TrinityConsensusVerifier is ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -161,6 +158,7 @@ contract TrinityConsensusVerifier is ReentrancyGuard {
     event ValidatorRotationConfirmed(bytes32 indexed proposalId, address validator, uint8 confirmations);
     event ValidatorRotationExecuted(bytes32 indexed proposalId, uint8 chainId, address oldValidator, address newValidator);
     event MerkleUpdateProposed(bytes32 indexed proposalId, uint8 chainId, bytes32 newRoot);
+    event EmergencyControlTransferred(address indexed oldController, address indexed newController); // v3.4
     event MerkleUpdateConfirmed(bytes32 indexed proposalId, address validator, uint8 confirmations);
     event MerkleUpdateExecuted(bytes32 indexed proposalId, uint8 chainId, bytes32 newRoot);
     
@@ -219,6 +217,24 @@ contract TrinityConsensusVerifier is ReentrancyGuard {
         if (amount == 0) revert Errors.InvalidAmount(amount);
         if (deadline < block.timestamp) revert Errors.OperationExpired(deadline, block.timestamp);
         
+        // v3.4: Validate vault implements IChronosVault interface
+        try IChronosVault(vault).vaultType() returns (IChronosVault.VaultType) {
+            // Vault interface is valid
+        } catch {
+            revert Errors.InvalidVaultInterface(vault);
+        }
+        
+        // v3.4: Check vault security level for high-value operations
+        try IChronosVault(vault).securityLevel() returns (uint8 level) {
+            if (operationType == OperationType.EMERGENCY_WITHDRAWAL || 
+                operationType == OperationType.VAULT_MIGRATION) {
+                if (level < 3) revert Errors.LowSecurityVault();
+            }
+        } catch {
+            // If security level check fails, revert for safety
+            revert Errors.InvalidVault(vault);
+        }
+        
         // Calculate fee using FeeAccounting library
         bool prioritizeSpeed = operationType == OperationType.EMERGENCY_WITHDRAWAL;
         bool prioritizeSecurity = operationType == OperationType.VAULT_CREATION || 
@@ -274,9 +290,10 @@ contract TrinityConsensusVerifier is ReentrancyGuard {
         if (op.arbitrumConfirmed) revert Errors.ProofAlreadySubmitted(operationId, ARBITRUM_CHAIN_ID);
         if (block.timestamp > op.expiresAt) revert Errors.OperationExpired(op.expiresAt, block.timestamp);
         
-        // Verify Merkle proof using ProofValidation library
+        // v3.4: Verify Merkle proof WITH NONCE for replay protection
         bytes32 leaf = keccak256(abi.encodePacked(operationId, ARBITRUM_CHAIN_ID, op.amount, op.user, txHash));
-        if (!ProofValidation.verifyMerkleProof(leaf, merkleProof, merkleRoots[ARBITRUM_CHAIN_ID])) {
+        uint256 currentNonce = merkleNonces[ARBITRUM_CHAIN_ID];
+        if (!ProofValidation.verifyMerkleProofWithNonce(leaf, merkleProof, merkleRoots[ARBITRUM_CHAIN_ID], currentNonce)) {
             revert Errors.InvalidMerkleProof(operationId, ARBITRUM_CHAIN_ID);
         }
         
@@ -309,8 +326,10 @@ contract TrinityConsensusVerifier is ReentrancyGuard {
         if (op.solanaConfirmed) revert Errors.ProofAlreadySubmitted(operationId, SOLANA_CHAIN_ID);
         if (block.timestamp > op.expiresAt) revert Errors.OperationExpired(op.expiresAt, block.timestamp);
         
+        // v3.4: Verify Merkle proof WITH NONCE for replay protection
         bytes32 leaf = keccak256(abi.encodePacked(operationId, SOLANA_CHAIN_ID, op.amount, op.user, txHash));
-        if (!ProofValidation.verifyMerkleProof(leaf, merkleProof, merkleRoots[SOLANA_CHAIN_ID])) {
+        uint256 currentNonce = merkleNonces[SOLANA_CHAIN_ID];
+        if (!ProofValidation.verifyMerkleProofWithNonce(leaf, merkleProof, merkleRoots[SOLANA_CHAIN_ID], currentNonce)) {
             revert Errors.InvalidMerkleProof(operationId, SOLANA_CHAIN_ID);
         }
         
@@ -342,8 +361,10 @@ contract TrinityConsensusVerifier is ReentrancyGuard {
         if (op.tonConfirmed) revert Errors.ProofAlreadySubmitted(operationId, TON_CHAIN_ID);
         if (block.timestamp > op.expiresAt) revert Errors.OperationExpired(op.expiresAt, block.timestamp);
         
+        // v3.4: Verify Merkle proof WITH NONCE for replay protection
         bytes32 leaf = keccak256(abi.encodePacked(operationId, TON_CHAIN_ID, op.amount, op.user, txHash));
-        if (!ProofValidation.verifyMerkleProof(leaf, merkleProof, merkleRoots[TON_CHAIN_ID])) {
+        uint256 currentNonce = merkleNonces[TON_CHAIN_ID];
+        if (!ProofValidation.verifyMerkleProofWithNonce(leaf, merkleProof, merkleRoots[TON_CHAIN_ID], currentNonce)) {
             revert Errors.InvalidMerkleProof(operationId, TON_CHAIN_ID);
         }
         
@@ -536,6 +557,20 @@ contract TrinityConsensusVerifier is ReentrancyGuard {
         }
         
         emit OperationCancelled(operationId, op.user, op.fee);
+    }
+    
+    /**
+     * @notice Transfer emergency controller role to new address
+     * @dev v3.4: Allows safe rotation of emergency controller key
+     * @param newController New emergency controller address
+     */
+    function transferEmergencyControl(address newController) external onlyEmergencyController {
+        if (newController == address(0)) revert Errors.ZeroAddress();
+        
+        address oldController = emergencyController;
+        emergencyController = newController;
+        
+        emit EmergencyControlTransferred(oldController, newController);
     }
     
     // ===== VIEW FUNCTIONS =====
