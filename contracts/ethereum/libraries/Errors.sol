@@ -91,6 +91,7 @@ library Errors {
     error ProposalNotFound(bytes32 proposalId); // v3.3: With parameter
     error ProposalExpired(uint256 proposedAt); // v3.3: With parameter
     error ProposalAlreadyExecuted(bytes32 proposalId); // v3.3: New
+    error InvalidNonce(uint256 provided, uint256 expected); // v3.4: Nonce replay protection
     
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // 💰 FEE MANAGEMENT ERRORS (7) - Moved InsufficientFee to Operation Lifecycle
@@ -105,11 +106,14 @@ library Errors {
     error RateLimitExceeded();
     
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // 🏦 VAULT SECURITY ERRORS (2)
+    // 🏦 VAULT SECURITY ERRORS (5) - Updated in v3.4
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     
     error InsufficientSecurityLevel();
     error UnsupportedChain();
+    error InvalidVault(address vault); // v3.4: Vault validation
+    error InvalidVaultInterface(address vault); // v3.4: Vault interface check
+    error LowSecurityVault(); // v3.4: Vault security level check
     
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // 🚨 CIRCUIT BREAKER ERRORS (5)
