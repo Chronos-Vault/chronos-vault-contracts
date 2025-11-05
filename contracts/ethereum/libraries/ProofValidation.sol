@@ -53,6 +53,37 @@ library ProofValidation {
     }
     
     /**
+     * @notice Verifies a Merkle proof with nonce for replay protection
+     * @dev v3.4: Includes merkle nonce in leaf hash to prevent replay attacks
+     * @param leaf The base leaf hash to verify
+     * @param proof Array of sibling hashes from leaf to root
+     * @param root The expected Merkle root
+     * @param nonce The merkle nonce for replay protection
+     * @return valid True if proof is valid
+     */
+    function verifyMerkleProofWithNonce(
+        bytes32 leaf,
+        bytes32[] memory proof,
+        bytes32 root,
+        uint256 nonce
+    ) internal pure returns (bool) {
+        bytes32 nonceLeaf = keccak256(abi.encodePacked(leaf, nonce));
+        bytes32 computedHash = nonceLeaf;
+        
+        for (uint256 i = 0; i < proof.length; i++) {
+            bytes32 proofElement = proof[i];
+            
+            if (computedHash <= proofElement) {
+                computedHash = keccak256(abi.encodePacked(computedHash, proofElement));
+            } else {
+                computedHash = keccak256(abi.encodePacked(proofElement, computedHash));
+            }
+        }
+        
+        return computedHash == root;
+    }
+    
+    /**
      * @notice Computes Merkle root from leaf and proof path
      * @dev Helper function for proof verification with caching
      * @param leaf The leaf hash
