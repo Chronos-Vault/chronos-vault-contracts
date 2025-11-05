@@ -1,0 +1,22 @@
+{
+  "network": "arbitrum-sepolia",
+  "chainId": 421614,
+  "contractName": "TrinityConsensusVerifier",
+  "version": "v3.4",
+  "address": "0xc86c614814ED5eEF6E12AAEB75c605A9041072cc",
+  "deployer": "0x66e5046D136E82d17cbeB2FfEa5bd5205D962906",
+  "deploymentBlock": 212174550,
+  "deploymentTx": "0x8fff357d2c9ce22bddd853971a461fd642a286b04f3cc04f524a35b765e5760b",
+  "timestamp": "2025-11-05T20:30:00.000Z",
+  "constructorArgs": {
+    "arbitrumValidator": "0x66e5046d136e82d17cbeb2ffea5bd5205d962906",
+    "solanaValidator": "0x66e5046D136E82d17cbeB2FfEa5bd5205D962906",
+    "tonValidator": "0x66e5046D136E82d17cbeB2FfEa5bd5205D962906",
+    "emergencyController": "0x66e5046D136E82d17cbeB2FfEa5bd5205D962906"
+  },
+  "securityFixes": [
+    "Merkle nonce replay protection",
+    "Vault authorization check",
+    "Emergency controller transfer function"
+  ]
+}
