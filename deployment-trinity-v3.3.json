@@ -1,0 +1,17 @@
+{
+  "network": "arbitrum-sepolia",
+  "chainId": 421614,
+  "contractName": "TrinityConsensusVerifier",
+  "version": "v3.3",
+  "address": "0x5e7D8B46E46c9D45aF90383964Bf19C61F73e525",
+  "deployer": "0x66e5046D136E82d17cbeB2FfEa5bd5205D962906",
+  "deploymentBlock": 212168156,
+  "deploymentTx": "0x2c8f3b720ee18af03aefc83f07396218226905819e4009d8ad5124c2f190fe40",
+  "timestamp": "2025-11-05T20:05:01.269Z",
+  "constructorArgs": {
+    "arbitrumValidator": "0x66e5046d136e82d17cbeb2ffea5bd5205d962906",
+    "solanaValidator": "0x66e5046D136E82d17cbeB2FfEa5bd5205D962906",
+    "tonValidator": "0x66e5046D136E82d17cbeB2FfEa5bd5205D962906",
+    "emergencyController": "0x66e5046D136E82d17cbeB2FfEa5bd5205D962906"
+  }
+}
