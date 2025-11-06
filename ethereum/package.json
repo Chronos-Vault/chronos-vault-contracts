@@ -1,0 +1,14 @@
+{
+  "name": "trinity-protocol-contracts",
+  "version": "3.5.1",
+  "description": "Trinity Protocol v3.5.1 - Multi-Chain Consensus Verification System",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test"
+  },
+  "devDependencies": {
+    "hardhat": "^2.19.0",
+    "@openzeppelin/contracts": "^5.0.0",
+    "dotenv": "^16.3.0"
+  }
+}
