@@ -1,4 +1,4 @@
-name: Security Analysis & Testing
+name: Trinity v3.5.1 Security Analysis
 
 on:
   push:
@@ -22,9 +22,11 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install dependencies
+      - name: Install OpenZeppelin contracts
         working-directory: ethereum
-        run: npm install
+        run: |
+          mkdir -p node_modules/@openzeppelin
+          npm install @openzeppelin/contracts@^5.0.0
 
       - name: Setup Python
         uses: actions/setup-python@v4
@@ -38,14 +40,14 @@ jobs:
           solc-select install 0.8.20
           solc-select use 0.8.20
 
-      - name: Run Slither
+      - name: Run Slither on Trinity v3.5.1
         working-directory: ethereum
         run: |
           slither TrinityConsensusVerifier.sol \
             --json slither-report.json \
-            --exclude naming-convention,solc-version \
-            --filter-paths "openzeppelin" \
-            --solc-remaps "@openzeppelin=node_modules/@openzeppelin" || true
+            --solc-remaps "@openzeppelin=node_modules/@openzeppelin" \
+            --exclude naming-convention,solc-version,unused-state,timestamp \
+            --filter-paths "openzeppelin" || true
 
       - name: Upload Slither Report
         uses: actions/upload-artifact@v4
@@ -53,23 +55,34 @@ jobs:
           name: slither-report
           path: ethereum/slither-report.json
 
-      - name: Check Results
+      - name: Check for HIGH/CRITICAL issues
         working-directory: ethereum
         run: |
           if [ -f slither-report.json ]; then
-            cat slither-report.json | jq '.results.detectors[] | select(.impact == "High" or .impact == "Critical")'
-            HIGH_COUNT=$(jq '[.results.detectors[] | select(.impact == "High")] | length' slither-report.json)
-            CRITICAL_COUNT=$(jq '[.results.detectors[] | select(.impact == "Critical")] | length' slither-report.json)
+            echo "📊 Slither Analysis Results:"
             
-            echo "HIGH: $HIGH_COUNT, CRITICAL: $CRITICAL_COUNT"
+            HIGH_COUNT=$(jq '[.results.detectors[] | select(.impact == "High")] | length' slither-report.json 2>/dev/null || echo "0")
+            CRITICAL_COUNT=$(jq '[.results.detectors[] | select(.impact == "Critical")] | length' slither-report.json 2>/dev/null || echo "0")
+            MEDIUM_COUNT=$(jq '[.results.detectors[] | select(.impact == "Medium")] | length' slither-report.json 2>/dev/null || echo "0")
             
-            if [ "$HIGH_COUNT" -gt 0 ] || [ "$CRITICAL_COUNT" -gt 0 ]; then
+            echo "   CRITICAL issues: $CRITICAL_COUNT"
+            echo "   HIGH issues: $HIGH_COUNT"
+            echo "   MEDIUM issues: $MEDIUM_COUNT"
+            
+            if [ "$CRITICAL_COUNT" -gt 0 ] || [ "$HIGH_COUNT" -gt 0 ]; then
+              echo "❌ FAILED: Found CRITICAL or HIGH severity issues"
+              jq '.results.detectors[] | select(.impact == "High" or .impact == "Critical")' slither-report.json
               exit 1
+            else
+              echo "✅ PASSED: No CRITICAL or HIGH severity issues found"
             fi
+          else
+            echo "⚠️  WARNING: slither-report.json not found"
+            exit 1
           fi
 
-  compilation-check:
-    name: Compilation Check
+  solidity-compile-check:
+    name: Solidity Compilation Check
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -80,30 +93,38 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install dependencies
+      - name: Install OpenZeppelin
         working-directory: ethereum
-        run: npm install
+        run: npm install @openzeppelin/contracts@^5.0.0
 
-      - name: Compile contracts
-        working-directory: ethereum
-        run: npx hardhat compile
+      - name: Install solc
+        run: |
+          pip install solc-select
+          solc-select install 0.8.20
+          solc-select use 0.8.20
 
-      - name: Check artifacts
+      - name: Compile Trinity v3.5.1
         working-directory: ethereum
         run: |
-          if [ ! -f "artifacts/contracts/TrinityConsensusVerifier.sol/TrinityConsensusVerifier.json" ]; then
-            echo "❌ Main contract failed"
-            exit 1
-          fi
+          solc @openzeppelin=node_modules/@openzeppelin \
+            --optimize --optimize-runs 200 \
+            --bin --abi --hashes \
+            --overwrite --output-dir ./build \
+            TrinityConsensusVerifier.sol \
+            libraries/*.sol
+          
           echo "✅ Compilation successful"
-
-      - name: Check contract size
-        working-directory: ethereum
-        run: |
-          SIZE=$(cat artifacts/contracts/TrinityConsensusVerifier.sol/TrinityConsensusVerifier.json | jq -r '.deployedBytecode' | wc -c)
-          SIZE=$((SIZE / 2 - 1))
-          PERCENT=$((SIZE * 100 / 24576))
-          echo "Contract: $SIZE bytes ($PERCENT% of 24KB)"
-          if [ $SIZE -gt 24576 ]; then
-            exit 1
+          
+          # Check contract size
+          if [ -f build/TrinityConsensusVerifier.bin ]; then
+            SIZE=$(cat build/TrinityConsensusVerifier.bin | wc -c)
+            SIZE=$((SIZE / 2))
+            PERCENT=$((SIZE * 100 / 24576))
+            
+            echo "📦 Contract Size: $SIZE bytes ($PERCENT% of 24KB limit)"
+            
+            if [ $SIZE -gt 24576 ]; then
+              echo "❌ Contract exceeds 24KB size limit!"
+              exit 1
+            fi
           fi
