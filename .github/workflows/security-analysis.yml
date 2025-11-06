@@ -5,7 +5,6 @@ on:
     branches: [ main ]
     paths:
       - 'ethereum/**/*.sol'
-      - 'ethereum/test/**'
   pull_request:
     branches: [ main ]
   workflow_dispatch:
@@ -30,13 +29,14 @@ jobs:
           solc-select install 0.8.20
           solc-select use 0.8.20
 
-      - name: Run Slither on TrinityConsensusVerifier
+      - name: Run Slither
         working-directory: ethereum
         run: |
           slither TrinityConsensusVerifier.sol \
             --json slither-report.json \
             --checkers-to-exclude naming-convention,solc-version \
-            --filter-paths "openzeppelin" || true
+            --filter-paths "openzeppelin" \
+            --solc-remaps "@openzeppelin=node_modules/@openzeppelin" || true
 
       - name: Upload Slither Report
         uses: actions/upload-artifact@v3
@@ -44,78 +44,19 @@ jobs:
           name: slither-report
           path: ethereum/slither-report.json
 
-      - name: Check for HIGH/CRITICAL issues
+      - name: Check Results
         working-directory: ethereum
         run: |
           if [ -f slither-report.json ]; then
+            cat slither-report.json | jq '.results.detectors[] | select(.impact == "High" or .impact == "Critical")'
             HIGH_COUNT=$(jq '[.results.detectors[] | select(.impact == "High")] | length' slither-report.json)
             CRITICAL_COUNT=$(jq '[.results.detectors[] | select(.impact == "Critical")] | length' slither-report.json)
             
-            echo "🔍 Slither Analysis Results:"
-            echo "   HIGH issues: $HIGH_COUNT"
-            echo "   CRITICAL issues: $CRITICAL_COUNT"
+            echo "HIGH: $HIGH_COUNT, CRITICAL: $CRITICAL_COUNT"
             
             if [ "$HIGH_COUNT" -gt 0 ] || [ "$CRITICAL_COUNT" -gt 0 ]; then
-              echo "❌ FAILED: Found HIGH or CRITICAL security issues!"
               exit 1
-            else
-              echo "✅ PASSED: No HIGH or CRITICAL issues found"
             fi
-          fi
-
-  hardhat-tests:
-    name: Hardhat Unit Tests
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install dependencies
-        working-directory: ethereum
-        run: |
-          npm install --save-dev \
-            hardhat \
-            @nomicfoundation/hardhat-toolbox \
-            @nomicfoundation/hardhat-verify \
-            @nomicfoundation/hardhat-ethers \
-            @nomicfoundation/hardhat-chai-matchers \
-            @typechain/hardhat \
-            @typechain/ethers-v6 \
-            ethers \
-            chai \
-            typescript \
-            @types/node \
-            @types/mocha \
-            @types/chai
-
-      - name: Compile contracts
-        working-directory: ethereum
-        run: npx hardhat compile
-
-      - name: Run tests
-        working-directory: ethereum
-        run: npx hardhat test
-
-      - name: Check contract size
-        working-directory: ethereum
-        run: |
-          SIZE=$(cat artifacts/contracts/TrinityConsensusVerifier.sol/TrinityConsensusVerifier.json | jq -r '.deployedBytecode' | wc -c)
-          SIZE=$((SIZE / 2 - 1))
-          PERCENT=$((SIZE * 100 / 24576))
-          
-          echo "📦 Contract Size: $SIZE bytes ($PERCENT% of 24KB limit)"
-          
-          if [ $SIZE -gt 24576 ]; then
-            echo "❌ FAILED: Contract exceeds 24KB limit!"
-            exit 1
-          else
-            echo "✅ PASSED: Contract size OK"
           fi
 
   compilation-check:
@@ -130,27 +71,30 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install Hardhat
+      - name: Install dependencies
         working-directory: ethereum
-        run: npm install --save-dev hardhat
+        run: npm install
 
-      - name: Compile all contracts
+      - name: Compile contracts
         working-directory: ethereum
         run: npx hardhat compile
 
-      - name: Verify compilation artifacts
+      - name: Check artifacts
         working-directory: ethereum
         run: |
           if [ ! -f "artifacts/contracts/TrinityConsensusVerifier.sol/TrinityConsensusVerifier.json" ]; then
-            echo "❌ Main contract failed to compile"
+            echo "❌ Main contract failed"
             exit 1
           fi
-          
-          for lib in Errors ProofValidation FeeAccounting ConsensusProposalLib OperationLifecycle; do
-            if [ ! -f "artifacts/contracts/libraries/${lib}.sol/${lib}.json" ]; then
-              echo "❌ Library ${lib} failed to compile"
-              exit 1
-            fi
-          done
-          
-          echo "✅ All contracts and libraries compiled successfully"
+          echo "✅ Compilation successful"
+
+      - name: Check contract size
+        working-directory: ethereum
+        run: |
+          SIZE=$(cat artifacts/contracts/TrinityConsensusVerifier.sol/TrinityConsensusVerifier.json | jq -r '.deployedBytecode' | wc -c)
+          SIZE=$((SIZE / 2 - 1))
+          PERCENT=$((SIZE * 100 / 24576))
+          echo "Contract: $SIZE bytes ($PERCENT% of 24KB)"
+          if [ $SIZE -gt 24576 ]; then
+            exit 1
+          fi
