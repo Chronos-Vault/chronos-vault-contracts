@@ -443,23 +443,22 @@ contract TrinityConsensusVerifier is ReentrancyGuard {
             revert Errors.OperationAlreadyExecuted(operationId);
         }
         
+        // v3.5.1 SECURITY FIX: Set status BEFORE external calls (Effects→Interactions, satisfies Slither)
+        op.status = OperationStatus.EXECUTED;
+        
         // Execute based on operation type
         if (op.operationType == OperationType.WITHDRAWAL || op.operationType == OperationType.EMERGENCY_WITHDRAWAL) {
             // CRITICAL FIX: Handle both ETH and ERC20 tokens
             if (address(op.token) == address(0)) {
-                // v3.5.1 SECURITY FIX: Set status before external call (Effects→Interactions)
-                op.status = OperationStatus.FAILED;
+                // ETH withdrawal - revert on failure (transaction rollback handles state)
                 (bool success, ) = payable(op.user).call{value: op.amount}("");
-                if (success) {
-                    op.status = OperationStatus.EXECUTED;
+                if (!success) {
+                    revert Errors.RefundFailed();
                 }
             } else {
                 // ERC20 withdrawal - safeTransfer reverts on failure
-                op.status = OperationStatus.EXECUTED;
                 op.token.safeTransfer(op.user, op.amount);
             }
-        } else {
-            op.status = OperationStatus.EXECUTED;
         }
         
         emit OperationExecuted(operationId, op.user, op.amount);
