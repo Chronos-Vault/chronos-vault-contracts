@@ -39,7 +39,7 @@ jobs:
             --solc-remaps "@openzeppelin=node_modules/@openzeppelin" || true
 
       - name: Upload Slither Report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: slither-report
           path: ethereum/slither-report.json
