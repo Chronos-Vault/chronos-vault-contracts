@@ -24,9 +24,7 @@ jobs:
 
       - name: Install OpenZeppelin contracts
         working-directory: ethereum
-        run: |
-          mkdir -p node_modules/@openzeppelin
-          npm install @openzeppelin/contracts@^5.0.0
+        run: npm install @openzeppelin/contracts@^5.0.0
 
       - name: Setup Python
         uses: actions/setup-python@v4
@@ -40,11 +38,12 @@ jobs:
           solc-select install 0.8.20
           solc-select use 0.8.20
 
-      - name: Run Slither on Trinity v3.5.1
+      - name: Run Slither with via-IR
         working-directory: ethereum
         run: |
           slither TrinityConsensusVerifier.sol \
             --json slither-report.json \
+            --solc-args="--via-ir --optimize --optimize-runs 200" \
             --solc-remaps "@openzeppelin=node_modules/@openzeppelin" \
             --exclude naming-convention,solc-version,unused-state,timestamp \
             --filter-paths "openzeppelin" || true
@@ -55,7 +54,7 @@ jobs:
           name: slither-report
           path: ethereum/slither-report.json
 
-      - name: Check for HIGH/CRITICAL issues
+      - name: Analyze Slither Results
         working-directory: ethereum
         run: |
           if [ -f slither-report.json ]; then
@@ -64,25 +63,31 @@ jobs:
             HIGH_COUNT=$(jq '[.results.detectors[] | select(.impact == "High")] | length' slither-report.json 2>/dev/null || echo "0")
             CRITICAL_COUNT=$(jq '[.results.detectors[] | select(.impact == "Critical")] | length' slither-report.json 2>/dev/null || echo "0")
             MEDIUM_COUNT=$(jq '[.results.detectors[] | select(.impact == "Medium")] | length' slither-report.json 2>/dev/null || echo "0")
+            LOW_COUNT=$(jq '[.results.detectors[] | select(.impact == "Low")] | length' slither-report.json 2>/dev/null || echo "0")
             
-            echo "   CRITICAL issues: $CRITICAL_COUNT"
-            echo "   HIGH issues: $HIGH_COUNT"
-            echo "   MEDIUM issues: $MEDIUM_COUNT"
+            echo "   CRITICAL: $CRITICAL_COUNT"
+            echo "   HIGH: $HIGH_COUNT"
+            echo "   MEDIUM: $MEDIUM_COUNT"
+            echo "   LOW: $LOW_COUNT"
             
             if [ "$CRITICAL_COUNT" -gt 0 ] || [ "$HIGH_COUNT" -gt 0 ]; then
-              echo "❌ FAILED: Found CRITICAL or HIGH severity issues"
-              jq '.results.detectors[] | select(.impact == "High" or .impact == "Critical")' slither-report.json
+              echo ""
+              echo "❌ FAILED: Found CRITICAL or HIGH severity vulnerabilities!"
+              echo ""
+              jq '.results.detectors[] | select(.impact == "High" or .impact == "Critical") | {impact: .impact, check: .check, description: .description}' slither-report.json
               exit 1
             else
+              echo ""
               echo "✅ PASSED: No CRITICAL or HIGH severity issues found"
+              echo "📋 Review MEDIUM/LOW issues manually in artifact"
             fi
           else
-            echo "⚠️  WARNING: slither-report.json not found"
+            echo "⚠️  slither-report.json not found - Slither failed to run"
             exit 1
           fi
 
-  solidity-compile-check:
-    name: Solidity Compilation Check
+  compilation-test:
+    name: Solidity Compilation with via-IR
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -103,17 +108,20 @@ jobs:
           solc-select install 0.8.20
           solc-select use 0.8.20
 
-      - name: Compile Trinity v3.5.1
+      - name: Compile with via-IR
         working-directory: ethereum
         run: |
+          echo "🔨 Compiling Trinity v3.5.1 with via-IR..."
+          
           solc @openzeppelin=node_modules/@openzeppelin \
+            --via-ir \
             --optimize --optimize-runs 200 \
             --bin --abi --hashes \
             --overwrite --output-dir ./build \
             TrinityConsensusVerifier.sol \
             libraries/*.sol
           
-          echo "✅ Compilation successful"
+          echo "✅ Compilation successful with via-IR!"
           
           # Check contract size
           if [ -f build/TrinityConsensusVerifier.bin ]; then
@@ -121,10 +129,21 @@ jobs:
             SIZE=$((SIZE / 2))
             PERCENT=$((SIZE * 100 / 24576))
             
-            echo "📦 Contract Size: $SIZE bytes ($PERCENT% of 24KB limit)"
+            echo ""
+            echo "📦 Contract Size Analysis:"
+            echo "   Bytecode: $SIZE bytes"
+            echo "   Limit: 24,576 bytes"
+            echo "   Usage: $PERCENT%"
             
             if [ $SIZE -gt 24576 ]; then
-              echo "❌ Contract exceeds 24KB size limit!"
+              echo ""
+              echo "❌ ERROR: Contract exceeds 24KB Ethereum size limit!"
               exit 1
+            else
+              echo ""
+              echo "✅ Contract size within limits"
             fi
+          else
+            echo "❌ Compilation artifact not found"
+            exit 1
           fi
