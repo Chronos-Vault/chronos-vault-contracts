@@ -277,6 +277,19 @@ contract TrinityConsensusVerifier is ReentrancyGuard {
             revert Errors.InsufficientFee(msg.value, fee);
         }
         
+        // CRITICAL FIX: Transfer tokens into contract for DEPOSIT operations
+        if (operationType == OperationType.DEPOSIT) {
+            if (address(token) == address(0)) {
+                // ETH deposit - ensure user sent enough (fee + deposit amount)
+                if (msg.value < fee + amount) {
+                    revert Errors.InsufficientFee(msg.value, fee + amount);
+                }
+            } else {
+                // ERC20 deposit - transfer from user to contract
+                token.safeTransferFrom(msg.sender, address(this), amount);
+            }
+        }
+        
         bytes32 operationId = keccak256(abi.encodePacked(
             msg.sender,
             vault,
@@ -430,15 +443,23 @@ contract TrinityConsensusVerifier is ReentrancyGuard {
             revert Errors.OperationAlreadyExecuted(operationId);
         }
         
-        op.status = OperationStatus.EXECUTED;
-        
         // Execute based on operation type
         if (op.operationType == OperationType.WITHDRAWAL || op.operationType == OperationType.EMERGENCY_WITHDRAWAL) {
-            // Transfer funds to user (non-reverting)
-            (bool success, ) = payable(op.user).call{value: op.amount}("");
-            if (!success) {
+            // CRITICAL FIX: Handle both ETH and ERC20 tokens
+            if (address(op.token) == address(0)) {
+                // v3.5.1 SECURITY FIX: Set status before external call (Effects→Interactions)
                 op.status = OperationStatus.FAILED;
+                (bool success, ) = payable(op.user).call{value: op.amount}("");
+                if (success) {
+                    op.status = OperationStatus.EXECUTED;
+                }
+            } else {
+                // ERC20 withdrawal - safeTransfer reverts on failure
+                op.status = OperationStatus.EXECUTED;
+                op.token.safeTransfer(op.user, op.amount);
             }
+        } else {
+            op.status = OperationStatus.EXECUTED;
         }
         
         emit OperationExecuted(operationId, op.user, op.amount);
@@ -688,14 +709,13 @@ contract TrinityConsensusVerifier is ReentrancyGuard {
         uint256 claimAmount = failedFees[msg.sender];
         if (claimAmount == 0) revert Errors.NoFeesToClaim();
         
+        // v3.5.1 SECURITY FIX: Effects before Interactions (no state restoration after call)
         failedFees[msg.sender] = 0;
         totalFailedFees -= claimAmount;
         
         (bool sent,) = payable(msg.sender).call{value: claimAmount}("");
         if (!sent) {
-            // Restore failed fee if claim fails
-            failedFees[msg.sender] = claimAmount;
-            totalFailedFees += claimAmount;
+            // Revert immediately - transaction rollback handles state restoration
             revert Errors.RefundFailed();
         }
         
