@@ -34,7 +34,7 @@ jobs:
         run: |
           slither TrinityConsensusVerifier.sol \
             --json slither-report.json \
-            --checkers-to-exclude naming-convention,solc-version \
+            --exclude naming-convention,solc-version \
             --filter-paths "openzeppelin" \
             --solc-remaps "@openzeppelin=node_modules/@openzeppelin" || true
 
