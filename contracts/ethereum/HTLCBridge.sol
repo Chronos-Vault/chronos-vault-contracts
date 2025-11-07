@@ -177,15 +177,17 @@ contract HTLCBridge is IHTLC, ReentrancyGuard {
         }
 
         // Create Trinity Protocol operation for 2-of-3 consensus
-        // Uses TrinityConsensusVerifier v3.3 for multi-chain validation
+        // Uses TrinityConsensusVerifier v3.5.4 with enhanced security
+        IERC20 token = swap.tokenAddress == address(0) 
+            ? IERC20(address(0)) 
+            : IERC20(swap.tokenAddress);
+            
         bytes32 operationId = trinityBridge.createOperation{value: 0.001 ether}(
-            ITrinityConsensusVerifier.OperationType.SWAP,
-            "htlc_swap", // destination chain (generic for HTLC)
-            swap.tokenAddress,
+            address(this), // vault address (HTLC contract acts as vault)
+            ITrinityConsensusVerifier.OperationType.TRANSFER, // Use TRANSFER for HTLC swaps
             swap.amount,
-            false, // prioritizeSpeed
-            true,  // prioritizeSecurity (ALWAYS true for HTLC)
-            0      // slippageTolerance
+            token,
+            swap.timelock // use timelock as deadline
         );
 
         // Update swap with operation ID
@@ -345,14 +347,17 @@ contract HTLCBridge is IHTLC, ReentrancyGuard {
     // ===== INTERNAL FUNCTIONS =====
 
     /**
-     * @notice Check REAL Trinity consensus from TrinityConsensusVerifier
+     * @notice Check REAL Trinity consensus from TrinityConsensusVerifier v3.5.4
      * @param operationId Trinity Protocol operation ID
-     * @return approved True if 2-of-3 consensus achieved on the consensus verifier
-     * @dev CRITICAL FIX: This queries the REAL Trinity Consensus Verifier instead of local flags
+     * @return approved True if 2-of-3 consensus achieved (chainConfirmations >= 2)
+     * @dev Queries the actual Trinity v3.5.4 consensus verifier
      */
     function _checkTrinityConsensus(bytes32 operationId) internal view returns (bool approved) {
-        // Query the REAL Trinity Protocol consensus from TrinityConsensusVerifier
-        return trinityBridge.hasConsensusApproval(operationId);
+        // Query Trinity v3.5.4 operation status
+        (,, uint8 chainConfirmations,,) = trinityBridge.getOperation(operationId);
+        
+        // Return true if 2-of-3 consensus achieved
+        return chainConfirmations >= 2;
     }
 
     /**
@@ -374,43 +379,46 @@ contract HTLCBridge is IHTLC, ReentrancyGuard {
 }
 
 /**
- * @notice Interface for TrinityConsensusVerifier v3.3
- * @dev Complete interface for Trinity Protocol integration with real consensus checking
+ * @notice Interface for TrinityConsensusVerifier v3.5.4
+ * @dev Updated interface for Trinity Protocol with enhanced security features
  */
 interface ITrinityConsensusVerifier {
-    enum OperationType { TRANSFER, SWAP, BRIDGE }
-    enum OperationStatus { PENDING, PROCESSING, COMPLETED, CANCELED, FAILED }
+    enum OperationType {
+        DEPOSIT,
+        WITHDRAWAL,
+        TRANSFER,
+        STAKING,
+        UNSTAKING,
+        CLAIM_REWARDS,
+        VAULT_CREATION,
+        VAULT_MIGRATION,
+        EMERGENCY_WITHDRAWAL,
+        GOVERNANCE_VOTE
+    }
+    
+    enum OperationStatus {
+        PENDING,
+        CONFIRMED,
+        EXECUTED,
+        REFUNDED,
+        CANCELLED,
+        FAILED,
+        EXPIRED
+    }
     
     function createOperation(
+        address vault,
         OperationType operationType,
-        string calldata destinationChain,
-        address tokenAddress,
         uint256 amount,
-        bool prioritizeSpeed,
-        bool prioritizeSecurity,
-        uint256 slippageTolerance
+        IERC20 token,
+        uint256 deadline
     ) external payable returns (bytes32 operationId);
     
-    function hasConsensusApproval(bytes32 operationId) external view returns (bool approved);
-    
-    function getChainVerifications(bytes32 operationId) 
-        external 
-        view 
-        returns (
-            bool arbitrumVerified,
-            bool solanaVerified,
-            bool tonVerified
-        );
-    
-    function getOperationDetails(bytes32 operationId)
-        external
-        view
-        returns (
-            address user,
-            OperationStatus status,
-            uint256 amount,
-            address tokenAddress,
-            uint8 validProofCount,
-            uint256 timestamp
-        );
+    function getOperation(bytes32 operationId) external view returns (
+        address user,
+        uint256 amount,
+        uint8 chainConfirmations,
+        OperationStatus status,
+        uint256 expiresAt
+    );
 }
