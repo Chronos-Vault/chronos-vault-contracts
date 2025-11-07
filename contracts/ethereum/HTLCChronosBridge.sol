@@ -354,10 +354,6 @@ contract HTLCChronosBridge is IHTLC, IChronosVault, ReentrancyGuard, Pausable, O
             secretHash: secretHash,
             timelock: timelock,
             state: SwapState.LOCKED,        // SECURITY FIX: Atomic create+lock
-            consensusCount: 0,              // Trinity handles consensus externally
-            arbitrumProof: false,           // Not used (Trinity integration)
-            solanaProof: false,             // Not used (Trinity integration)
-            tonProof: false,                // Not used (Trinity integration)
             createdAt: block.timestamp
         });
 
@@ -457,6 +453,11 @@ contract HTLCChronosBridge is IHTLC, IChronosVault, ReentrancyGuard, Pausable, O
         // CRITICAL SECURITY FIX H-3: Check Trinity State to prevent double-spend
         // If the transfer was already executed on the destination chain, refund must fail
         // This prevents Alice from refunding on Chain A after Bob claimed on Chain B
+        //
+        // SECURITY PHILOSOPHY v3.5.9: ALWAYS check Trinity (no fail-safe bypass)
+        // - If Trinity fails/reverts: Funds temporarily locked (ACCEPTABLE)
+        // - Solution: Upgrade/fix Trinity contract, not bypass security
+        // - Trade-off: Security over Liveness (prevents double-spend attacks)
         (,,,, bool executed) = trinityBridge.getOperation(swap.operationId);
         require(!executed, "Trinity operation already executed - cannot refund");
 
@@ -497,6 +498,12 @@ contract HTLCChronosBridge is IHTLC, IChronosVault, ReentrancyGuard, Pausable, O
 
         // CRITICAL SECURITY FIX H-3: Check Trinity State to prevent double-spend
         // Check BOTH consensus level AND executed status
+        //
+        // SECURITY PHILOSOPHY v3.5.9: ALWAYS check Trinity (no fail-safe bypass)
+        // - If Trinity fails/reverts: Funds temporarily locked (ACCEPTABLE)
+        // - Solution: Upgrade/fix Trinity contract, not bypass security
+        // - Trade-off: Security over Liveness (prevents double-spend attacks)
+        // - The 67-day emergency delay provides time to fix Trinity if needed
         (,, uint8 chainConfirmations,, bool executed) = trinityBridge.getOperation(swap.operationId);
         require(chainConfirmations < REQUIRED_CONSENSUS, "Trinity consensus achieved - use claimHTLC");
         require(!executed, "Trinity operation already executed - cannot refund");
