@@ -177,13 +177,17 @@ by
 
 ### Arbitrum Sepolia (Testnet)
 
-| Contract | Address | Version | Explorer |
+| Contract | Address | Version | Arbiscan |
 |----------|---------|---------|----------|
-| **CrossChainBridgeOptimized** | `0x3E205dc9881Cf0E9377683aDd22bC1aBDBdF462D` | v2.2 | [View →](https://sepolia.arbiscan.io/address/0x3E205dc9881Cf0E9377683aDd22bC1aBDBdF462D) |
-| **HTLCBridge** | `0x6cd3B1a72F67011839439f96a70290051fd66D57` | v2.0 | [View →](https://sepolia.arbiscan.io/address/0x6cd3B1a72F67011839439f96a70290051fd66D57) |
-| **ChronosVault** | `0x99444B0B1d6F7b21e9234229a2AC2bC0150B9d91` | v3.0 | [View →](https://sepolia.arbiscan.io/address/0x99444B0B1d6F7b21e9234229a2AC2bC0150B9d91) |
-| **CVT Token** | `0xFb419D8E32c14F774279a4dEEf330dc893257147` | - | [View →](https://sepolia.arbiscan.io/address/0xFb419D8E32c14F774279a4dEEf330dc893257147) |
-| **EmergencyMultiSig** | `0xecc00bbE268Fa4D0330180e0fB445f64d824d818` | v1.0 | [View →](https://sepolia.arbiscan.io/address/0xecc00bbE268Fa4D0330180e0fB445f64d824d818) |
+| **TrinityConsensusVerifier** | `0xcb56CD751453d15adc699b5D4DED8EC02D725AEB` | v3.5.4 | [View →](https://sepolia.arbiscan.io/address/0xcb56CD751453d15adc699b5D4DED8EC02D725AEB) |
+| **HTLCChronosBridge** | `0xbaC4f0283Fa9542c01CAA086334AEc33F86a7839` | v3.5.9 | [View →](https://sepolia.arbiscan.io/address/0xbaC4f0283Fa9542c01CAA086334AEc33F86a7839) |
+
+
+### 🔥 First On-Chain HTLC Swap Proof
+- **Transaction**: [0x1987e62d...0a9db](https://sepolia.arbiscan.io/tx/0x1987e62d565d6430a916140db3ecd81e7cb644758d0e2e3b913e6f3db190a9db)
+- **Block**: 212,811,031
+- ✅ 0.01 ETH locked | ✅ 0.001 ETH Trinity fee | ✅ 4 events emitted
+- 📖 [Full Proof Documentation](./docs/deployments/TRINITY_ON-CHAIN_PROOF_v3.5.9.md)
 
 **Network**: Arbitrum Sepolia Testnet  
 **Chain ID**: 421614  
