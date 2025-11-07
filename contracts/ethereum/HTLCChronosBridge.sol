@@ -4,44 +4,11 @@ pragma solidity ^0.8.20;
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/Pausable.sol";
 import "./IHTLC.sol";
-
-/**
- * @notice IChronosVault interface for Trinity v3.5.4 integration
- */
-interface IChronosVault {
-    enum VaultType {
-        TIME_LOCK, MULTI_SIGNATURE, QUANTUM_RESISTANT, GEO_LOCATION, NFT_POWERED,
-        BIOMETRIC, SOVEREIGN_FORTRESS, DEAD_MANS_SWITCH, INHERITANCE, CONDITIONAL_RELEASE,
-        SOCIAL_RECOVERY, PROOF_OF_RESERVE, ESCROW, CORPORATE_TREASURY, LEGAL_COMPLIANCE,
-        INSURANCE_BACKED, STAKING_REWARDS, LEVERAGE_VAULT, PRIVACY_ENHANCED, MULTI_ASSET,
-        TIERED_ACCESS, DELEGATED_VOTING
-    }
-    
-    function vaultType() external view returns (VaultType);
-    function securityLevel() external view returns (uint8);
-    function isAuthorized(address user) external view returns (bool);
-}
-
-/**
- * @notice Interface for TrinityConsensusVerifier v3.5.4
- */
-interface ITrinityConsensusVerifier {
-    enum OperationType { DEPOSIT, WITHDRAWAL, TRANSFER, EMERGENCY_WITHDRAWAL }
-    
-    function createOperation(
-        address vault,
-        OperationType operationType,
-        uint256 amount,
-        IERC20 token,
-        uint256 deadline
-    ) external payable returns (bytes32 operationId);
-    
-    function getOperation(bytes32 operationId)
-        external
-        view
-        returns (address user, uint256 amount, uint8 chainConfirmations, uint256 expiresAt, bool executed);
-}
+import "./IChronosVault.sol";
+import "./ITrinityConsensusVerifier.sol";
 
 /**
  * @title HTLCChronosBridge - Production HTLC with Trinity Protocol v3.5.4
@@ -94,7 +61,7 @@ interface ITrinityConsensusVerifier {
  * - Origin Chain: 48 hours minimum
  * - Destination Chain: 24 hours (half of origin)
  */
-contract HTLCChronosBridge is IHTLC, IChronosVault, ReentrancyGuard {
+contract HTLCChronosBridge is IHTLC, IChronosVault, ReentrancyGuard, Pausable, Ownable {
     using SafeERC20 for IERC20;
 
     // ===== STATE VARIABLES =====
@@ -120,12 +87,33 @@ contract HTLCChronosBridge is IHTLC, IChronosVault, ReentrancyGuard {
 
     /// @notice Counter for collision-resistant swap IDs
     uint256 private swapCounter;
+    
+    /// @notice Pending withdrawal data structure
+    /// @dev SECURITY: Stores recipient address to prevent unauthorized withdrawals
+    struct PendingWithdrawal {
+        address recipient;      // Who should receive the funds
+        address tokenAddress;   // Token contract or address(0) for ETH
+        uint256 amount;         // Amount owed
+    }
+    
+    /// @notice Pending withdrawals for failed push transfers (hybrid push/pull pattern)
+    /// @dev Maps swapId => withdrawal data
+    /// @dev SECURITY: Binds each withdrawal to rightful payee to prevent theft
+    mapping(bytes32 => PendingWithdrawal) public pendingWithdrawals;
+    
+    /// @notice User-specific nonce for enhanced front-run protection
+    /// @dev SECURITY FIX M-1: Prevents mempool front-running via user nonce
+    mapping(address => uint256) public userNonce;
 
     /// @notice Minimum timelock (7 days recommended for cross-chain)
     uint256 public constant MIN_TIMELOCK = 7 days;
 
     /// @notice Maximum timelock (30 days)
     uint256 public constant MAX_TIMELOCK = 30 days;
+    
+    /// @notice Emergency withdrawal timelock (60 days after normal timelock)
+    /// @dev SECURITY FIX H-1: Allows recovery if Trinity bridge fails
+    uint256 public constant EMERGENCY_TIMELOCK_EXTENSION = 60 days;
 
     /// @notice Minimum HTLC amount (0.01 ETH equivalent to prevent dust attacks)
     /// @dev For 18-decimal tokens: 10^16 wei = 0.01 tokens
@@ -138,6 +126,11 @@ contract HTLCChronosBridge is IHTLC, IChronosVault, ReentrancyGuard {
     /// @notice Frontend integration guide for proper claim ordering
     string public constant CLAIM_ORDER_GUIDE = 
         "CRITICAL: Claim on DESTINATION chain FIRST to reveal secret safely.";
+    
+    /// @notice Mapping from swapId to destination chain
+    /// @dev SECURITY FIX M-4: Store destChain for tracking and validation
+    /// @dev GAS OPTIMIZATION M-5: Changed from string to bytes32 for efficiency
+    mapping(bytes32 => bytes32) public swapDestChain;
 
     // ===== EVENTS =====
 
@@ -152,15 +145,47 @@ contract HTLCChronosBridge is IHTLC, IChronosVault, ReentrancyGuard {
         uint256 timelock,
         uint256 trinityFee
     );
+    
+    event EmergencyWithdrawal(
+        bytes32 indexed swapId,
+        address indexed sender,
+        uint256 amount,
+        string reason
+    );
+    
+    event ActiveSwapCountChanged(
+        address indexed user,
+        uint256 newCount,
+        string reason
+    );
+    
+    event TransferFallbackToPull(
+        bytes32 indexed swapId,
+        address indexed recipient,
+        address tokenAddress,
+        uint256 amount,
+        string reason
+    );
+    
+    event PendingWithdrawalClaimed(
+        bytes32 indexed swapId,
+        address indexed recipient,
+        uint256 amount
+    );
 
     // ===== CONSTRUCTOR =====
 
     /**
      * @notice Initialize HTLCChronosBridge with Trinity Protocol
      * @param _trinityBridge TrinityConsensusVerifier v3.5.4 address
+     * @param _owner Initial owner (should be multi-sig wallet for production)
+     * 
+     * @dev SECURITY: Owner can pause contract in emergency situations
+     * @dev RECOMMENDATION: Use Gnosis Safe multi-sig as owner for decentralization
      */
-    constructor(address _trinityBridge) {
+    constructor(address _trinityBridge, address _owner) Ownable(_owner) {
         require(_trinityBridge != address(0), "Invalid Trinity address");
+        require(_owner != address(0), "Invalid owner address");
         trinityBridge = ITrinityConsensusVerifier(_trinityBridge);
     }
     
@@ -169,6 +194,35 @@ contract HTLCChronosBridge is IHTLC, IChronosVault, ReentrancyGuard {
      */
     receive() external payable {
         revert("Use createHTLC to deposit funds");
+    }
+    
+    // ===== EMERGENCY CONTROLS =====
+    
+    /**
+     * @notice Emergency pause - stops new swaps from being created
+     * @dev CRITICAL: Does NOT block claim/refund - users can always recover funds
+     * @dev Only owner (multi-sig) can pause
+     * 
+     * PAUSABLE DESIGN PHILOSOPHY:
+     * - createHTLC: PAUSABLE (prevent new swaps during emergency)
+     * - claimHTLC: NOT PAUSABLE (users must be able to claim with valid secret)
+     * - refundHTLC: NOT PAUSABLE (users must be able to recover after timelock)
+     * - emergencyWithdraw: NOT PAUSABLE (ultimate recovery mechanism)
+     * 
+     * WHY: Pausing claim/refund would lock user funds until owner unpauses,
+     * which defeats the trustless nature of HTLC and could cause fund loss
+     * if owner is compromised/unavailable.
+     */
+    function pause() external onlyOwner {
+        _pause();
+    }
+    
+    /**
+     * @notice Resume normal operations after emergency
+     * @dev Only owner (multi-sig) can unpause
+     */
+    function unpause() external onlyOwner {
+        _unpause();
     }
 
     // ===== HTLC LIFECYCLE =====
@@ -195,8 +249,8 @@ contract HTLCChronosBridge is IHTLC, IChronosVault, ReentrancyGuard {
         uint256 amount,
         bytes32 secretHash,
         uint256 timelock,
-        string calldata destChain
-    ) external payable override nonReentrant returns (bytes32 swapId, bytes32 operationId) {
+        bytes32 destChain  // GAS OPTIMIZATION M-5: Changed from string to bytes32
+    ) external payable override nonReentrant whenNotPaused returns (bytes32 swapId, bytes32 operationId) {
         // ===== INPUT VALIDATION =====
         
         require(recipient != address(0), "Invalid recipient");
@@ -212,6 +266,13 @@ contract HTLCChronosBridge is IHTLC, IChronosVault, ReentrancyGuard {
         if (tokenAddress != address(0)) {
             // Verify token is a contract
             require(tokenAddress.code.length > 0, "Token not a contract");
+            
+            // SECURITY FIX H-3: Check allowance before attempting transfer
+            require(
+                IERC20(tokenAddress).allowance(msg.sender, address(this)) >= amount,
+                "Insufficient token allowance"
+            );
+            
             // ERC20 swap: require msg.value = TRINITY_FEE
             require(msg.value == TRINITY_FEE, "Must send Trinity fee");
         } else {
@@ -221,11 +282,14 @@ contract HTLCChronosBridge is IHTLC, IChronosVault, ReentrancyGuard {
 
         // ===== COLLISION-RESISTANT SWAP ID =====
         
-        // GAS OPTIMIZATION: Use unchecked for counter (won't overflow in practice)
+        // Get current counters and increment
         uint256 currentCounter;
+        uint256 currentUserNonce;
         unchecked {
             currentCounter = swapCounter;
             swapCounter = currentCounter + 1;
+            currentUserNonce = userNonce[msg.sender];
+            userNonce[msg.sender] = currentUserNonce + 1;
         }
         
         swapId = keccak256(abi.encodePacked(
@@ -235,8 +299,9 @@ contract HTLCChronosBridge is IHTLC, IChronosVault, ReentrancyGuard {
             amount,
             secretHash,
             block.timestamp,
-            block.number,      // SECURITY FIX: Block number prevents same-block collisions
-            currentCounter,     // SECURITY FIX: Counter for uniqueness
+            block.number,           // SECURITY FIX: Block number prevents same-block collisions
+            currentCounter,          // SECURITY FIX: Global counter for uniqueness
+            currentUserNonce,        // SECURITY FIX M-1: User nonce prevents front-running
             destChain
         ));
 
@@ -258,8 +323,22 @@ contract HTLCChronosBridge is IHTLC, IChronosVault, ReentrancyGuard {
         // ===== LOCK FUNDS IN ESCROW =====
         
         if (tokenAddress != address(0)) {
+            // SECURITY FIX C-1: Token Accounting Check (Fee-on-Transfer Protection)
+            // Measure balance before and after transfer to detect fee-on-transfer tokens
+            uint256 balanceBefore = IERC20(tokenAddress).balanceOf(address(this));
+            
             // ERC20: Transfer tokens from sender (fee already received)
             IERC20(tokenAddress).safeTransferFrom(msg.sender, address(this), amount);
+            
+            uint256 balanceAfter = IERC20(tokenAddress).balanceOf(address(this));
+            
+            // CORRECTED: Check the DELTA (amount actually received) not absolute balance
+            // This works even if contract already holds tokens from previous swaps
+            uint256 received = balanceAfter - balanceBefore;
+            require(
+                received >= amount,
+                "Token transfer incomplete - fee-on-transfer not supported"
+            );
         }
         // Native ETH already received in msg.value
 
@@ -289,9 +368,15 @@ contract HTLCChronosBridge is IHTLC, IChronosVault, ReentrancyGuard {
         swapParticipants[swapId][msg.sender] = true;
         swapParticipants[swapId][recipient] = true;
         
+        // SECURITY FIX M-4: Store destination chain for tracking
+        swapDestChain[swapId] = destChain;
+        
         // Increment active swap count (used for isAuthorized)
         activeSwapCount[msg.sender]++;
         activeSwapCount[recipient]++;
+        
+        emit ActiveSwapCountChanged(msg.sender, activeSwapCount[msg.sender], "swap_created");
+        emit ActiveSwapCountChanged(recipient, activeSwapCount[recipient], "swap_created");
 
         emit HTLCCreatedAndLocked(
             swapId,
@@ -338,12 +423,18 @@ contract HTLCChronosBridge is IHTLC, IChronosVault, ReentrancyGuard {
 
         swap.state = SwapState.EXECUTED;
 
-        // Decrement active swap counts (swap completed)
-        activeSwapCount[swap.sender]--;
-        activeSwapCount[swap.recipient]--;
+        // SECURITY FIX C-2: Safe decrement with overflow protection
+        if (activeSwapCount[swap.sender] > 0) {
+            activeSwapCount[swap.sender]--;
+            emit ActiveSwapCountChanged(swap.sender, activeSwapCount[swap.sender], "swap_claimed");
+        }
+        if (activeSwapCount[swap.recipient] > 0) {
+            activeSwapCount[swap.recipient]--;
+            emit ActiveSwapCountChanged(swap.recipient, activeSwapCount[swap.recipient], "swap_claimed");
+        }
 
         // Transfer funds to recipient
-        _transferFunds(swap.recipient, swap.tokenAddress, swap.amount);
+        _transferFunds(swapId, swap.recipient, swap.tokenAddress, swap.amount);
 
         emit HTLCExecuted(swapId, swap.operationId, swap.recipient, secret);
         return true;
@@ -362,17 +453,100 @@ contract HTLCChronosBridge is IHTLC, IChronosVault, ReentrancyGuard {
         require(swap.state == SwapState.LOCKED, "Not locked");
         require(block.timestamp > swap.timelock, "Not expired"); // SECURITY FIX: > prevents overlap
         require(swap.sender == msg.sender, "Only sender");
+        
+        // CRITICAL SECURITY FIX H-3: Check Trinity State to prevent double-spend
+        // If the transfer was already executed on the destination chain, refund must fail
+        // This prevents Alice from refunding on Chain A after Bob claimed on Chain B
+        (,,,, bool executed) = trinityBridge.getOperation(swap.operationId);
+        require(!executed, "Trinity operation already executed - cannot refund");
 
         swap.state = SwapState.REFUNDED;
 
-        // Decrement active swap counts (swap completed)
-        activeSwapCount[swap.sender]--;
-        activeSwapCount[swap.recipient]--;
+        // SECURITY FIX C-2: Safe decrement with overflow protection
+        if (activeSwapCount[swap.sender] > 0) {
+            activeSwapCount[swap.sender]--;
+            emit ActiveSwapCountChanged(swap.sender, activeSwapCount[swap.sender], "swap_refunded");
+        }
+        if (activeSwapCount[swap.recipient] > 0) {
+            activeSwapCount[swap.recipient]--;
+            emit ActiveSwapCountChanged(swap.recipient, activeSwapCount[swap.recipient], "swap_refunded");
+        }
 
         // Refund to sender
-        _transferFunds(swap.sender, swap.tokenAddress, swap.amount);
+        _transferFunds(swapId, swap.sender, swap.tokenAddress, swap.amount);
 
         emit HTLCRefunded(swapId, swap.operationId, swap.sender, swap.amount);
+        return true;
+    }
+
+    /**
+     * @notice Emergency withdrawal if Trinity bridge fails or stalls
+     * @param swapId Swap identifier
+     * @return success True if emergency withdrawal successful
+     * 
+     * @dev SECURITY FIX H-1: Allows recovery after extended timelock
+     * @dev Can only be called by sender after: timelock + EMERGENCY_TIMELOCK_EXTENSION
+     * @dev Use this ONLY if Trinity consensus permanently stalled
+     */
+    function emergencyWithdraw(bytes32 swapId) external nonReentrant returns (bool) {
+        HTLCSwap storage swap = htlcSwaps[swapId];
+        
+        require(swap.state == SwapState.LOCKED, "Not locked");
+        require(block.timestamp > swap.timelock + EMERGENCY_TIMELOCK_EXTENSION, "Emergency timelock not reached");
+        require(swap.sender == msg.sender, "Only sender");
+
+        // CRITICAL SECURITY FIX H-3: Check Trinity State to prevent double-spend
+        // Check BOTH consensus level AND executed status
+        (,, uint8 chainConfirmations,, bool executed) = trinityBridge.getOperation(swap.operationId);
+        require(chainConfirmations < REQUIRED_CONSENSUS, "Trinity consensus achieved - use claimHTLC");
+        require(!executed, "Trinity operation already executed - cannot refund");
+
+        swap.state = SwapState.REFUNDED;
+
+        // SECURITY FIX C-2: Safe decrement with overflow protection
+        if (activeSwapCount[swap.sender] > 0) {
+            activeSwapCount[swap.sender]--;
+            emit ActiveSwapCountChanged(swap.sender, activeSwapCount[swap.sender], "emergency_withdrawal");
+        }
+        if (activeSwapCount[swap.recipient] > 0) {
+            activeSwapCount[swap.recipient]--;
+            emit ActiveSwapCountChanged(swap.recipient, activeSwapCount[swap.recipient], "emergency_withdrawal");
+        }
+
+        // Emergency refund to sender
+        _transferFunds(swapId, swap.sender, swap.tokenAddress, swap.amount);
+
+        emit EmergencyWithdrawal(swapId, swap.sender, swap.amount, "Trinity bridge stalled");
+        emit HTLCRefunded(swapId, swap.operationId, swap.sender, swap.amount);
+        return true;
+    }
+    
+    /**
+     * @notice Withdraw pending funds (pull pattern for failed push transfers)
+     * @param swapId Swap identifier with pending withdrawal
+     * @return success True if withdrawal successful
+     * 
+     * @dev SECURITY FIX H-2: Hybrid push/pull pattern for gas griefing protection
+     * @dev If initial push transfer fails (e.g., smart wallet needs high gas),
+     * @dev recipient can call this function to pull funds with unlimited gas
+     * @dev CRITICAL: Prevents fund loss when recipient is Gnosis Safe or other high-gas wallet
+     */
+    function withdrawPendingFunds(bytes32 swapId) external nonReentrant returns (bool) {
+        PendingWithdrawal memory pending = pendingWithdrawals[swapId];
+        
+        require(pending.amount > 0, "No pending withdrawal");
+        
+        // SECURITY FIX: Only the rightful recipient can withdraw
+        // This prevents sender from stealing recipient's funds after claim succeeds
+        require(msg.sender == pending.recipient, "Only recipient can withdraw");
+        
+        // Clear pending withdrawal BEFORE transfer (CEI pattern)
+        delete pendingWithdrawals[swapId];
+        
+        // Transfer with unlimited gas (recipient controls their own gas limit)
+        _transferFundsUnlimited(pending.recipient, pending.tokenAddress, pending.amount);
+        
+        emit PendingWithdrawalClaimed(swapId, pending.recipient, pending.amount);
         return true;
     }
 
@@ -440,10 +614,66 @@ contract HTLCChronosBridge is IHTLC, IChronosVault, ReentrancyGuard {
     // ===== INTERNAL FUNCTIONS =====
 
     /**
-     * @notice Transfer funds (native or ERC20)
+     * @notice Transfer funds with hybrid push/pull pattern (SECURITY FIX H-2)
+     * @dev Attempts push transfer first; if it fails, records as pending withdrawal
+     * @dev This prevents gas griefing while supporting high-gas wallets (Gnosis Safe, etc.)
+     * 
+     * @param swapId Swap identifier (for pending withdrawal tracking)
+     * @param to Recipient address
+     * @param tokenAddress Token contract address (address(0) for ETH)
+     * @param amount Amount to transfer
+     * 
+     * HYBRID PUSH/PULL PATTERN:
+     * 1. Try to push funds with full gas
+     * 2. If push fails, record as pending withdrawal
+     * 3. Recipient can pull funds later with withdrawPendingFunds()
+     * 
+     * WHY: Eliminates hard-coded gas limits that break Gnosis Safe and other smart wallets
      */
-    function _transferFunds(address to, address tokenAddress, uint256 amount) internal {
+    function _transferFunds(bytes32 swapId, address to, address tokenAddress, uint256 amount) internal {
         if (tokenAddress == address(0)) {
+            // Attempt ETH transfer with full gas
+            (bool sent, ) = payable(to).call{value: amount}("");
+            
+            if (!sent) {
+                // Transfer failed - record as pending withdrawal WITH RECIPIENT ADDRESS
+                pendingWithdrawals[swapId] = PendingWithdrawal({
+                    recipient: to,
+                    tokenAddress: tokenAddress,
+                    amount: amount
+                });
+                emit TransferFallbackToPull(swapId, to, tokenAddress, amount, "ETH push transfer failed - pull required");
+            }
+        } else {
+            // ERC20: Attempt transfer and check success
+            // Use low-level call to avoid try/catch scoping issues with events
+            bool success;
+            try IERC20(tokenAddress).transfer(to, amount) returns (bool _success) {
+                success = _success;
+            } catch {
+                success = false;
+            }
+            
+            if (!success) {
+                // Transfer failed - record as pending withdrawal WITH RECIPIENT ADDRESS
+                pendingWithdrawals[swapId] = PendingWithdrawal({
+                    recipient: to,
+                    tokenAddress: tokenAddress,
+                    amount: amount
+                });
+                emit TransferFallbackToPull(swapId, to, tokenAddress, amount, "ERC20 push transfer failed - pull required");
+            }
+        }
+    }
+    
+    /**
+     * @notice Transfer funds with unlimited gas (pull pattern only)
+     * @dev Used ONLY by withdrawPendingFunds where recipient controls gas
+     * @dev Never use this in push transfers - only in pull withdrawals
+     */
+    function _transferFundsUnlimited(address to, address tokenAddress, uint256 amount) internal {
+        if (tokenAddress == address(0)) {
+            // Unlimited gas - recipient controls gas limit
             (bool sent, ) = payable(to).call{value: amount}("");
             require(sent, "ETH transfer failed");
         } else {
