@@ -9,7 +9,7 @@
 ![FunC](https://img.shields.io/badge/FunC-TON-0088CC?style=for-the-badge)
 ![Lean 4](https://img.shields.io/badge/Lean_4-Formally_Verified-brightgreen?style=for-the-badge&logo=lean)
 
-🎯 **Trinity Protocol v3.1** • 🔒 **78/78 Theorems Proven** • ⚛️ **Quantum Resistant** • 🌐 **Multi-Chain**
+🎯 **Trinity Protocol v3.5.9** • 🔒 **78/78 Theorems Proven** • ⚛️ **Quantum Resistant** • 🌐 **Multi-Chain**
 
 [Documentation](#-documentation) • [Security Audits](#-security-audits) • [SDK](#-sdk)
 
@@ -70,7 +70,7 @@
 
 Chronos Vault smart contracts are **mathematically proven secure** using Lean 4 theorem prover with **100% formal verification coverage**. Every security claim is provable, not just audited - following our philosophy: **"Trust Math, Not Humans"**.
 
-### Trinity Protocol v3.1 - Production Ready
+### Trinity Protocol v3.5.9 - Production Ready
 
 - ✅ **78/78 Lean 4 formal proofs complete** (100%)
 - ✅ **All 4 critical security vulnerabilities fixed**
@@ -173,7 +173,7 @@ by
 
 ---
 
-## 📍 Deployed Contracts - Trinity Protocol v3.1
+## 📍 Deployed Contracts - Trinity Protocol v3.5.9
 
 ### Arbitrum Sepolia (Testnet)
 
