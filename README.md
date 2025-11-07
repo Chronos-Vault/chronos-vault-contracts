@@ -91,14 +91,6 @@
 
 Chronos Vault smart contracts are **mathematically proven secure** using Lean 4 theorem prover with **100% formal verification coverage**. Every security claim is provable, not just audited - following our philosophy: **"Trust Math, Not Humans"**.
 
-### Trinity Protocol v3.1 - Production Ready
-
-- ✅ **78/78 Lean 4 formal proofs complete** (100%)
-- ✅ **All 4 critical security vulnerabilities fixed**
-- ✅ **CrossChainBridgeOptimized v2.2** - Production-ready
-- ✅ **Deployed**: November 3, 2025
-- ✅ **Attack probability**: P < 10^-50 (mathematically negligible)
-
 ---
 
 ## 💻 Programming Languages
@@ -194,44 +186,6 @@ by
 
 ---
 
-## 📍 Deployed Contracts - Trinity Protocol v3.1
-
-### Arbitrum Sepolia (Testnet)
-
-| Contract | Address | Version | Explorer |
-|----------|---------|---------|----------|
-| **CrossChainBridgeOptimized** | `0x3E205dc9881Cf0E9377683aDd22bC1aBDBdF462D` | v2.2 | [View →](https://sepolia.arbiscan.io/address/0x3E205dc9881Cf0E9377683aDd22bC1aBDBdF462D) |
-| **HTLCBridge** | `0x6cd3B1a72F67011839439f96a70290051fd66D57` | v2.0 | [View →](https://sepolia.arbiscan.io/address/0x6cd3B1a72F67011839439f96a70290051fd66D57) |
-| **ChronosVault** | `0x99444B0B1d6F7b21e9234229a2AC2bC0150B9d91` | v3.0 | [View →](https://sepolia.arbiscan.io/address/0x99444B0B1d6F7b21e9234229a2AC2bC0150B9d91) |
-| **CVT Token** | `0xFb419D8E32c14F774279a4dEEf330dc893257147` | - | [View →](https://sepolia.arbiscan.io/address/0xFb419D8E32c14F774279a4dEEf330dc893257147) |
-| **EmergencyMultiSig** | `0xecc00bbE268Fa4D0330180e0fB445f64d824d818` | v1.0 | [View →](https://sepolia.arbiscan.io/address/0xecc00bbE268Fa4D0330180e0fB445f64d824d818) |
-
-**Network**: Arbitrum Sepolia Testnet  
-**Chain ID**: 421614  
-**RPC**: https://sepolia-rollup.arbitrum.io/rpc
-
-### Solana Devnet
-
-| Program | Address | Status |
-|---------|---------|--------|
-| **Trinity Validator** | `5oD8S1TtkdJbAX7qhsGticU7JKxjwY4AbEeBdnkUrrKY` | ✅ Active |
-| **CVT Token (SPL)** | `5g3TkqFxyVe1ismrC5r2QD345CA1YdfWn6s6p4AYNmy4` | ✅ Live |
-| **CVT Bridge** | `6wo8Gso3uB8M6t9UGiritdGmc4UTPEtM5NhC6vbb9CdK` | ✅ Live |
-| **CVT Vesting** | `3dxjcEGP8MurCtodLCJi1V6JBizdRRAYg91nZkhmX1sB` | ✅ Live |
-
-**Explorer**: [Solana Explorer →](https://explorer.solana.com/?cluster=devnet)
-
-### TON Testnet
-
-| Contract | Address | Status |
-|----------|---------|--------|
-| **Trinity Consensus Validator** | `EQDx6yH5WH3Ex47h0PBnOBMzPCsmHdnL2snts3DZBO5CYVVJ` | ✅ Active |
-| **ChronosVault** | `EQDJAnXDPT-NivritpEhQeP0XmG20NdeUtxgh4nUiWH-DF7M` | ✅ Live |
-| **CVT Jetton Bridge** | `EQAOJxa1WDjGZ7f3n53JILojhZoDdTOKWl6h41_yOWX3v0tq` | ✅ Live |
-
-**Explorer**: [TON Testnet Explorer →](https://testnet.tonapi.io)
-
----
 
 ## 📚 Contract Documentation
 
