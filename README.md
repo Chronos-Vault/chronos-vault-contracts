@@ -9,13 +9,34 @@
 ![FunC](https://img.shields.io/badge/FunC-TON-0088CC?style=for-the-badge)
 ![Lean 4](https://img.shields.io/badge/Lean_4-Formally_Verified-brightgreen?style=for-the-badge&logo=lean)
 
-🎯 **Trinity Protocol v3.1** • 🔒 **78/78 Theorems Proven** • ⚛️ **Quantum Resistant** • 🌐 **Multi-Chain**
+🎯 **Trinity Protocol v3.5.9** • 🔒 **78/78 Theorems Proven** • ⚛️ **Quantum Resistant** • 🌐 **Multi-Chain**
 
 [Documentation](#-documentation) • [Security Audits](#-security-audits) • [SDK](#-sdk)
 
 </div>
 
 ---
+
+## 🎯 Latest Deployment - Arbitrum Sepolia Testnet
+
+### ✅ Trinity Protocol v3.5.9 - LIVE ON-CHAIN
+**First successful HTLC swap with 2-of-3 multi-chain consensus verification**
+
+| Contract | Address | Version | Arbiscan |
+|----------|---------|---------|----------|
+| **TrinityConsensusVerifier** | `0xcb56CD751453d15adc699b5D4DED8EC02D725AEB` | v3.5.4 | [View](https://sepolia.arbiscan.io/address/0xcb56CD751453d15adc699b5D4DED8EC02D725AEB) |
+| **HTLCChronosBridge** | `0xbaC4f0283Fa9542c01CAA086334AEc33F86a7839` | v3.5.9 | [View](https://sepolia.arbiscan.io/address/0xbaC4f0283Fa9542c01CAA086334AEc33F86a7839) |
+
+### 🔥 On-Chain Proof Transaction
+- **Transaction**: [0x1987e62d565d6430a916140db3ecd81e7cb644758d0e2e3b913e6f3db190a9db](https://sepolia.arbiscan.io/tx/0x1987e62d565d6430a916140db3ecd81e7cb644758d0e2e3b913e6f3db190a9db)
+- **Block**: 212811031
+- **Status**: ✅ SUCCESS - First real HTLC swap with Trinity consensus
+- **Proof**: 0.01 ETH locked, 0.001 ETH fee paid, 4 events emitted
+
+📖 **[Full On-Chain Proof Documentation →](./docs/deployments/TRINITY_ON-CHAIN_PROOF_v3.5.9.md)**
+
+---
+
 
 ## 📋 Table of Contents
 
