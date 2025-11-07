@@ -134,6 +134,10 @@ contract HTLCChronosBridge is IHTLC, IChronosVault, ReentrancyGuard {
 
     /// @notice Required Trinity consensus (2-of-3)
     uint8 public constant REQUIRED_CONSENSUS = 2;
+    
+    /// @notice Frontend integration guide for proper claim ordering
+    string public constant CLAIM_ORDER_GUIDE = 
+        "CRITICAL: Claim on DESTINATION chain FIRST to reveal secret safely.";
 
     // ===== EVENTS =====
 
@@ -159,22 +163,31 @@ contract HTLCChronosBridge is IHTLC, IChronosVault, ReentrancyGuard {
         require(_trinityBridge != address(0), "Invalid Trinity address");
         trinityBridge = ITrinityConsensusVerifier(_trinityBridge);
     }
+    
+    /**
+     * @notice Reject direct ETH transfers (use createHTLC instead)
+     */
+    receive() external payable {
+        revert("Use createHTLC to deposit funds");
+    }
 
     // ===== HTLC LIFECYCLE =====
 
     /**
-     * @notice Create and lock HTLC atomically (prevents frontrunning)
-     * @param recipient Address that can claim with secret
-     * @param tokenAddress Token contract (address(0) for ETH)
-     * @param amount Amount to lock (must be >= MIN_HTLC_AMOUNT)
-     * @param secretHash Keccak256 hash of secret
-     * @param timelock Expiry timestamp (between MIN and MAX)
-     * @param destChain Destination chain identifier (for documentation)
-     * @return swapId Unique swap identifier
-     * @return operationId Trinity Protocol operation ID
+     * @notice Create and lock HTLC atomically with Trinity consensus
+     * @dev Requires exact msg.value: TRINITY_FEE (ERC20) or amount + TRINITY_FEE (ETH)
+     * @dev SECURITY FIX: Atomic create+lock in single transaction prevents frontrunning
+     * @param recipient Claimant's address (cannot be sender or this contract)
+     * @param tokenAddress ERC20 token contract or address(0) for native ETH
+     * @param amount Amount in wei (must be >= MIN_HTLC_AMOUNT = 0.01 ETH)
+     * @param secretHash keccak256(secret) - keep secret safe until claim time
+     * @param timelock Unix timestamp deadline (7-30 days from now)
+     * @param destChain Destination chain identifier (for documentation only)
+     * @return swapId Collision-resistant unique swap identifier
+     * @return operationId Trinity Protocol operation ID for consensus tracking
      * 
      * @dev ATOMIC OPERATION: Both creates swap AND locks funds
-     * @dev SECURITY: Requires msg.value = amount (ETH) OR amount + TRINITY_FEE (ERC20)
+     * @dev SECURITY: Requires msg.value = amount + TRINITY_FEE (ETH) OR TRINITY_FEE only (ERC20)
      */
     function createHTLC(
         address recipient,
@@ -208,7 +221,13 @@ contract HTLCChronosBridge is IHTLC, IChronosVault, ReentrancyGuard {
 
         // ===== COLLISION-RESISTANT SWAP ID =====
         
-        uint256 currentCounter = swapCounter++;
+        // GAS OPTIMIZATION: Use unchecked for counter (won't overflow in practice)
+        uint256 currentCounter;
+        unchecked {
+            currentCounter = swapCounter;
+            swapCounter = currentCounter + 1;
+        }
+        
         swapId = keccak256(abi.encodePacked(
             msg.sender,
             recipient,
@@ -256,10 +275,10 @@ contract HTLCChronosBridge is IHTLC, IChronosVault, ReentrancyGuard {
             secretHash: secretHash,
             timelock: timelock,
             state: SwapState.LOCKED,        // SECURITY FIX: Atomic create+lock
-            consensusCount: 0,              // Not used - Trinity handles consensus
-            arbitrumProof: false,           // Deprecated
-            solanaProof: false,             // Deprecated
-            tonProof: false,                // Deprecated
+            consensusCount: 0,              // Trinity handles consensus externally
+            arbitrumProof: false,           // Not used (Trinity integration)
+            solanaProof: false,             // Not used (Trinity integration)
+            tonProof: false,                // Not used (Trinity integration)
             createdAt: block.timestamp
         });
 
