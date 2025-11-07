@@ -30,6 +30,8 @@ interface IHTLC {
 
     /**
      * @notice HTLC swap data structure
+     * @dev GAS OPTIMIZATION v3.5.9: Removed unused consensus tracking fields
+     *      (Trinity handles consensus externally - no need to duplicate state)
      */
     struct HTLCSwap {
         bytes32 id;                    // Unique swap identifier
@@ -41,10 +43,6 @@ interface IHTLC {
         bytes32 secretHash;            // Keccak256 hash of secret (hash lock)
         uint256 timelock;              // Unix timestamp for refund eligibility
         SwapState state;               // Current state of the swap
-        uint8 consensusCount;          // Number of chains confirmed (0-3)
-        bool arbitrumProof;            // Arbitrum/Ethereum proof submitted
-        bool solanaProof;              // Solana proof submitted
-        bool tonProof;                 // TON proof submitted
         uint256 createdAt;             // Creation timestamp
     }
 
@@ -119,7 +117,7 @@ interface IHTLC {
         uint256 amount,
         bytes32 secretHash,
         uint256 timelock,
-        string calldata destChain
+        bytes32 destChain  // Changed from string to bytes32 for gas optimization
     ) external payable returns (bytes32 swapId, bytes32 operationId);
 
     /**
