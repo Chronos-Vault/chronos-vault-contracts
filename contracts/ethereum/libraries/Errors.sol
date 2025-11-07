@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity 0.8.20;
 
 /**
  * @title Errors Library
@@ -46,6 +46,7 @@ library Errors {
     error OnlyEmergencyController(address caller, address controller); // v3.3
     error InvalidValidatorSignature(address signer, address expected); // v3.3
     error ProofAlreadySubmitted(bytes32 operationId, uint8 chainId); // v3.3
+    error ValidatorsMustBeUnique(); // v3.5.4: Prevent same address for multiple validators
     
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // ⚙️  OPERATION LIFECYCLE ERRORS (15) - Updated in v3.3
@@ -65,7 +66,11 @@ library Errors {
     error AmountExceedsUint128();
     error VolumeOverflow();
     error RefundFailed();
+    error TransferFailed(); // v3.5.3: Deposit transfer to vault failed
     error InsufficientFee(uint256 provided, uint256 required); // v3.3: With parameters
+    error DeadlineTooSoon(uint256 provided, uint256 minimum); // v3.5.3: Deadline validation
+    error DeadlineTooLate(uint256 provided, uint256 maximum); // v3.5.3: Deadline validation
+    error InvalidChainId(uint8 provided, uint8 expected); // v3.5.3: ChainId mismatch in proofs
     
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // 🔍 PROOF VALIDATION ERRORS (21) - Updated in v3.3
@@ -104,9 +109,11 @@ library Errors {
     error NoFeesToWithdraw();
     error FutureTimestamp();
     error RateLimitExceeded();
+    error InsufficientFees(); // v3.5: Fee withdrawal check
+    error FailedFeesUnclaimed(address user); // v3.5: Unclaimed fee tracking
     
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // 🏦 VAULT SECURITY ERRORS (5) - Updated in v3.4
+    // 🏦 VAULT SECURITY ERRORS (6) - Updated in v3.5.2
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     
     error InsufficientSecurityLevel();
@@ -114,6 +121,7 @@ library Errors {
     error InvalidVault(address vault); // v3.4: Vault validation
     error InvalidVaultInterface(address vault); // v3.4: Vault interface check
     error LowSecurityVault(); // v3.4: Vault security level check
+    error UnauthorizedVaultAccess(address user, address vault); // v3.5.2: CRITICAL FIX - Vault authorization
     
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // 🚨 CIRCUIT BREAKER ERRORS (5)
@@ -124,9 +132,12 @@ library Errors {
     error AnomalyDetected();
     error EmergencyPauseActive();
     error InvalidChain();
+    error ContractPaused(); // v3.5: Pause mechanism
+    error TooLateToCancel(); // v3.5: User cancellation
+    error InvalidStatus(); // v3.5: Operation status check
     
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // 🔱 CONSENSUS VALIDATION ERRORS (7) - NEW IN v3.1, Updated in v3.3
+    // 🔱 CONSENSUS VALIDATION ERRORS (8) - NEW IN v3.1, Updated in v3.5.2
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     
     error InsufficientValidators();
@@ -136,4 +147,5 @@ library Errors {
     error InsufficientConsensus();
     error InsufficientConfirmations(uint8 current, uint8 required); // v3.3: New
     error InvalidChainID();
+    error CannotConfirmOwnProposal(); // v3.5.2: HIGH FIX - Prevent validator self-confirmation
 }

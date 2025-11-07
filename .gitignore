@@ -4,15 +4,97 @@ build/
 .next/
 out/
 coverage/
+
+# Environment & Secrets
 .env
 .env.local
 .env.production
+.env.development
 *.pem
 *.key
+*secret*
+*private-key*
+
+# OS & IDE
 .DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-.vscode/
-.idea/
+lerna-debug.log*
+
+# Build artifacts
+artifacts/
+cache/
+.cache/
+.turbo/
+.vercel/
+
+# Uploads & Temp files
+uploads/
+attached_assets/
+temp/
+tmp/
+
+# Testing
+.nyc_output/
+coverage/
+*.lcov
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Replit specific (for GitHub cleanup)
+.replit
+.upm/
+replit.nix
+replit.md
+
+# Blockchain private data
+hardhat.config.ts.backup
+deployment-keys/
+validator-keys/
+
+# Internal scripts and tools (not for GitHub)
+**/upload-*.ts
+**/upload-*.mjs
+**/upload-*.js
+**/delete-*.ts
+**/trigger-*.ts
+**/quick-upload.ts
+**/final-fix.ts
+
+# Status and internal documentation
+**/DEPLOYMENT_STATUS*.md
+**/STATUS*.md
+archive/
+status/
+
+# Hardhat/Solidity artifacts
+**/artifacts/
+**/cache/
+**/build-info/
+contracts/ethereum/artifacts/
+contracts/ethereum/cache/
+
+# Test outputs
+slither-output.txt
+slither-results.txt
+slither-hardhat-output.txt
+
+# Verification corpus (generated during testing)
+corpus/
+echidna-corpus/
+
+# Old deployment configs
+deployment-trinity-*.json
+TRINITY_V3_DEPLOYMENT_CONFIG.json

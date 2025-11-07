@@ -67,6 +67,9 @@ library ProofValidation {
         bytes32 root,
         uint256 nonce
     ) internal pure returns (bool) {
+        // v3.5.4 LOW FIX: Prevent gas griefing with oversized merkle proofs
+        require(proof.length <= 32, "ProofTooDeep");
+        
         bytes32 nonceLeaf = keccak256(abi.encodePacked(leaf, nonce));
         bytes32 computedHash = nonceLeaf;
         

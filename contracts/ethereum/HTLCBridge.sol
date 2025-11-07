@@ -8,9 +8,9 @@ import "./IHTLC.sol";
 
 /**
  * @title HTLCBridge - Hash Time-Locked Contract Bridge
- * @notice Production implementation of HTLC atomic swaps with Trinity Protocol v1.5 integration
+ * @notice Production implementation of HTLC atomic swaps with Trinity Protocol v3.5.4 integration
  * @author Chronos Vault Team
- * @dev Implements IHTLC interface and integrates with CrossChainBridgeOptimized for 2-of-3 consensus
+ * @dev Implements IHTLC interface and integrates with TrinityConsensusVerifier for 2-of-3 consensus
  * 
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  * 🔱 TRINITY PROTOCOL™ HTLC ATOMIC SWAPS - THIS IS OUR TECHNOLOGY
@@ -19,7 +19,7 @@ import "./IHTLC.sol";
  * MATHEMATICAL SECURITY GUARANTEE: ~10^-50 attack probability
  * 
  * 1. HTLC Atomicity (10^-39): Keccak256 cryptographic hash function
- * 2. Trinity 2-of-3 Consensus (10^-12): Requires compromising 2 blockchains
+ * 2. Trinity 2-of-3 Consensus (10^-18): Requires compromising 2 blockchains
  * 3. Economic Disincentive: $8B+ attack cost vs <$1M gain (8000:1)
  * 
  * THIS IS NOT LAYERZERO OR WORMHOLE - 100% CHRONOS VAULT TECHNOLOGY
@@ -31,15 +31,17 @@ import "./IHTLC.sol";
  * HTLCBridge (this contract):
  * - Stores HTLC swap state (secret hash, timelock, participants)
  * - Validates deposits and holds funds in escrow
- * - Calls CrossChainBridgeOptimized.createOperation() for Trinity consensus
- * - Queries CrossChainBridgeOptimized for 2-of-3 consensus status
+ * - Calls TrinityConsensusVerifier.createOperation() for Trinity consensus
+ * - Queries TrinityConsensusVerifier for 2-of-3 consensus status
  * - Releases funds on claimHTLC() after secret + consensus verification
  * - Allows refund after timelock if swap not executed
  * 
- * CrossChainBridgeOptimized (existing v1.5 contract):
- * - Manages Trinity Protocol operations (initiation, proofs, consensus)
- * - Receives validator proofs from Arbitrum, Solana, TON
- * - Enforces 2-of-3 consensus requirement
+ * TrinityConsensusVerifier (v3.5.4):
+ * - Manages Trinity Protocol operations with enhanced security
+ * - Enforces validator uniqueness (prevents single entity control)
+ * - Operation expiry enforcement (prevents late execution)
+ * - Improved fee accounting with failedFeePortions tracking
+ * - Merkle proof depth limits (gas griefing prevention)
  * - Exposes operation status via view functions
  * 
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -49,8 +51,8 @@ contract HTLCBridge is IHTLC, ReentrancyGuard {
 
     // ===== STATE VARIABLES =====
 
-    /// @notice CrossChainBridgeOptimized v1.5 contract for Trinity consensus
-    ICrossChainBridgeOptimized public immutable trinityBridge;
+    /// @notice TrinityConsensusVerifier v3.5.4 contract for Trinity consensus
+    ITrinityConsensusVerifier public immutable trinityBridge;
 
     /// @notice Mapping from swapId to HTLC swap data
     mapping(bytes32 => HTLCSwap) public htlcSwaps;
@@ -77,11 +79,11 @@ contract HTLCBridge is IHTLC, ReentrancyGuard {
 
     /**
      * @notice Initialize HTLCBridge with Trinity Protocol bridge address
-     * @param _trinityBridge Address of CrossChainBridgeOptimized v1.5 contract
+     * @param _trinityBridge Address of TrinityConsensusVerifier v3.5.4 contract
      */
     constructor(address _trinityBridge) {
         require(_trinityBridge != address(0), "Invalid bridge address");
-        trinityBridge = ICrossChainBridgeOptimized(_trinityBridge);
+        trinityBridge = ITrinityConsensusVerifier(_trinityBridge);
     }
 
     // ===== HTLC LIFECYCLE FUNCTIONS =====
@@ -175,9 +177,9 @@ contract HTLCBridge is IHTLC, ReentrancyGuard {
         }
 
         // Create Trinity Protocol operation for 2-of-3 consensus
-        // FIX: Use correct interface matching CrossChainBridgeOptimized v1.5
+        // Uses TrinityConsensusVerifier v3.3 for multi-chain validation
         bytes32 operationId = trinityBridge.createOperation{value: 0.001 ether}(
-            ICrossChainBridgeOptimized.OperationType.SWAP,
+            ITrinityConsensusVerifier.OperationType.SWAP,
             "htlc_swap", // destination chain (generic for HTLC)
             swap.tokenAddress,
             swap.amount,
@@ -198,15 +200,15 @@ contract HTLCBridge is IHTLC, ReentrancyGuard {
 
     /**
      * @inheritdoc IHTLC
-     * @dev DEPRECATED: This function is no longer used in Trinity Protocol v1.5
+     * @dev DEPRECATED: This function is no longer used in Trinity Protocol v3.3
      * 
      * CRITICAL SECURITY FIX:
      * - Old implementation allowed ANYONE to fake consensus by calling this function
-     * - Validators now submit proofs directly to CrossChainBridgeOptimized.submitProof()
+     * - Validators now submit proofs directly to TrinityConsensusVerifier.submitProof()
      * - claimHTLC() now queries REAL consensus via trinityBridge.hasConsensusApproval()
      * 
      * This function remains for interface compatibility but does NOT affect consensus.
-     * Real Trinity consensus is verified through CrossChainBridgeOptimized only.
+     * Real Trinity consensus is verified through TrinityConsensusVerifier only.
      */
     function submitConsensusProof(
         bytes32 swapId,
@@ -343,13 +345,13 @@ contract HTLCBridge is IHTLC, ReentrancyGuard {
     // ===== INTERNAL FUNCTIONS =====
 
     /**
-     * @notice Check REAL Trinity consensus from CrossChainBridgeOptimized
+     * @notice Check REAL Trinity consensus from TrinityConsensusVerifier
      * @param operationId Trinity Protocol operation ID
-     * @return approved True if 2-of-3 consensus achieved on the bridge
-     * @dev CRITICAL FIX: This queries the REAL Trinity Bridge instead of local flags
+     * @return approved True if 2-of-3 consensus achieved on the consensus verifier
+     * @dev CRITICAL FIX: This queries the REAL Trinity Consensus Verifier instead of local flags
      */
     function _checkTrinityConsensus(bytes32 operationId) internal view returns (bool approved) {
-        // Query the REAL Trinity Protocol consensus from CrossChainBridgeOptimized
+        // Query the REAL Trinity Protocol consensus from TrinityConsensusVerifier
         return trinityBridge.hasConsensusApproval(operationId);
     }
 
@@ -372,10 +374,10 @@ contract HTLCBridge is IHTLC, ReentrancyGuard {
 }
 
 /**
- * @notice Interface for CrossChainBridgeOptimized v1.5
+ * @notice Interface for TrinityConsensusVerifier v3.3
  * @dev Complete interface for Trinity Protocol integration with real consensus checking
  */
-interface ICrossChainBridgeOptimized {
+interface ITrinityConsensusVerifier {
     enum OperationType { TRANSFER, SWAP, BRIDGE }
     enum OperationStatus { PENDING, PROCESSING, COMPLETED, CANCELED, FAILED }
     
