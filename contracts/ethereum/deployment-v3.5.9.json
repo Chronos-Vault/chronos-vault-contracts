@@ -1,0 +1,31 @@
+{
+  "network": "arbitrum-sepolia",
+  "chainId": 421614,
+  "timestamp": "2025-11-07T16:35:00.838Z",
+  "deployer": "0x66e5046D136E82d17cbeB2FfEa5bd5205D962906",
+  "contracts": {
+    "TrinityConsensusVerifier": {
+      "address": "0xcb56CD751453d15adc699b5D4DED8EC02D725AEB",
+      "version": "v3.5.4",
+      "validators": {
+        "arbitrum": "0x66e5046D136E82d17cbeB2FfEa5bd5205D962906",
+        "solana": "0x64c58964227a59f378BcAdEdD05590F031BdB6A4",
+        "ton": "0xe1F48453b0fcE8F17Cd065Ec976B065cb0fF095A"
+      },
+      "emergencyController": "0x66e5046D136E82d17cbeB2FfEa5bd5205D962906",
+      "feeBeneficiary": "0x66e5046D136E82d17cbeB2FfEa5bd5205D962906"
+    },
+    "HTLCChronosBridge": {
+      "address": "0xbaC4f0283Fa9542c01CAA086334AEc33F86a7839",
+      "version": "v3.5.9",
+      "trinityBridge": "0xcb56CD751453d15adc699b5D4DED8EC02D725AEB",
+      "owner": "0x66e5046D136E82d17cbeB2FfEa5bd5205D962906",
+      "features": [
+        "H-3: Double-spend prevention",
+        "M-5: Gas optimization (bytes32 destChain)",
+        "2-of-3 consensus",
+        "67-day emergency withdrawal"
+      ]
+    }
+  }
+}
