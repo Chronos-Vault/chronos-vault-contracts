@@ -117,6 +117,9 @@ contract TrinityConsensusVerifier is ReentrancyGuard {
     // v3.5.4: Merkle proof depth limit (prevents gas griefing)
     uint8 public constant MAX_MERKLE_PROOF_DEPTH = 32;
     
+    // v3.5.7 FIX #2: Maximum operation amount (prevents gas griefing/DoS)
+    uint256 public constant MAX_OPERATION_AMOUNT = 1_000_000 ether; // 1M ETH/tokens
+    
     // ===== OPERATION TYPES =====
     
     enum OperationType {
@@ -210,6 +213,7 @@ contract TrinityConsensusVerifier is ReentrancyGuard {
     event FeeBeneficiaryUpdated(address indexed oldBeneficiary, address indexed newBeneficiary); // v3.5.6 M-1
     event DepositExecuted(bytes32 indexed operationId, address indexed vault, address indexed user, address token, uint256 amount); // v3.5.3
     event WithdrawalExecuted(bytes32 indexed operationId, address indexed vault, address indexed user, address token, uint256 amount); // v3.5.3
+    event DepositFailed(bytes32 indexed operationId, address indexed vault, address indexed user, uint256 amount); // v3.5.7 FIX #3
     
     // ===== MODIFIERS =====
     
@@ -276,7 +280,12 @@ contract TrinityConsensusVerifier is ReentrancyGuard {
         uint256 deadline
     ) external payable nonReentrant whenNotPaused returns (bytes32) {
         if (vault == address(0)) revert Errors.ZeroAddress();
-        if (amount == 0) revert Errors.InvalidAmount(amount);
+        
+        // v3.5.7 FIX #2: Validate amount bounds (prevent gas griefing/DoS)
+        if (amount == 0 || amount > MAX_OPERATION_AMOUNT) {
+            revert Errors.InvalidAmount(amount);
+        }
+        
         if (deadline < block.timestamp) revert Errors.OperationExpired(deadline, block.timestamp);
         
         // v3.5.3 MEDIUM FIX: Validate deadline bounds
@@ -331,13 +340,7 @@ contract TrinityConsensusVerifier is ReentrancyGuard {
         // Transfer tokens into contract for DEPOSIT operations (ERC20 only, ETH already received)
         if (operationType == OperationType.DEPOSIT) {
             if (address(token) == address(0)) {
-                // v3.5.6 HIGH FIX H-1: Validate vault can receive ETH (prevents stuck funds)
-                // Use 50k gas to allow vaults with non-trivial receive/fallback logic
-                (bool canReceiveETH,) = payable(vault).call{value: 0, gas: 50000}("");
-                if (!canReceiveETH) {
-                    revert Errors.VaultCannotReceiveETH(vault);
-                }
-                
+                // v3.5.7 FIX #3: Remove vault ETH check - will handle gracefully in _executeOperation
                 // v3.5.3 HIGH FIX: Track pending ETH deposits
                 totalPendingDeposits += amount;
             } else {
@@ -578,9 +581,25 @@ contract TrinityConsensusVerifier is ReentrancyGuard {
         if (op.operationType == OperationType.DEPOSIT) {
             // Transfer deposited funds to vault
             if (address(op.token) == address(0)) {
-                // ETH deposit - send to vault
-                (bool success,) = payable(op.vault).call{value: op.amount}("");
-                if (!success) revert Errors.TransferFailed();
+                // v3.5.7 FIX #3: Try to send ETH to vault with generous gas limit
+                (bool success,) = payable(op.vault).call{value: op.amount, gas: 100000}("");
+                
+                if (!success) {
+                    // Vault rejected ETH - mark operation as FAILED (don't revert)
+                    op.status = OperationStatus.FAILED;
+                    
+                    // Refund deposit to user (fee already paid, non-refundable for failed operations)
+                    (bool refunded,) = payable(op.user).call{value: op.amount}("");
+                    if (!refunded) {
+                        // Track as failed fee for user to claim
+                        failedFees[op.user] += op.amount;
+                        totalFailedFees += op.amount;
+                        emit FailedFeeRecorded(op.user, op.amount);
+                    }
+                    
+                    emit DepositFailed(operationId, op.vault, op.user, op.amount);
+                    return; // Exit early - operation failed gracefully
+                }
             } else {
                 // ERC20 deposit - transfer from contract to vault
                 op.token.safeTransfer(op.vault, op.amount);
@@ -800,32 +819,38 @@ contract TrinityConsensusVerifier is ReentrancyGuard {
         // Always decrement collected fees BEFORE external call
         collectedFees -= op.fee;
         
-        // v3.5.6: Validate invariant after state updates
-        _validateBalanceInvariant();
-        
         // NOW make external calls (Interactions last)
+        uint256 totalRefund;
         if (op.operationType == OperationType.DEPOSIT) {
             if (address(op.token) == address(0)) {
-                // Return ETH deposit + fee
-                uint256 totalRefund = op.amount + op.fee;
-                (bool sent,) = payable(op.user).call{value: totalRefund}("");
-                if (!sent) {
-                    // REVERT - let emergency controller retry. State already updated above.
-                    revert Errors.RefundFailed();
-                }
+                totalRefund = op.amount + op.fee; // ETH deposit + fee
             } else {
-                // Return ERC20 tokens (safeTransfer reverts on failure)
-                op.token.safeTransfer(op.user, op.amount);
-                
-                // Refund fee separately
-                (bool sent,) = payable(op.user).call{value: op.fee}("");
-                if (!sent) revert Errors.RefundFailed();
+                totalRefund = op.fee; // Just fee for ERC20 (token transfer separate)
             }
         } else {
-            // For non-deposit operations, just refund fee
-            (bool sent,) = payable(op.user).call{value: op.fee}("");
-            if (!sent) revert Errors.RefundFailed();
+            totalRefund = op.fee; // Just fee for non-deposit operations
         }
+        
+        // v3.5.7 FIX #1: Try to refund ETH (deposit + fee, or just fee) to user
+        (bool sent,) = payable(op.user).call{value: totalRefund}("");
+        
+        if (sent) {
+            // Success: No failed fees to track
+        } else {
+            // v3.5.7 MAINNET FIX: Failed - track for later claim (DON'T REVERT!)
+            failedFees[op.user] += totalRefund;
+            totalFailedFees += totalRefund;
+            failedFeePortions[op.user] += op.fee;
+            emit FailedFeeRecorded(op.user, totalRefund);
+        }
+        
+        // Handle ERC20 separately (this always succeeds or reverts)
+        if (op.operationType == OperationType.DEPOSIT && address(op.token) != address(0)) {
+            op.token.safeTransfer(op.user, op.amount);
+        }
+        
+        // v3.5.7: Validate invariant after all operations
+        _validateBalanceInvariant();
         
         emit OperationCancelled(operationId, op.user, op.fee);
     }
@@ -877,32 +902,38 @@ contract TrinityConsensusVerifier is ReentrancyGuard {
         // Always decrement collected fees BEFORE external call
         collectedFees -= op.fee;
         
-        // v3.5.6: Validate invariant after state updates
-        _validateBalanceInvariant();
-        
         // NOW make external calls (Interactions last)
+        uint256 totalRefund;
         if (op.operationType == OperationType.DEPOSIT) {
             if (address(op.token) == address(0)) {
-                // Return ETH deposit + fee
-                uint256 totalRefund = op.amount + op.fee;
-                (bool sent,) = payable(msg.sender).call{value: totalRefund}("");
-                if (!sent) {
-                    // REVERT - let user retry. State already updated above.
-                    revert Errors.RefundFailed();
-                }
+                totalRefund = op.amount + op.fee; // ETH deposit + fee
             } else {
-                // Return ERC20 tokens (safeTransfer reverts on failure)
-                op.token.safeTransfer(msg.sender, op.amount);
-                
-                // Refund fee separately
-                (bool sent,) = payable(msg.sender).call{value: op.fee}("");
-                if (!sent) revert Errors.RefundFailed();
+                totalRefund = op.fee; // Just fee for ERC20 (token transfer separate)
             }
         } else {
-            // For non-deposit operations, just refund fee
-            (bool sent,) = payable(msg.sender).call{value: op.fee}("");
-            if (!sent) revert Errors.RefundFailed();
+            totalRefund = op.fee; // Just fee for non-deposit operations
         }
+        
+        // v3.5.7 FIX #1: Try to refund ETH (deposit + fee, or just fee)
+        (bool sent,) = payable(msg.sender).call{value: totalRefund}("");
+        
+        if (sent) {
+            // Success: No failed fees to track
+        } else {
+            // v3.5.7 MAINNET FIX: Failed - track for later claim (DON'T REVERT!)
+            failedFees[msg.sender] += totalRefund;
+            totalFailedFees += totalRefund;
+            failedFeePortions[msg.sender] += op.fee;
+            emit FailedFeeRecorded(msg.sender, totalRefund);
+        }
+        
+        // Handle ERC20 separately (this always succeeds or reverts)
+        if (op.operationType == OperationType.DEPOSIT && address(op.token) != address(0)) {
+            op.token.safeTransfer(msg.sender, op.amount);
+        }
+        
+        // v3.5.7: Validate invariant after all operations
+        _validateBalanceInvariant();
         
         emit OperationCancelled(operationId, msg.sender, op.fee);
     }
