@@ -571,7 +571,7 @@ The **Trinity bridge dependency** is particularly concerning as it creates a sin
 For questions about this audit:
 - **GitHub**: https://github.com/Chronos-Vault/chronos-vault-contracts/issues
 - **Discord**: discord.gg/trinity-protocol
-- **Email**: security@chronos-vault.org
+- **Email**: chronosvault@chronosvault.org
 
 ---
 
