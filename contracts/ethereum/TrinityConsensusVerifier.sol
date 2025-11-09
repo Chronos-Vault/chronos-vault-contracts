@@ -182,6 +182,9 @@ contract TrinityConsensusVerifier is ReentrancyGuard {
     uint256 public totalFailedFees; // Total ETH reserved for failed fee claims
     uint256 public totalPendingDeposits; // v3.5.3: Total ETH in pending DEPOSIT operations (not yet executed/cancelled)
     
+    // v3.5.5 HIGH FIX H-3: Per-operation deposit tracking to prevent race conditions
+    mapping(bytes32 => bool) public depositProcessed; // Track if deposit has been executed or cancelled
+    
     // v3.5.4: Track fee portion of failed refunds separately for accounting
     mapping(address => uint256) public failedFeePortions; // Fee-only portion of failedFees (for collectedFees reconciliation)
     
@@ -204,6 +207,7 @@ contract TrinityConsensusVerifier is ReentrancyGuard {
     event FeesWithdrawn(address indexed beneficiary, uint256 amount); // v3.5
     event FailedFeeClaimed(address indexed user, uint256 amount); // v3.5
     event FailedFeeRecorded(address indexed user, uint256 amount); // v3.5
+    event FeeBeneficiaryUpdated(address indexed oldBeneficiary, address indexed newBeneficiary); // v3.5.6 M-1
     event DepositExecuted(bytes32 indexed operationId, address indexed vault, address indexed user, address token, uint256 amount); // v3.5.3
     event WithdrawalExecuted(bytes32 indexed operationId, address indexed vault, address indexed user, address token, uint256 amount); // v3.5.3
     
@@ -327,6 +331,13 @@ contract TrinityConsensusVerifier is ReentrancyGuard {
         // Transfer tokens into contract for DEPOSIT operations (ERC20 only, ETH already received)
         if (operationType == OperationType.DEPOSIT) {
             if (address(token) == address(0)) {
+                // v3.5.6 HIGH FIX H-1: Validate vault can receive ETH (prevents stuck funds)
+                // Use 50k gas to allow vaults with non-trivial receive/fallback logic
+                (bool canReceiveETH,) = payable(vault).call{value: 0, gas: 50000}("");
+                if (!canReceiveETH) {
+                    revert Errors.VaultCannotReceiveETH(vault);
+                }
+                
                 // v3.5.3 HIGH FIX: Track pending ETH deposits
                 totalPendingDeposits += amount;
             } else {
@@ -365,6 +376,9 @@ contract TrinityConsensusVerifier is ReentrancyGuard {
         totalOperations++;
         collectedFees += fee;
         
+        // v3.5.6 CRITICAL FIX C-2: Validate balance invariant after accounting changes
+        _validateBalanceInvariant();
+        
         emit OperationCreated(operationId, msg.sender, operationType, amount);
         
         return operationId;
@@ -377,6 +391,11 @@ contract TrinityConsensusVerifier is ReentrancyGuard {
         bytes calldata signature,
         uint8 chainId // v3.5.3: Explicit chainId parameter for validation
     ) external onlyValidator nonReentrant {
+        // v3.5.5 CRITICAL FIX C-1: Validate Merkle proof depth (prevents gas griefing + DoS)
+        if (merkleProof.length > MAX_MERKLE_PROOF_DEPTH) {
+            revert Errors.MerkleProofTooDeep(merkleProof.length, MAX_MERKLE_PROOF_DEPTH);
+        }
+        
         // v3.5.3 CRITICAL FIX: Validate chainId matches expected
         if (chainId != ARBITRUM_CHAIN_ID) {
             revert Errors.InvalidChainId(chainId, ARBITRUM_CHAIN_ID);
@@ -419,6 +438,11 @@ contract TrinityConsensusVerifier is ReentrancyGuard {
         bytes calldata signature,
         uint8 chainId // v3.5.3: Explicit chainId parameter for validation
     ) external onlyValidator nonReentrant {
+        // v3.5.5 CRITICAL FIX C-1: Validate Merkle proof depth (prevents gas griefing + DoS)
+        if (merkleProof.length > MAX_MERKLE_PROOF_DEPTH) {
+            revert Errors.MerkleProofTooDeep(merkleProof.length, MAX_MERKLE_PROOF_DEPTH);
+        }
+        
         // v3.5.3 CRITICAL FIX: Validate chainId matches expected
         if (chainId != SOLANA_CHAIN_ID) {
             revert Errors.InvalidChainId(chainId, SOLANA_CHAIN_ID);
@@ -460,6 +484,11 @@ contract TrinityConsensusVerifier is ReentrancyGuard {
         bytes calldata signature,
         uint8 chainId // v3.5.3: Explicit chainId parameter for validation
     ) external onlyValidator nonReentrant {
+        // v3.5.5 CRITICAL FIX C-1: Validate Merkle proof depth (prevents gas griefing + DoS)
+        if (merkleProof.length > MAX_MERKLE_PROOF_DEPTH) {
+            revert Errors.MerkleProofTooDeep(merkleProof.length, MAX_MERKLE_PROOF_DEPTH);
+        }
+        
         // v3.5.3 CRITICAL FIX: Validate chainId matches expected
         if (chainId != TON_CHAIN_ID) {
             revert Errors.InvalidChainId(chainId, TON_CHAIN_ID);
@@ -511,29 +540,44 @@ contract TrinityConsensusVerifier is ReentrancyGuard {
             revert Errors.OperationAlreadyExecuted(operationId);
         }
         
-        // v3.5.2 CRITICAL SECURITY FIX: Verify user is authorized for this vault
-        // Prevents attack where malicious user creates operation for someone else's vault
-        try IChronosVault(op.vault).isAuthorized(op.user) returns (bool authorized) {
-            if (!authorized) {
-                revert Errors.UnauthorizedVaultAccess(op.user, op.vault);
-            }
+        // v3.5.5 CRITICAL FIX C-3: Check authorization FIRST (before any state changes)
+        // Prevents reentrancy attack where malicious vault manipulates state
+        bool authorized;
+        try IChronosVault(op.vault).isAuthorized(op.user) returns (bool _authorized) {
+            authorized = _authorized;
         } catch {
             // If vault doesn't implement isAuthorized, revert for safety
             revert Errors.InvalidVaultInterface(op.vault);
         }
         
-        // v3.5.1 SECURITY FIX: Set status BEFORE external calls (Effects→Interactions, satisfies Slither)
+        if (!authorized) {
+            revert Errors.UnauthorizedVaultAccess(op.user, op.vault);
+        }
+        
+        // v3.5.5 CRITICAL FIX C-3: Update ALL state BEFORE external transfers (Checks-Effects-Interactions)
         op.status = OperationStatus.EXECUTED;
         
         // v3.5.3 NEW CRITICAL FIX: Handle DEPOSIT operations
         if (op.operationType == OperationType.DEPOSIT) {
+            if (address(op.token) == address(0)) {
+                // v3.5.5 HIGH FIX H-3: Check if deposit already processed (prevents race condition)
+                if (!depositProcessed[operationId]) {
+                    if (totalPendingDeposits < op.amount) {
+                        revert Errors.InsufficientBalance();
+                    }
+                    totalPendingDeposits -= op.amount;
+                    depositProcessed[operationId] = true;
+                }
+            }
+        }
+        
+        // v3.5.6 CRITICAL FIX C-2: Validate invariant after all state updates
+        _validateBalanceInvariant();
+        
+        // v3.5.5 CRITICAL FIX C-3: ONLY AFTER all state is updated, do external transfers
+        if (op.operationType == OperationType.DEPOSIT) {
             // Transfer deposited funds to vault
             if (address(op.token) == address(0)) {
-                // v3.5.3 HIGH FIX: Enforce pending deposits accounting invariant (no silent underflow)
-                if (totalPendingDeposits < op.amount) {
-                    revert Errors.InsufficientBalance(); // Accounting invariant violated
-                }
-                totalPendingDeposits -= op.amount;
                 // ETH deposit - send to vault
                 (bool success,) = payable(op.vault).call{value: op.amount}("");
                 if (!success) revert Errors.TransferFailed();
@@ -624,15 +668,21 @@ contract TrinityConsensusVerifier is ReentrancyGuard {
     function _executeValidatorRotation(bytes32 proposalId) internal {
         ConsensusProposalLib.ValidatorRotationProposal storage proposal = validatorRotationProposals[proposalId];
         
-        proposal.executed = true;
+        // v3.5.5 HIGH FIX H-2: Check expiry BEFORE execution
+        if (ConsensusProposalLib.isRotationProposalExpired(proposal.proposedAt, block.timestamp)) {
+            revert Errors.ProposalExpired(proposal.proposedAt);
+        }
         
-        // v3.5.4 HIGH FIX: Validate uniqueness BEFORE execution
+        // v3.5.5 HIGH FIX H-4: Validate uniqueness BEFORE setting executed=true
         address[3] memory validatorArray = [
             proposal.chainId == ARBITRUM_CHAIN_ID ? proposal.newValidator : validators[ARBITRUM_CHAIN_ID],
             proposal.chainId == SOLANA_CHAIN_ID ? proposal.newValidator : validators[SOLANA_CHAIN_ID],
             proposal.chainId == TON_CHAIN_ID ? proposal.newValidator : validators[TON_CHAIN_ID]
         ];
         _validateUniqueValidators(validatorArray);
+        
+        // v3.5.5 FIX: Set executed AFTER all validations pass
+        proposal.executed = true;
         
         // Remove old validator
         authorizedValidators[proposal.oldValidator] = false;
@@ -659,6 +709,7 @@ contract TrinityConsensusVerifier is ReentrancyGuard {
         );
         
         ConsensusProposalLib.MerkleRootProposal storage proposal = merkleRootProposals[proposalId];
+        proposal.chainId = chainId; // v3.5.5 HIGH FIX H-3: Store chainId in proposal
         proposal.newRoot = newRoot;
         proposal.proposedAt = block.timestamp;
         proposal.proposedBy = msg.sender; // v3.5.2: Track proposer
@@ -676,6 +727,11 @@ contract TrinityConsensusVerifier is ReentrancyGuard {
         if (proposal.proposedAt == 0) revert Errors.ProposalNotFound(proposalId);
         if (proposal.executed) revert Errors.ProposalAlreadyExecuted(proposalId);
         if (proposal.confirmedBy[msg.sender]) revert Errors.AlreadyConfirmed(msg.sender);
+        
+        // v3.5.5 HIGH FIX H-3: Validate chainId matches original proposal
+        if (proposal.chainId != chainId) {
+            revert Errors.ChainIdMismatch(proposal.chainId, chainId);
+        }
         
         // v3.5.2 HIGH SECURITY FIX: Prevent proposer from confirming own proposal
         if (proposal.proposedBy == msg.sender) {
@@ -700,6 +756,12 @@ contract TrinityConsensusVerifier is ReentrancyGuard {
     function _executeMerkleRootUpdate(bytes32 proposalId, uint8 chainId) internal {
         ConsensusProposalLib.MerkleRootProposal storage proposal = merkleRootProposals[proposalId];
         
+        // v3.5.5 HIGH FIX H-2: Check expiry BEFORE execution
+        if (ConsensusProposalLib.isMerkleProposalExpired(proposal.proposedAt, block.timestamp)) {
+            revert Errors.ProposalExpired(proposal.proposedAt);
+        }
+        
+        // v3.5.5 FIX: Set executed AFTER expiry validation
         proposal.executed = true;
         
         bytes32 oldRoot = merkleRoots[chainId];
@@ -716,61 +778,53 @@ contract TrinityConsensusVerifier is ReentrancyGuard {
         Operation storage op = operations[operationId];
         if (op.operationId == bytes32(0)) revert Errors.OperationNotFound(operationId);
         if (op.status == OperationStatus.EXECUTED) revert Errors.OperationAlreadyExecuted(operationId);
-        if (op.status == OperationStatus.CANCELLED) revert Errors.OperationAlreadyCanceled(); // v3.5.3: Prevent double-cancellation
+        if (op.status == OperationStatus.CANCELLED) revert Errors.OperationAlreadyCanceled();
         
+        // v3.5.6 CRITICAL FIX C-3: Update ALL state BEFORE external calls (strict CEI)
         op.status = OperationStatus.CANCELLED;
         
-        // v3.5.4 MEDIUM FIX: Only decrement collectedFees AFTER successful refund
-        // v3.5.3 HIGH FIX: Return deposited tokens/ETH if applicable (same logic as cancelOperation)
+        // Handle deposits: update accounting state first
         if (op.operationType == OperationType.DEPOSIT) {
             if (address(op.token) == address(0)) {
-                // v3.5.3 HIGH FIX: Enforce pending deposits accounting invariant (no silent underflow)
-                if (totalPendingDeposits < op.amount) {
-                    revert Errors.InsufficientBalance(); // Accounting invariant violated
+                // Update pending deposits accounting
+                if (!depositProcessed[operationId]) {
+                    if (totalPendingDeposits < op.amount) {
+                        revert Errors.InsufficientBalance();
+                    }
+                    totalPendingDeposits -= op.amount;
+                    depositProcessed[operationId] = true;
                 }
-                totalPendingDeposits -= op.amount;
+            }
+        }
+        
+        // Always decrement collected fees BEFORE external call
+        collectedFees -= op.fee;
+        
+        // v3.5.6: Validate invariant after state updates
+        _validateBalanceInvariant();
+        
+        // NOW make external calls (Interactions last)
+        if (op.operationType == OperationType.DEPOSIT) {
+            if (address(op.token) == address(0)) {
                 // Return ETH deposit + fee
                 uint256 totalRefund = op.amount + op.fee;
                 (bool sent,) = payable(op.user).call{value: totalRefund}("");
-                if (sent) {
-                    // v3.5.4: Only decrement on successful send
-                    collectedFees -= op.fee;
-                } else {
-                    failedFees[op.user] += totalRefund;
-                    totalFailedFees += totalRefund;
-                    // v3.5.4: Track fee portion
-                    failedFeePortions[op.user] += op.fee;
-                    emit FailedFeeRecorded(op.user, totalRefund);
+                if (!sent) {
+                    // REVERT - let emergency controller retry. State already updated above.
+                    revert Errors.RefundFailed();
                 }
             } else {
-                // Return ERC20 tokens
+                // Return ERC20 tokens (safeTransfer reverts on failure)
                 op.token.safeTransfer(op.user, op.amount);
                 
                 // Refund fee separately
                 (bool sent,) = payable(op.user).call{value: op.fee}("");
-                if (sent) {
-                    // v3.5.4: Only decrement on successful send
-                    collectedFees -= op.fee;
-                } else {
-                    failedFees[op.user] += op.fee;
-                    totalFailedFees += op.fee;
-                    // v3.5.4: Track fee portion
-                    failedFeePortions[op.user] += op.fee;
-                    emit FailedFeeRecorded(op.user, op.fee);
-                }
+                if (!sent) revert Errors.RefundFailed();
             }
         } else {
-            // Non-deposit: refund fee only
-            (bool success, ) = payable(op.user).call{value: op.fee}("");
-            if (success) {
-                collectedFees -= op.fee;
-            } else {
-                failedFees[op.user] += op.fee;
-                totalFailedFees += op.fee;
-                // v3.5.4: Track fee portion
-                failedFeePortions[op.user] += op.fee;
-                emit FailedFeeRecorded(op.user, op.fee);
-            }
+            // For non-deposit operations, just refund fee
+            (bool sent,) = payable(op.user).call{value: op.fee}("");
+            if (!sent) revert Errors.RefundFailed();
         }
         
         emit OperationCancelled(operationId, op.user, op.fee);
@@ -803,61 +857,51 @@ contract TrinityConsensusVerifier is ReentrancyGuard {
         if (op.chainConfirmations > 0) revert Errors.TooLateToCancel();
         if (op.status != OperationStatus.PENDING) revert Errors.InvalidStatus();
         
+        // v3.5.6 CRITICAL FIX C-3: Update ALL state BEFORE external calls (strict CEI)
         op.status = OperationStatus.CANCELLED;
         
-        // v3.5.4 MEDIUM FIX: Only decrement collectedFees AFTER successful refund
-        // v3.5.2 HIGH SECURITY FIX: Return deposited tokens/ETH on cancellation
+        // Handle deposits: update accounting state first
         if (op.operationType == OperationType.DEPOSIT) {
             if (address(op.token) == address(0)) {
-                // v3.5.3 HIGH FIX: Enforce pending deposits accounting invariant (no silent underflow)
-                if (totalPendingDeposits < op.amount) {
-                    revert Errors.InsufficientBalance(); // Accounting invariant violated
+                // Update pending deposits accounting
+                if (!depositProcessed[operationId]) {
+                    if (totalPendingDeposits < op.amount) {
+                        revert Errors.InsufficientBalance();
+                    }
+                    totalPendingDeposits -= op.amount;
+                    depositProcessed[operationId] = true;
                 }
-                totalPendingDeposits -= op.amount;
+            }
+        }
+        
+        // Always decrement collected fees BEFORE external call
+        collectedFees -= op.fee;
+        
+        // v3.5.6: Validate invariant after state updates
+        _validateBalanceInvariant();
+        
+        // NOW make external calls (Interactions last)
+        if (op.operationType == OperationType.DEPOSIT) {
+            if (address(op.token) == address(0)) {
                 // Return ETH deposit + fee
                 uint256 totalRefund = op.amount + op.fee;
                 (bool sent,) = payable(msg.sender).call{value: totalRefund}("");
-                if (sent) {
-                    // v3.5.4: Only decrement on successful send
-                    collectedFees -= op.fee;
-                } else {
-                    // Track failed refund for later claim
-                    failedFees[msg.sender] += totalRefund;
-                    totalFailedFees += totalRefund;
-                    // v3.5.4: Track fee portion separately for collectedFees reconciliation
-                    failedFeePortions[msg.sender] += op.fee;
-                    emit FailedFeeRecorded(msg.sender, totalRefund);
+                if (!sent) {
+                    // REVERT - let user retry. State already updated above.
+                    revert Errors.RefundFailed();
                 }
             } else {
-                // Return ERC20 tokens
+                // Return ERC20 tokens (safeTransfer reverts on failure)
                 op.token.safeTransfer(msg.sender, op.amount);
                 
                 // Refund fee separately
                 (bool sent,) = payable(msg.sender).call{value: op.fee}("");
-                if (sent) {
-                    // v3.5.4: Only decrement on successful send
-                    collectedFees -= op.fee;
-                } else {
-                    failedFees[msg.sender] += op.fee;
-                    totalFailedFees += op.fee;
-                    // v3.5.4: Track fee portion
-                    failedFeePortions[msg.sender] += op.fee;
-                    emit FailedFeeRecorded(msg.sender, op.fee);
-                }
+                if (!sent) revert Errors.RefundFailed();
             }
         } else {
             // For non-deposit operations, just refund fee
             (bool sent,) = payable(msg.sender).call{value: op.fee}("");
-            if (sent) {
-                // v3.5.4: Only decrement on successful send
-                collectedFees -= op.fee;
-            } else {
-                failedFees[msg.sender] += op.fee;
-                totalFailedFees += op.fee;
-                // v3.5.4: Track fee portion
-                failedFeePortions[msg.sender] += op.fee;
-                emit FailedFeeRecorded(msg.sender, op.fee);
-            }
+            if (!sent) revert Errors.RefundFailed();
         }
         
         emit OperationCancelled(operationId, msg.sender, op.fee);
@@ -889,6 +933,9 @@ contract TrinityConsensusVerifier is ReentrancyGuard {
     function withdrawFees(uint256 amount) external onlyEmergencyController nonReentrant {
         if (amount > collectedFees) revert Errors.InsufficientFees();
         
+        // v3.5.5 CRITICAL FIX C-2: Validate balance invariant BEFORE withdrawal
+        _validateBalanceInvariant();
+        
         // v3.5.3 HIGH FIX: Reserve ETH for failed fees AND pending deposits
         uint256 requiredReserve = totalFailedFees + totalPendingDeposits;
         if (address(this).balance - amount < requiredReserve) {
@@ -900,7 +947,36 @@ contract TrinityConsensusVerifier is ReentrancyGuard {
         (bool sent,) = payable(feeBeneficiary).call{value: amount}("");
         if (!sent) revert Errors.RefundFailed();
         
+        // v3.5.5 CRITICAL FIX C-2: Validate invariant after withdrawal
+        _validateBalanceInvariant();
+        
         emit FeesWithdrawn(feeBeneficiary, amount);
+    }
+    
+    /**
+     * @notice Update fee beneficiary address for key rotation
+     * @dev v3.5.6 MEDIUM FIX M-1: Allows emergency controller to rotate treasury address
+     * @param newBeneficiary New treasury address to receive protocol fees
+     */
+    function updateFeeBeneficiary(address newBeneficiary) external onlyEmergencyController {
+        if (newBeneficiary == address(0)) revert Errors.ZeroAddress();
+        
+        address oldBeneficiary = feeBeneficiary;
+        feeBeneficiary = newBeneficiary;
+        
+        emit FeeBeneficiaryUpdated(oldBeneficiary, newBeneficiary);
+    }
+    
+    /**
+     * @notice v3.5.5 CRITICAL FIX C-2: Validate balance invariant
+     * @dev Ensures contract.balance >= collectedFees + totalFailedFees + totalPendingDeposits
+     * @dev Prevents fund loss via accounting errors
+     */
+    function _validateBalanceInvariant() internal view {
+        uint256 totalReserved = collectedFees + totalFailedFees + totalPendingDeposits;
+        if (address(this).balance < totalReserved) {
+            revert Errors.BalanceInvariantViolated(address(this).balance, totalReserved);
+        }
     }
     
     /**
@@ -923,6 +999,9 @@ contract TrinityConsensusVerifier is ReentrancyGuard {
         if (feePortion > 0) {
             collectedFees -= feePortion;
         }
+        
+        // v3.5.6 CRITICAL FIX C-2: Validate invariant after accounting changes
+        _validateBalanceInvariant();
         
         (bool sent,) = payable(msg.sender).call{value: claimAmount}("");
         if (!sent) {

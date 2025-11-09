@@ -20,14 +20,17 @@ library ConsensusProposalLib {
         address oldValidator;
         address newValidator;
         uint256 proposedAt;
+        address proposedBy; // v3.5.2: Track proposer to prevent self-confirmation
         uint8 confirmations;
         mapping(address => bool) confirmedBy;
         bool executed;
     }
     
     struct MerkleRootProposal {
+        uint8 chainId; // v3.5.5 HIGH FIX H-3: Store chainId to prevent cross-chain replay
         bytes32 newRoot;
         uint256 proposedAt;
+        address proposedBy; // v3.5.2: Track proposer to prevent self-confirmation
         uint8 confirmations;
         mapping(address => bool) confirmedBy;
         bool executed;

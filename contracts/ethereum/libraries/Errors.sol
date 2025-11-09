@@ -97,6 +97,7 @@ library Errors {
     error ProposalExpired(uint256 proposedAt); // v3.3: With parameter
     error ProposalAlreadyExecuted(bytes32 proposalId); // v3.3: New
     error InvalidNonce(uint256 provided, uint256 expected); // v3.4: Nonce replay protection
+    error MerkleProofTooDeep(uint256 provided, uint256 maximum); // v3.5.5: CRITICAL FIX C-1 - Gas griefing protection
     
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // 💰 FEE MANAGEMENT ERRORS (7) - Moved InsufficientFee to Operation Lifecycle
@@ -122,6 +123,7 @@ library Errors {
     error InvalidVaultInterface(address vault); // v3.4: Vault interface check
     error LowSecurityVault(); // v3.4: Vault security level check
     error UnauthorizedVaultAccess(address user, address vault); // v3.5.2: CRITICAL FIX - Vault authorization
+    error VaultCannotReceiveETH(address vault); // v3.5.6 HIGH FIX H-1: Vault ETH reception validation
     
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // 🚨 CIRCUIT BREAKER ERRORS (5)
@@ -148,4 +150,6 @@ library Errors {
     error InsufficientConfirmations(uint8 current, uint8 required); // v3.3: New
     error InvalidChainID();
     error CannotConfirmOwnProposal(); // v3.5.2: HIGH FIX - Prevent validator self-confirmation
+    error ChainIdMismatch(uint8 proposalChainId, uint8 providedChainId); // v3.5.5: HIGH FIX H-3 - Merkle update validation
+    error BalanceInvariantViolated(uint256 balance, uint256 required); // v3.5.5: CRITICAL FIX C-2 - Fund safety
 }
