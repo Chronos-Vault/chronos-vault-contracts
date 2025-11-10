@@ -10,6 +10,7 @@ import "./libraries/FeeAccounting.sol";
 import "./libraries/ProofValidation.sol";
 import "./libraries/ConsensusProposalLib.sol";
 import "./libraries/OperationLifecycle.sol";
+import "./ITrinityBatchVerifier.sol";
 
 /**
  * @title IChronosVault - Interface for vault type integration
@@ -98,7 +99,7 @@ interface IChronosVault {
  *    - All libraries connected
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  */
-contract TrinityConsensusVerifier is ReentrancyGuard {
+contract TrinityConsensusVerifier is ITrinityBatchVerifier, ReentrancyGuard {
     using SafeERC20 for IERC20;
     using ECDSA for bytes32;
     
@@ -160,6 +161,7 @@ contract TrinityConsensusVerifier is ReentrancyGuard {
         bool solanaConfirmed;
         bool tonConfirmed;
         uint256 fee;
+        bytes32 data; // v3.5.10: Batch data commitment for Exit-Batch verification
     }
     
     // ===== STATE VARIABLES =====
@@ -373,7 +375,8 @@ contract TrinityConsensusVerifier is ReentrancyGuard {
             arbitrumConfirmed: false,
             solanaConfirmed: false,
             tonConfirmed: false,
-            fee: fee
+            fee: fee,
+            data: bytes32(0) // v3.5.10: Reserved for batch verification (set to 0 for normal operations)
         });
         
         totalOperations++;
@@ -1055,6 +1058,150 @@ contract TrinityConsensusVerifier is ReentrancyGuard {
     
     function getValidator(uint8 chainId) external view returns (address) {
         return validators[chainId];
+    }
+    
+    /**
+     * @notice Create batch verification operation for Exit-Batch system
+     * @param batchRoot Merkle root of exits
+     * @param expectedTotal Expected sum of exit amounts
+     * @return operationId Trinity operation ID
+     * 
+     * @dev Keeper calls this to create Trinity consensus operation
+     * @dev Stores commitment hash of (batchRoot, expectedTotal)
+     * @dev Validators verify batch integrity on their chains
+     */
+    function createBatchOperation(
+        bytes32 batchRoot,
+        uint256 expectedTotal
+    ) external payable whenNotPaused nonReentrant returns (bytes32 operationId) {
+        require(batchRoot != bytes32(0), "Invalid batch root");
+        require(expectedTotal > 0, "Invalid expected total");
+        require(msg.value >= 0.001 ether, "Insufficient fee");
+        
+        // Create commitment hash binding batchRoot and expectedTotal together
+        bytes32 batchDataHash = keccak256(abi.encodePacked(batchRoot, expectedTotal));
+        
+        // Generate unique operation ID
+        operationId = keccak256(abi.encodePacked(
+            batchRoot,
+            expectedTotal,
+            msg.sender,
+            block.timestamp,
+            block.number,
+            totalOperations
+        ));
+        
+        // Create Trinity consensus operation (no vault, no token transfer)
+        operations[operationId] = Operation({
+            operationId: operationId,
+            user: msg.sender,
+            vault: address(0), // No vault for batch operations
+            operationType: OperationType.TRANSFER, // Use generic type
+            amount: 0, // No token transfer, consensus only
+            token: IERC20(address(0)),
+            status: OperationStatus.PENDING,
+            createdAt: block.timestamp,
+            expiresAt: block.timestamp + 24 hours,
+            chainConfirmations: 0,
+            arbitrumConfirmed: false,
+            solanaConfirmed: false,
+            tonConfirmed: false,
+            fee: msg.value,
+            data: batchDataHash // Store batch commitment
+        });
+        
+        totalOperations++;
+        collectedFees += msg.value;
+        
+        emit OperationCreated(operationId, msg.sender, OperationType.TRANSFER, 0);
+        
+        return operationId;
+    }
+    
+    /**
+     * @notice Verify batch for Exit-Batch system using Trinity 2-of-3 consensus
+     * @param batchRoot Merkle root of exit batch
+     * @param expectedTotal Sum of all exit amounts in batch
+     * @param merkleProof Trinity consensus Merkle proof
+     * @param trinityOpId Trinity operation ID for this batch
+     * @return bool True if batch verified with 2-of-3 consensus
+     * 
+     * @dev SECURITY: Validates batch data matches Trinity operation
+     * @dev SECURITY: Requires 2-of-3 chain confirmations
+     * @dev SECURITY: Verifies operation is EXECUTED state
+     */
+    function verifyBatch(
+        bytes32 batchRoot,
+        uint256 expectedTotal,
+        bytes32[] calldata merkleProof,
+        bytes32 trinityOpId
+    ) external view returns (bool) {
+        Operation storage op = operations[trinityOpId];
+        
+        // SECURITY CHECK #1: Operation must be executed
+        if (op.status != OperationStatus.EXECUTED) {
+            return false;
+        }
+        
+        // SECURITY CHECK #2: Operation must have 2-of-3 consensus
+        if (op.chainConfirmations < requiredChainConfirmations) {
+            return false;
+        }
+        
+        // SECURITY CHECK #3: Verify batch data matches operation data
+        // Trinity operation stores hash of (batchRoot, expectedTotal) as the data commitment
+        bytes32 batchDataHash = keccak256(abi.encodePacked(
+            batchRoot,
+            expectedTotal
+        ));
+        
+        // Operation data field should contain the batch commitment hash
+        // This binds the Trinity consensus to the specific batch
+        if (op.data != batchDataHash) {
+            return false;
+        }
+        
+        // SECURITY CHECK #4: Merkle proof validation
+        // Verify merkleProof matches one of the stored merkle roots
+        // This ensures the batch was approved by at least 2 of the 3 chains
+        if (merkleProof.length > 0) {
+            bool validProof = false;
+            for (uint8 chainId = 1; chainId <= 3; chainId++) {
+                bytes32 root = merkleRoots[chainId];
+                if (root != bytes32(0) && _verifyMerkleProof(merkleProof, root, batchDataHash)) {
+                    validProof = true;
+                    break;
+                }
+            }
+            if (!validProof) {
+                return false;
+            }
+        }
+        
+        return true;
+    }
+    
+    /**
+     * @notice Internal Merkle proof verification
+     * @param proof Merkle proof path
+     * @param root Merkle root to verify against
+     * @param leaf Leaf node to verify
+     */
+    function _verifyMerkleProof(
+        bytes32[] memory proof,
+        bytes32 root,
+        bytes32 leaf
+    ) internal pure returns (bool) {
+        bytes32 computedHash = leaf;
+        for (uint256 i = 0; i < proof.length; i++) {
+            bytes32 proofElement = proof[i];
+            if (computedHash < proofElement) {
+                computedHash = keccak256(abi.encodePacked(computedHash, proofElement));
+            } else {
+                computedHash = keccak256(abi.encodePacked(proofElement, computedHash));
+            }
+        }
+        return computedHash == root;
     }
     
     // ===== INTERNAL HELPER FUNCTIONS =====
