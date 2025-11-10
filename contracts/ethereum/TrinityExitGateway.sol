@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
+import "./ITrinityBatchVerifier.sol";
 
 /**
  * @title TrinityExitGateway - L1 Settlement Layer for Exit-Batch System
@@ -38,7 +37,6 @@ import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
  * - Keeper bond/reputation system
  */
 contract TrinityExitGateway is ReentrancyGuard, Ownable {
-    using SafeERC20 for IERC20;
     using MerkleProof for bytes32[];
 
     // ===== TRINITY INTEGRATION =====
@@ -65,6 +63,7 @@ contract TrinityExitGateway is ReentrancyGuard, Ownable {
         bytes32 batchRoot;           // Merkle root of exits
         uint256 exitCount;           // Number of exits in batch
         uint256 totalValue;          // Total ETH value locked
+        uint256 claimedValue;        // Total claimed so far (prevents over-claims)
         uint256 submittedAt;         // Submission timestamp
         uint256 finalizedAt;         // Finalization timestamp (submittedAt + CHALLENGE_PERIOD)
         address keeper;              // Who submitted the batch
@@ -164,33 +163,40 @@ contract TrinityExitGateway is ReentrancyGuard, Ownable {
      * @notice Submit batch of exits with Trinity 2-of-3 consensus proof
      * @param batchRoot Merkle root of exit data
      * @param exitCount Number of exits in batch
+     * @param expectedTotal Sum of all exit amounts in batch
      * @param merkleProof Trinity Protocol Merkle proof (2-of-3 consensus)
+     * @param trinityOperationId Trinity operation ID
      * 
      * @dev Must be called by authorized keeper
-     * @dev Must include exact ETH value matching totalValue
+     * @dev Must include exact ETH value matching expectedTotal
      * @dev Starts 6-hour challenge period
      * 
      * Trinity Operation:
-     * 1. Keeper creates operation on Trinity Protocol
+     * 1. Keeper creates operation on Trinity Protocol with expectedTotal
      * 2. Trinity validators verify each exit on Arbitrum/Solana/TON
-     * 3. Once 2-of-3 consensus achieved, keeper relays proof to L1
+     * 3. Trinity validates sum of exit amounts matches expectedTotal
+     * 4. Once 2-of-3 consensus achieved, keeper relays proof to L1
+     * 
+     * Security: expectedTotal is verified by Trinity consensus to prevent underfunded batches
      */
     function submitBatch(
         bytes32 batchRoot,
         uint256 exitCount,
+        uint256 expectedTotal,
         bytes32[] calldata merkleProof,
         bytes32 trinityOperationId
     ) external payable nonReentrant whenNotPaused onlyKeeper {
         require(batchRoot != bytes32(0), "Invalid batch root");
         require(exitCount >= MIN_BATCH_SIZE, "Batch too small");
         require(exitCount <= MAX_BATCH_SIZE, "Batch too large");
-        require(msg.value > 0, "No value sent");
+        require(expectedTotal > 0, "Invalid expected total");
+        require(msg.value == expectedTotal, "Value mismatch");
         require(batches[batchRoot].state == BatchState.INVALID, "Batch exists");
 
         // Verify Trinity 2-of-3 consensus
-        // NOTE: In production, this calls TrinityConsensusVerifier.verifyOperation()
-        // For MVP, we trust the keeper multisig
-        require(_verifyTrinityConsensus(batchRoot, merkleProof, trinityOperationId), "Trinity consensus failed");
+        // NOTE: Trinity validators verify that expectedTotal matches sum of exit amounts
+        // This prevents underfunded batches from being submitted
+        require(_verifyTrinityConsensus(batchRoot, expectedTotal, merkleProof, trinityOperationId), "Trinity consensus failed");
 
         uint256 finalizedAt = block.timestamp + CHALLENGE_PERIOD;
 
@@ -198,6 +204,7 @@ contract TrinityExitGateway is ReentrancyGuard, Ownable {
             batchRoot: batchRoot,
             exitCount: exitCount,
             totalValue: msg.value,
+            claimedValue: 0,
             submittedAt: block.timestamp,
             finalizedAt: finalizedAt,
             keeper: msg.sender,
@@ -236,27 +243,74 @@ contract TrinityExitGateway is ReentrancyGuard, Ownable {
         bytes32[] calldata merkleProof
     ) external nonReentrant whenNotPaused {
         Batch storage batch = batches[batchRoot];
+        
+        // Auto-finalize if challenge period expired
+        if (batch.state == BatchState.PENDING && block.timestamp >= batch.finalizedAt) {
+            batch.state = BatchState.FINALIZED;
+            emit BatchFinalized(batchRoot, block.timestamp);
+        }
+        
         require(batch.state == BatchState.FINALIZED, "Batch not finalized");
         require(!exitClaimed[batchRoot][exitId], "Exit already claimed");
         require(recipient != address(0), "Invalid recipient");
         require(amount > 0, "Invalid amount");
+        
+        // Prevent over-claims
+        require(batch.totalValue - batch.claimedValue >= amount, "Insufficient batch funds");
 
-        // Verify Merkle proof
-        // NOTE: Uses abi.encode (not encodePacked) to match StandardMerkleTree from OpenZeppelin
-        bytes32 leaf = keccak256(abi.encode(exitId, recipient, amount));
+        // Verify Merkle proof with DOUBLE HASH (matches OpenZeppelin StandardMerkleTree)
+        // Prevents second preimage attacks
+        bytes32 innerHash = keccak256(abi.encode(exitId, recipient, amount));
+        bytes32 leaf = keccak256(bytes.concat(innerHash));
         require(
             merkleProof.verify(batchRoot, leaf),
             "Invalid Merkle proof"
         );
 
-        // Mark as claimed
+        // Update accounting
         exitClaimed[batchRoot][exitId] = true;
+        batch.claimedValue += amount;
 
         // Transfer funds
         (bool sent,) = payable(recipient).call{value: amount}("");
         require(sent, "Transfer failed");
 
         emit ExitClaimed(batchRoot, exitId, recipient, amount);
+    }
+
+    /**
+     * @notice Claim priority exit from L2 (bypasses batching)
+     * @param exitId Unique exit identifier
+     * @param recipient Address to receive funds
+     * @param amount Amount to claim
+     * @param secretHash HTLC secret hash (for audit trail)
+     * 
+     * @dev Called by Arbitrum bridge via sendTxToL1
+     * @dev No batch verification needed - direct L1 settlement
+     * @dev Uses special batchRoot = bytes32(0) for priority exits
+     */
+    function claimPriorityExit(
+        bytes32 exitId,
+        address recipient,
+        uint256 amount,
+        bytes32 secretHash
+    ) external payable nonReentrant whenNotPaused {
+        // Use special batchRoot for priority exits
+        bytes32 priorityBatchRoot = bytes32(0);
+        
+        require(!exitClaimed[priorityBatchRoot][exitId], "Exit already claimed");
+        require(recipient != address(0), "Invalid recipient");
+        require(amount > 0, "Invalid amount");
+        require(msg.value == amount, "Amount mismatch");
+        
+        // Mark as claimed
+        exitClaimed[priorityBatchRoot][exitId] = true;
+
+        // Transfer funds
+        (bool sent,) = payable(recipient).call{value: amount}("");
+        require(sent, "Transfer failed");
+
+        emit ExitClaimed(priorityBatchRoot, exitId, recipient, amount);
     }
 
     /**
@@ -324,8 +378,9 @@ contract TrinityExitGateway is ReentrancyGuard, Ownable {
 
             emit BatchCancelled(batchRoot, reason);
         } else {
-            // Challenge invalid: return to PENDING
+            // Challenge invalid: return to PENDING with FRESH challenge period
             batch.state = BatchState.PENDING;
+            batch.finalizedAt = block.timestamp + CHALLENGE_PERIOD;
         }
 
         emit ChallengeResolved(batchRoot, approved, reason);
@@ -363,28 +418,29 @@ contract TrinityExitGateway is ReentrancyGuard, Ownable {
     /**
      * @notice Verify Trinity 2-of-3 consensus for batch
      * @param batchRoot Batch identifier
+     * @param expectedTotal Sum of all exit amounts (validated by Trinity)
      * @param merkleProof Trinity consensus Merkle proof
      * @param trinityOperationId Trinity operation ID
      * @return valid True if 2-of-3 consensus achieved
      * 
      * @dev In production, this calls TrinityConsensusVerifier.verifyOperation()
-     * @dev For MVP, we trust keeper multisig (simplified)
+     * @dev Trinity validators independently compute sum of exit amounts and verify match
+     * @dev The operation data must encode both batchRoot AND expectedTotal for verification
+     * @dev For MVP, we create composite hash to bind batchRoot and expectedTotal together
      */
     function _verifyTrinityConsensus(
         bytes32 batchRoot,
+        uint256 expectedTotal,
         bytes32[] calldata merkleProof,
         bytes32 trinityOperationId
     ) internal view returns (bool valid) {
-        // MVP: Trust keeper multisig
-        // Production: Call Trinity verifier
-        // 
-        // ITrinityConsensus(trinityVerifier).verifyOperation(
-        //     trinityOperationId,
-        //     batchRoot,
-        //     merkleProof
-        // );
-
-        return merkleProof.length > 0 && trinityOperationId != bytes32(0);
+        // Call real Trinity batch verifier
+        return ITrinityBatchVerifier(trinityVerifier).verifyBatch(
+            batchRoot,
+            expectedTotal,
+            merkleProof,
+            trinityOperationId
+        );
     }
 
     // ===== EMERGENCY CONTROLS =====

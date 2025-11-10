@@ -1,11 +1,26 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/Pausable.sol";
 import "./IHTLC.sol";
+import "./ITrinityBatchVerifier.sol";
+
+// Arbitrum precompile for L2→L1 messaging
+interface ArbSys {
+    function sendTxToL1(address destination, bytes calldata data) external payable returns (uint256);
+}
+
+// L1 TrinityExitGateway interface for priority exits
+interface ITrinityExitGateway {
+    function claimPriorityExit(
+        bytes32 exitId,
+        address recipient,
+        uint256 amount,
+        bytes32 secretHash
+    ) external payable;
+}
 
 /**
  * @title HTLCArbToL1 - Exit-Batch Layer for Trinity Protocol
@@ -34,19 +49,26 @@ import "./IHTLC.sol";
  * - 6-hour challenge period before batch finalizes
  * - Trinity 2-of-3 consensus validates all batches
  */
-contract HTLCArbToL1 is ReentrancyGuard, Ownable {
-    using SafeERC20 for IERC20;
-
+contract HTLCArbToL1 is ReentrancyGuard, Pausable, Ownable {
     // ===== STATE VARIABLES =====
 
     /// @notice Reference to main HTLC contract
     IHTLC public immutable htlcBridge;
+    
+    /// @notice Trinity batch verifier for consensus validation
+    ITrinityBatchVerifier public immutable trinityVerifier;
+    
+    /// @notice L1 Gateway address for priority exits
+    address public immutable l1Gateway;
 
     /// @notice Exit request counter for collision resistance
     uint256 private exitCounter;
 
     /// @notice User nonce for front-run protection
     mapping(address => uint256) public userNonce;
+    
+    /// @notice Track exit IDs per batch for finalization
+    mapping(bytes32 => bytes32[]) public batchToExitIds;
 
     /// @notice Standard exit fee (paid to keeper)
     uint256 public constant EXIT_FEE = 0.0001 ether;
@@ -132,6 +154,8 @@ contract HTLCArbToL1 is ReentrancyGuard, Ownable {
         bytes32 indexed exitId,
         bytes32 indexed batchRoot
     );
+    
+    event BatchFinalized(bytes32 indexed batchRoot);
 
     event PriorityExitProcessed(
         bytes32 indexed exitId,
@@ -142,13 +166,19 @@ contract HTLCArbToL1 is ReentrancyGuard, Ownable {
     // ===== CONSTRUCTOR =====
 
     /**
-     * @notice Initialize HTLCArbToL1 with HTLC bridge reference
+     * @notice Initialize HTLCArbToL1 with HTLC bridge and Trinity verifier
      * @param _htlcBridge Address of HTLCChronosBridge on Arbitrum
+     * @param _trinityVerifier Address of Trinity batch verifier
+     * @param _l1Gateway Address of TrinityExitGateway on L1
      * @param _owner Initial owner (should be multi-sig)
      */
-    constructor(address _htlcBridge, address _owner) Ownable(_owner) {
+    constructor(address _htlcBridge, address _trinityVerifier, address _l1Gateway, address _owner) Ownable(_owner) {
         require(_htlcBridge != address(0), "Invalid HTLC address");
+        require(_trinityVerifier != address(0), "Invalid Trinity address");
+        require(_l1Gateway != address(0), "Invalid L1 gateway");
         htlcBridge = IHTLC(_htlcBridge);
+        trinityVerifier = ITrinityBatchVerifier(_trinityVerifier);
+        l1Gateway = _l1Gateway;
     }
 
     // ===== CORE FUNCTIONS =====
@@ -174,6 +204,7 @@ contract HTLCArbToL1 is ReentrancyGuard, Ownable {
         require(swap.state == IHTLC.SwapState.LOCKED || swap.state == IHTLC.SwapState.CONSENSUS_ACHIEVED, "Swap not active");
         require(swap.recipient == msg.sender, "Not swap recipient");
         require(swap.secretHash != bytes32(0), "Invalid secret hash");
+        require(swap.tokenAddress == address(0), "Only ETH supported");
         require(swapToExit[swapId] == bytes32(0), "Exit already requested");
 
         // Generate collision-resistant exit ID
@@ -186,7 +217,7 @@ contract HTLCArbToL1 is ReentrancyGuard, Ownable {
             userNonce[msg.sender] = currentUserNonce + 1;
         }
 
-        exitId = keccak256(abi.encodePacked(
+        exitId = keccak256(abi.encode(
             swapId,
             l1Recipient,
             swap.tokenAddress,
@@ -215,6 +246,9 @@ contract HTLCArbToL1 is ReentrancyGuard, Ownable {
         });
 
         swapToExit[swapId] = exitId;
+        
+        // Release HTLC funds to prevent double-spend
+        htlcBridge.releaseForExit(swapId);
 
         // Refund excess fee
         uint256 excess = msg.value - EXIT_FEE;
@@ -258,6 +292,7 @@ contract HTLCArbToL1 is ReentrancyGuard, Ownable {
         require(swap.state == IHTLC.SwapState.LOCKED || swap.state == IHTLC.SwapState.CONSENSUS_ACHIEVED, "Swap not active");
         require(swap.recipient == msg.sender, "Not swap recipient");
         require(swap.secretHash != bytes32(0), "Invalid secret hash");
+        require(swap.tokenAddress == address(0), "Only ETH supported");
         require(swapToExit[swapId] == bytes32(0), "Exit already requested");
 
         // Generate exit ID
@@ -270,7 +305,7 @@ contract HTLCArbToL1 is ReentrancyGuard, Ownable {
             userNonce[msg.sender] = currentUserNonce + 1;
         }
 
-        exitId = keccak256(abi.encodePacked(
+        exitId = keccak256(abi.encode(
             swapId,
             l1Recipient,
             swap.tokenAddress,
@@ -298,6 +333,21 @@ contract HTLCArbToL1 is ReentrancyGuard, Ownable {
         });
 
         swapToExit[swapId] = exitId;
+        
+        // Release HTLC funds to prevent double-spend  
+        htlcBridge.releaseForExit(swapId);
+
+        // Send to L1 immediately via Arbitrum bridge
+        ArbSys(0x0000000000000000000000000000000000000064).sendTxToL1{value: swap.amount}(
+            l1Gateway,
+            abi.encodeCall(
+                ITrinityExitGateway.claimPriorityExit,
+                (exitId, l1Recipient, swap.amount, swap.secretHash)
+            )
+        );
+        
+        // Mark as finalized (L1 will handle claim)
+        exitRequests[exitId].state = ExitState.FINALIZED;
 
         // Refund excess
         uint256 excess = msg.value - PRIORITY_EXIT_FEE;
@@ -323,38 +373,68 @@ contract HTLCArbToL1 is ReentrancyGuard, Ownable {
     }
 
     /**
-     * @notice Keeper marks exits as batched with Merkle root
+     * @notice Keeper marks exits as batched with Merkle root and Trinity verification
      * @param exitIds Array of exit IDs in this batch
      * @param batchRoot Merkle root of the batch
+     * @param expectedTotal Sum of all exit amounts
+     * @param merkleProof Trinity consensus Merkle proof
+     * @param trinityOpId Trinity operation ID
      * 
      * @dev Only owner (keeper multisig) can call this
      * @dev Batch size must be between MIN and MAX
+     * @dev Trinity 2-of-3 consensus validates batch integrity
      * @dev Starts challenge period countdown
      */
     function markExitsBatched(
         bytes32[] calldata exitIds,
-        bytes32 batchRoot
-    ) external onlyOwner nonReentrant {
+        bytes32 batchRoot,
+        uint256 expectedTotal,
+        bytes32[] calldata merkleProof,
+        bytes32 trinityOpId
+    ) external onlyOwner nonReentrant whenNotPaused {
         require(exitIds.length >= MIN_BATCH_SIZE, "Batch too small");
         require(exitIds.length <= MAX_BATCH_SIZE, "Batch too large");
         require(batchRoot != bytes32(0), "Invalid batch root");
         require(batchExitCount[batchRoot] == 0, "Batch already exists");
+        
+        // Verify Trinity 2-of-3 consensus for batch
+        require(
+            trinityVerifier.verifyBatch(batchRoot, expectedTotal, merkleProof, trinityOpId),
+            "Trinity consensus failed"
+        );
 
         uint256 count = 0;
+        uint256 totalAmount = 0;
+        
+        // Duplicate check: O(n²) complexity but acceptable for MAX_BATCH_SIZE=200
+        // Solidity doesn't support memory mappings, storage mapping would add gas overhead
+        // 200 exits = ~20k comparisons, still within gas limits
         for (uint256 i = 0; i < exitIds.length; i++) {
-            ExitRequest storage exit = exitRequests[exitIds[i]];
+            bytes32 exitId = exitIds[i];
+            
+            // Check for duplicates against previous entries
+            for (uint256 j = 0; j < i; j++) {
+                require(exitId != exitIds[j], "Duplicate exit in batch");
+            }
+            
+            ExitRequest storage exit = exitRequests[exitId];
             require(exit.state == ExitState.REQUESTED, "Exit not requested");
             require(!exit.isPriority, "Cannot batch priority exits");
 
             exit.state = ExitState.BATCHED;
             exit.batchRoot = batchRoot;
+            totalAmount += exit.amount;
             count++;
 
-            emit ExitBatched(exitIds[i], batchRoot, exitIds.length);
+            emit ExitBatched(exitId, batchRoot, exitIds.length);
         }
+        
+        // Verify totalAmount matches expectedTotal
+        require(totalAmount == expectedTotal, "Amount mismatch");
 
         batchExitCount[batchRoot] = count;
         batchFinalizedAt[batchRoot] = block.timestamp + CHALLENGE_PERIOD;
+        batchToExitIds[batchRoot] = exitIds;
     }
 
     /**
@@ -380,6 +460,33 @@ contract HTLCArbToL1 is ReentrancyGuard, Ownable {
 
         emit ExitChallenged(exitId, msg.sender, reason);
     }
+    
+    /**
+     * @notice Resolve challenge (owner only)
+     * @param exitId Exit to resolve
+     * @param approved True if challenge valid, false if invalid
+     * @param reason Resolution reason
+     */
+    function resolveChallenge(
+        bytes32 exitId,
+        bool approved,
+        string calldata reason
+    ) external onlyOwner nonReentrant {
+        ExitRequest storage exit = exitRequests[exitId];
+        require(exit.state == ExitState.CHALLENGED, "Not challenged");
+        
+        if (approved) {
+            // Challenge valid: invalidate exit
+            exit.state = ExitState.INVALID;
+        } else {
+            // Challenge rejected: return to BATCHED
+            exit.state = ExitState.BATCHED;
+        }
+        
+        emit ChallengeResolved(exitId, approved, reason);
+    }
+    
+    event ChallengeResolved(bytes32 indexed exitId, bool approved, string reason);
 
     /**
      * @notice Finalize batch after challenge period
@@ -395,9 +502,19 @@ contract HTLCArbToL1 is ReentrancyGuard, Ownable {
             "Challenge period active"
         );
 
-        // Note: Individual exits are marked FINALIZED when claimed on L1
-        // This function just enables L1 claims after challenge period
-        emit ExitFinalized(bytes32(0), batchRoot);
+        // Mark all exits as FINALIZED
+        bytes32[] memory exitIds = batchToExitIds[batchRoot];
+        for (uint256 i = 0; i < exitIds.length; i++) {
+            ExitRequest storage exit = exitRequests[exitIds[i]];
+            if (exit.state == ExitState.BATCHED) {
+                exit.state = ExitState.FINALIZED;
+            }
+        }
+        
+        // Clean up mapping
+        delete batchToExitIds[batchRoot];
+        
+        emit BatchFinalized(batchRoot);
     }
 
     // ===== VIEW FUNCTIONS =====
@@ -417,6 +534,30 @@ contract HTLCArbToL1 is ReentrancyGuard, Ownable {
     }
 
     /**
+     * @notice Mark exit as claimed (called by owner after L1 claim)
+     * @param exitId Exit that was claimed on L1
+     */
+    function markClaimed(bytes32 exitId) external onlyOwner {
+        ExitRequest storage exit = exitRequests[exitId];
+        require(exit.state == ExitState.FINALIZED, "Not finalized");
+        exit.state = ExitState.CLAIMED;
+    }
+    
+    /**
+     * @notice Emergency pause (owner only)
+     */
+    function pause() external onlyOwner {
+        _pause();
+    }
+    
+    /**
+     * @notice Unpause (owner only)
+     */
+    function unpause() external onlyOwner {
+        _unpause();
+    }
+
+    /**
      * @notice Withdraw collected fees (keeper revenue)
      */
     function withdrawFees(address payable recipient) external onlyOwner nonReentrant {
@@ -426,5 +567,18 @@ contract HTLCArbToL1 is ReentrancyGuard, Ownable {
 
         (bool sent,) = recipient.call{value: balance}("");
         require(sent, "Fee withdrawal failed");
+    }
+    
+    /**
+     * @notice Emergency withdraw stuck funds (when paused)
+     */
+    function emergencyWithdraw(address payable recipient) external onlyOwner nonReentrant {
+        require(paused(), "Not paused");
+        require(recipient != address(0), "Invalid recipient");
+        uint256 balance = address(this).balance;
+        require(balance > 0, "No balance");
+
+        (bool sent,) = recipient.call{value: balance}("");
+        require(sent, "Emergency withdrawal failed");
     }
 }

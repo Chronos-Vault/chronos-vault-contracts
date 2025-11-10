@@ -188,4 +188,11 @@ interface IHTLC {
      * @return available True if timelock expired and not executed
      */
     function isRefundAvailable(bytes32 swapId) external view returns (bool available);
+    
+    /**
+     * @notice Release swap funds for L1 exit (prevents double-spend)
+     * @param swapId Swap to release
+     * @dev Marks swap as exiting to prevent L2 claim while bridging to L1
+     */
+    function releaseForExit(bytes32 swapId) external;
 }
