@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.24;
+pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -190,13 +190,15 @@ contract TrinityExitGateway is ReentrancyGuard, Ownable {
         require(exitCount >= MIN_BATCH_SIZE, "Batch too small");
         require(exitCount <= MAX_BATCH_SIZE, "Batch too large");
         require(expectedTotal > 0, "Invalid expected total");
-        require(msg.value == expectedTotal, "Value mismatch");
         require(batches[batchRoot].state == BatchState.INVALID, "Batch exists");
 
-        // Verify Trinity 2-of-3 consensus
+        // MEDIUM-22 FIX: Verify Trinity 2-of-3 consensus BEFORE accepting ETH value
         // NOTE: Trinity validators verify that expectedTotal matches sum of exit amounts
         // This prevents underfunded batches from being submitted
         require(_verifyTrinityConsensus(batchRoot, expectedTotal, merkleProof, trinityOperationId), "Trinity consensus failed");
+        
+        // Check value AFTER Trinity verification to prevent gas griefing
+        require(msg.value == expectedTotal, "Value mismatch");
 
         uint256 finalizedAt = block.timestamp + CHALLENGE_PERIOD;
 
