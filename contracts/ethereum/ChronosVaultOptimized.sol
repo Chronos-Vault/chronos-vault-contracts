@@ -380,6 +380,8 @@ contract ChronosVaultOptimized is ERC4626, Ownable, ReentrancyGuard {
      * @notice Deposits MIN_BOOTSTRAP_DEPOSIT and mints shares to dead address
      */
     function initializeBootstrap() external {
+        // LOW-13 FIX: Only owner can initialize bootstrap
+        require(msg.sender == owner(), "Only owner can initialize bootstrap");
         require(!bootstrapInitialized, "Bootstrap already initialized");
         require(totalSupply() == 0, "Vault already has shares");
         require(totalAssets() == 0, "Vault already has assets");
