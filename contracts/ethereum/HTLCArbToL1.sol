@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.24;
+pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -160,6 +160,12 @@ contract HTLCArbToL1 is ReentrancyGuard, Pausable, Ownable {
     event PriorityExitProcessed(
         bytes32 indexed exitId,
         address l1Recipient,
+        uint256 amount
+    );
+    
+    event ExitCancelled(
+        bytes32 indexed exitId,
+        address indexed requester,
         uint256 amount
     );
 
@@ -514,6 +520,9 @@ contract HTLCArbToL1 is ReentrancyGuard, Pausable, Ownable {
         // Clean up mapping
         delete batchToExitIds[batchRoot];
         
+        // LOW-18 FIX: Clean up batchExitCount storage
+        delete batchExitCount[batchRoot];
+        
         emit BatchFinalized(batchRoot);
     }
 
@@ -580,5 +589,23 @@ contract HTLCArbToL1 is ReentrancyGuard, Pausable, Ownable {
 
         (bool sent,) = recipient.call{value: balance}("");
         require(sent, "Emergency withdrawal failed");
+    }
+    
+    // MEDIUM-16 FIX: 7-day timeout for stuck exits
+    uint256 public constant EXIT_TIMEOUT = 7 days;
+    
+    function claimStuckExit(bytes32 exitId) external nonReentrant {
+        ExitRequest storage exit = exitRequests[exitId];
+        
+        require(exit.requester == msg.sender, "Not your exit");
+        require(exit.state == ExitState.REQUESTED, "Not in REQUESTED state");
+        require(block.timestamp >= exit.requestedAt + EXIT_TIMEOUT, "Exit timeout not reached");
+        
+        exit.state = ExitState.CLAIMED;
+        
+        (bool refunded,) = payable(msg.sender).call{value: exit.amount}("");
+        require(refunded, "Refund failed");
+        
+        emit ExitCancelled(exitId, msg.sender, exit.amount);
     }
 }
