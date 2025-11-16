@@ -357,14 +357,23 @@ contract TrinityConsensusVerifier is ITrinityBatchVerifier, ReentrancyGuard {
         }
         
         // Transfer tokens into contract for DEPOSIT operations (ERC20 only, ETH already received)
+        uint256 actualReceived = amount; // Default to expected amount
         if (operationType == OperationType.DEPOSIT) {
             if (address(token) == address(0)) {
                 // v3.5.7 FIX #3: Remove vault ETH check - will handle gracefully in _executeOperation
                 // v3.5.3 HIGH FIX: Track pending ETH deposits
                 totalPendingDeposits += amount;
             } else {
-                // ERC20 deposit - transfer from user to contract
+                // HIGH-4 FIX: Check balance before/after for fee-on-transfer tokens
+                uint256 balanceBefore = token.balanceOf(address(this));
                 token.safeTransferFrom(msg.sender, address(this), amount);
+                uint256 balanceAfter = token.balanceOf(address(this));
+                actualReceived = balanceAfter - balanceBefore;
+                
+                // Ensure we received the expected amount (prevents deflationary token issues)
+                if (actualReceived != amount) {
+                    revert Errors.FeeOnTransferNotSupported(amount, actualReceived);
+                }
             }
         }
         

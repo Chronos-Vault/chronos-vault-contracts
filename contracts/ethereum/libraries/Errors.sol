@@ -71,6 +71,7 @@ library Errors {
     error DeadlineTooSoon(uint256 provided, uint256 minimum); // v3.5.3: Deadline validation
     error DeadlineTooLate(uint256 provided, uint256 maximum); // v3.5.3: Deadline validation
     error InvalidChainId(uint8 provided, uint8 expected); // v3.5.3: ChainId mismatch in proofs
+    error FeeOnTransferNotSupported(uint256 expected, uint256 received); // v3.5.17 HIGH FIX H-4: Deflationary token protection
     
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // 🔍 PROOF VALIDATION ERRORS (21) - Updated in v3.3

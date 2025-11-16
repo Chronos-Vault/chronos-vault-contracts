@@ -69,8 +69,10 @@ contract EmergencyMultiSig {
         uint256 createdAt;
         uint256 executionTime; // Time-locked
         bool executed;
-        mapping(address => bool) signatures;
-        uint8 signatureCount;
+        mapping(address => bool) signatures; // Execution approvals
+        uint8 signatureCount; // Execution approval count
+        mapping(address => bool) cancellationSignatures; // CRITICAL FIX: Separate cancellation tracking
+        uint8 cancellationCount; // CRITICAL FIX: Separate cancellation counter
     }
     
     // Mappings
@@ -276,7 +278,35 @@ contract EmergencyMultiSig {
     }
     
     /**
+     * @dev Sign proposal for cancellation (requires 2-of-3 consensus)
+     * CRITICAL FIX: Separate cancellation signatures from execution signatures
+     */
+    function signCancellation(uint256 proposalId)
+        external
+        onlySigner
+        proposalExists(proposalId)
+    {
+        EmergencyProposal storage proposal = proposals[proposalId];
+        require(!proposal.executed, "Proposal already executed");
+        require(!proposal.cancellationSignatures[msg.sender], "Already signed cancellation");
+        
+        // CRITICAL FIX: Use separate cancellation tracking
+        proposal.cancellationSignatures[msg.sender] = true;
+        proposal.cancellationCount++;
+        
+        emit EmergencyProposalSigned(proposalId, msg.sender, proposal.cancellationCount);
+        
+        // Auto-cancel if 2-of-3 cancellation signatures reached
+        if (proposal.cancellationCount >= REQUIRED_SIGNATURES) {
+            proposal.executed = true;
+            emit EmergencyProposalCancelled(proposalId, msg.sender);
+        }
+    }
+    
+    /**
+     * @dev DEPRECATED: Use signCancellation() instead
      * @dev Cancel proposal (requires 2-of-3 consensus)
+     * CRITICAL FIX: Uses separate cancellation counter, not execution counter
      */
     function cancelProposal(uint256 proposalId) 
         external 
@@ -285,6 +315,8 @@ contract EmergencyMultiSig {
     {
         EmergencyProposal storage proposal = proposals[proposalId];
         require(!proposal.executed, "Proposal already executed");
+        // CRITICAL FIX: Check cancellation counter, not execution counter
+        require(proposal.cancellationCount >= REQUIRED_SIGNATURES, "Insufficient cancellation signatures (need 2-of-3)");
         
         // Mark as executed (cancelled)
         proposal.executed = true;

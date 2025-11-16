@@ -920,22 +920,17 @@ contract ChronosVaultOptimized is ERC4626, Ownable, ReentrancyGuard {
         address receiver = request.receiver;
         address _owner = request.owner;
         
-        // SECURITY FIX: Use internal _withdraw to bypass allowance checks
+        // CRITICAL FIX C-2: Direct burn and transfer to bypass allowance checks
         // Multi-sig approval replaces individual owner approval
         // Calculate shares needed for the withdrawal amount
         uint256 shares = previewWithdraw(amount);
         
-        // Call internal _withdraw which:
-        // 1. Burns shares from owner
-        // 2. Transfers assets to receiver
-        // 3. Does NOT check allowances (bypassed by multi-sig approval)
-        super._withdraw({
-            caller: address(this),
-            receiver: receiver,
-            owner: _owner,
-            assets: amount,
-            shares: shares
-        });
+        // Direct ERC-4626 flow bypassing allowance:
+        // 1. Burn shares from owner (no allowance check)
+        _burn(_owner, shares);
+        
+        // 2. Transfer assets to receiver
+        IERC20(asset()).safeTransfer(receiver, amount);
         
         emit WithdrawalExecuted(_requestId, receiver, amount);
     }

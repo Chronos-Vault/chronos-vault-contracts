@@ -1070,10 +1070,16 @@ contract ChronosVault is ERC4626, Ownable, ReentrancyGuard {
         
         request.executed = true;
         
-        // Transfer assets to the receiver
-        // owner() parameter is correct: all shares belong to vault owner
+        // CRITICAL FIX C-2: Direct burn and transfer to bypass allowance checks
+        // Multi-sig approval replaces individual owner approval
         uint256 shares = convertToShares(request.amount);
-        super._withdraw(msg.sender, request.receiver, owner(), request.amount, shares);
+        
+        // Direct ERC-4626 flow bypassing allowance:
+        // 1. Burn shares from vault owner (no allowance check)
+        _burn(owner(), shares);
+        
+        // 2. Transfer assets to receiver
+        IERC20(asset()).safeTransfer(request.receiver, request.amount);
         
         emit WithdrawalExecuted(_requestId, request.receiver, request.amount);
     }
