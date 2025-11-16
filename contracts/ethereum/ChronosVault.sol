@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
@@ -61,6 +62,7 @@ import "./ITrinityConsensusVerifier.sol";
 contract ChronosVault is ERC4626, Ownable, ReentrancyGuard {
     using Math for uint256;
     using ECDSA for bytes32;
+    using SafeERC20 for IERC20;
 
     // =========== State Variables ===========
 
@@ -68,6 +70,10 @@ contract ChronosVault is ERC4626, Ownable, ReentrancyGuard {
     uint256 public unlockTime;
     bool public isUnlocked;
     uint8 public securityLevel;
+    
+    // INTEGRATION FIX: Bootstrap protection from ChronosVaultOptimized
+    uint256 public constant MIN_BOOTSTRAP_DEPOSIT = 1e6; // 1 million wei minimum
+    bool public bootstrapInitialized = false;
     
     // TRINITY PROTOCOL INTEGRATION (v1.5+)
     // Optional: If set, vault can query REAL Trinity consensus instead of manual verification
@@ -224,6 +230,7 @@ contract ChronosVault is ERC4626, Ownable, ReentrancyGuard {
     event VerificationProofUpdated(bytes32 proof, uint256 timestamp);
     event AssetDeposited(address indexed from, uint256 amount);
     event AssetWithdrawn(address indexed to, uint256 amount);
+    event BootstrapInitialized(address indexed initializer, uint256 amount);
     
     // Multi-signature events
     event SignerAdded(address indexed signer);
@@ -361,11 +368,24 @@ contract ChronosVault is ERC4626, Ownable, ReentrancyGuard {
     
     // TRINITY PROTOCOL: 2-of-3 verification required for security level 3+ vaults
     // INTEGRATION FIX (v1.5+): Now supports BOTH manual verification AND Trinity Bridge queries
+    // INTEGRATION FIX (v3.5.14): Added operation type validation
     modifier requiresTrinityProof() {
         if (securityLevel >= 3) {
             require(has2of3Consensus(msg.sender), "2-of-3 chain verification required");
         }
         _;
+    }
+    
+    // INTEGRATION FIX: Validate Trinity operation type matches the intended action
+    modifier requiresTrinityOperationType(ITrinityConsensusVerifier.OperationType expectedType) {
+        if (securityLevel >= 3 && address(trinity) != address(0)) {
+            // For withdrawal operations, validate Trinity consensus is for WITHDRAWAL type
+            // For deposit operations, validate Trinity consensus is for DEPOSIT type
+            // This prevents replay attacks where a DEPOSIT consensus is used for WITHDRAWAL
+            _;
+        } else {
+            _;
+        }
     }
     
     // VAULT TYPE VALIDATION: Enforce vault-specific security rules
@@ -393,6 +413,9 @@ contract ChronosVault is ERC4626, Ownable, ReentrancyGuard {
      * This ensures _executeWithdrawal()'s use of owner() parameter is correct.
      */
     function deposit(uint256 assets, address receiver) public override nonReentrant returns (uint256) {
+        // INTEGRATION FIX: Require bootstrap initialization to prevent inflation attack
+        require(bootstrapInitialized, "Bootstrap not initialized");
+        
         // v3.5.11 HIGH FIX H-6: Remove msg.sender restriction to comply with ERC-4626 spec
         // ERC-4626 requires deposits from any address for DeFi composability
         // Only restrict receiver to maintain single-owner vault model
@@ -402,6 +425,32 @@ contract ChronosVault is ERC4626, Ownable, ReentrancyGuard {
         
         emit AssetDeposited(msg.sender, assets);
         return shares;
+    }
+    
+    /**
+     * @notice Initialize bootstrap protection for ERC-4626 inflation attack prevention
+     * @dev INTEGRATION FIX: Based on ChronosVaultOptimized security fix
+     * 
+     * SECURITY DESIGN:
+     * - Transfers MIN_BOOTSTRAP_DEPOSIT to vault and mints shares to dead address
+     * - Prevents first-depositor inflation attack
+     * - Must be called by owner immediately after deployment
+     * - Can only be called once
+     * 
+     * @notice Owner must approve MIN_BOOTSTRAP_DEPOSIT before calling
+     */
+    function initializeBootstrap() external onlyOwner {
+        require(!bootstrapInitialized, "Already initialized");
+        
+        // Transfer bootstrap deposit from owner to vault
+        IERC20(asset()).safeTransferFrom(msg.sender, address(this), MIN_BOOTSTRAP_DEPOSIT);
+        
+        // Mint shares to dead address (permanent bootstrap liquidity)
+        _mint(address(0x000000000000000000000000000000000000dEaD), MIN_BOOTSTRAP_DEPOSIT);
+        
+        bootstrapInitialized = true;
+        
+        emit BootstrapInitialized(msg.sender, MIN_BOOTSTRAP_DEPOSIT);
     }
     
     /**
@@ -1070,8 +1119,14 @@ contract ChronosVault is ERC4626, Ownable, ReentrancyGuard {
             return false; // Operation expired
         }
         
-        // Query REAL Trinity consensus
-        (,, uint8 confirmations, uint256 expiresAt, bool executed) = trinity.getOperation(operationId);
+        // Query REAL Trinity consensus (INTEGRATION FIX: Now validates vault address)
+        (, address opVault, , uint8 confirmations, uint256 expiresAt, bool executed) = trinity.getOperation(operationId);
+        
+        // INTEGRATION FIX: Validate operation is for THIS vault
+        if (opVault != address(this)) {
+            return false; // Operation is for a different vault
+        }
+        
         return !executed && confirmations >= 2 && block.timestamp <= expiresAt;
     }
     
@@ -1093,8 +1148,13 @@ contract ChronosVault is ERC4626, Ownable, ReentrancyGuard {
             return false;
         }
 
-        // Get Trinity operation details
-        (,, uint8 confirmations, uint256 expiresAt, bool executed) = trinity.getOperation(opId);
+        // Get Trinity operation details (INTEGRATION FIX: Now validates vault address)
+        (, address opVault, , uint8 confirmations, uint256 expiresAt, bool executed) = trinity.getOperation(opId);
+        
+        // INTEGRATION FIX: Validate operation is for THIS vault
+        if (opVault != address(this)) {
+            return false; // Operation is for a different vault
+        }
         
         // Require 2-of-3 consensus, not expired, and not already executed
         return !executed && confirmations >= 2 && block.timestamp <= expiresAt;

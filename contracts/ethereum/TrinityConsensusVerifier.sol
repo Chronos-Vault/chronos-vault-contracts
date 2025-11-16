@@ -187,8 +187,8 @@ contract TrinityConsensusVerifier is ITrinityBatchVerifier, ReentrancyGuard {
     uint256 public totalFailedFees; // Total ETH reserved for failed fee claims
     uint256 public totalPendingDeposits; // v3.5.3: Total ETH in pending DEPOSIT operations (not yet executed/cancelled)
     
-    // v3.5.5 HIGH FIX H-3: Per-operation deposit tracking to prevent race conditions
-    mapping(bytes32 => bool) public depositProcessed; // Track if deposit has been executed or cancelled
+    // v3.5.15 AUDIT FIX C-2: REMOVED depositProcessed mapping - use operation status as single source of truth
+    // This prevents race conditions between _executeOperation() and emergencyCancelOperation()
     
     // v3.5.4: Track fee portion of failed refunds separately for accounting
     mapping(address => uint256) public failedFeePortions; // Fee-only portion of failedFees (for collectedFees reconciliation)
@@ -577,22 +577,21 @@ contract TrinityConsensusVerifier is ITrinityBatchVerifier, ReentrancyGuard {
             revert Errors.UnauthorizedVaultAccess(op.user, op.vault);
         }
         
-        // v3.5.5 CRITICAL FIX C-3: Update ALL state BEFORE external transfers (Checks-Effects-Interactions)
-        op.status = OperationStatus.EXECUTED;
-        
-        // v3.5.3 NEW CRITICAL FIX: Handle DEPOSIT operations
+        // v3.5.15 AUDIT FIX C-2: Process deposits BEFORE status update (prevents stuck funds)
+        // If decrement reverts, status never gets set - ensures accounting stays consistent
         if (op.operationType == OperationType.DEPOSIT) {
             if (address(op.token) == address(0)) {
-                // v3.5.5 HIGH FIX H-3: Check if deposit already processed (prevents race condition)
-                if (!depositProcessed[operationId]) {
-                    if (totalPendingDeposits < op.amount) {
-                        revert Errors.InsufficientBalance();
-                    }
-                    totalPendingDeposits -= op.amount;
-                    depositProcessed[operationId] = true;
+                // Check and decrement FIRST - if this reverts, entire transaction rolls back
+                if (totalPendingDeposits < op.amount) {
+                    revert Errors.InsufficientBalance();
                 }
+                totalPendingDeposits -= op.amount;
             }
         }
+        
+        // v3.5.15 AUDIT FIX C-2: Set status AFTER accounting (atomic guard)
+        // If we reach here, accounting succeeded - safe to mark as executed
+        op.status = OperationStatus.EXECUTED;
         
         // v3.5.6 CRITICAL FIX C-2: Validate invariant after all state updates
         _validateBalanceInvariant();
@@ -820,22 +819,21 @@ contract TrinityConsensusVerifier is ITrinityBatchVerifier, ReentrancyGuard {
         if (op.status == OperationStatus.EXECUTED) revert Errors.OperationAlreadyExecuted(operationId);
         if (op.status == OperationStatus.CANCELLED) revert Errors.OperationAlreadyCanceled();
         
-        // v3.5.6 CRITICAL FIX C-3: Update ALL state BEFORE external calls (strict CEI)
-        op.status = OperationStatus.CANCELLED;
-        
-        // Handle deposits: update accounting state first
+        // v3.5.15 AUDIT FIX C-2: Process deposits BEFORE status update (prevents stuck funds)
+        // If decrement reverts, status never gets set - ensures accounting stays consistent
         if (op.operationType == OperationType.DEPOSIT) {
             if (address(op.token) == address(0)) {
-                // Update pending deposits accounting
-                if (!depositProcessed[operationId]) {
-                    if (totalPendingDeposits < op.amount) {
-                        revert Errors.InsufficientBalance();
-                    }
-                    totalPendingDeposits -= op.amount;
-                    depositProcessed[operationId] = true;
+                // Check and decrement FIRST - if this reverts, entire transaction rolls back
+                if (totalPendingDeposits < op.amount) {
+                    revert Errors.InsufficientBalance();
                 }
+                totalPendingDeposits -= op.amount;
             }
         }
+        
+        // v3.5.15 AUDIT FIX C-2: Set status AFTER accounting (atomic guard)
+        // If we reach here, accounting succeeded - safe to mark as cancelled
+        op.status = OperationStatus.CANCELLED;
         
         // Always decrement collected fees BEFORE external call
         collectedFees -= op.fee;
@@ -903,22 +901,21 @@ contract TrinityConsensusVerifier is ITrinityBatchVerifier, ReentrancyGuard {
         if (op.chainConfirmations > 0) revert Errors.TooLateToCancel();
         if (op.status != OperationStatus.PENDING) revert Errors.InvalidStatus();
         
-        // v3.5.6 CRITICAL FIX C-3: Update ALL state BEFORE external calls (strict CEI)
-        op.status = OperationStatus.CANCELLED;
-        
-        // Handle deposits: update accounting state first
+        // v3.5.15 AUDIT FIX C-2: Process deposits BEFORE status update (prevents stuck funds)
+        // If decrement reverts, status never gets set - ensures accounting stays consistent
         if (op.operationType == OperationType.DEPOSIT) {
             if (address(op.token) == address(0)) {
-                // Update pending deposits accounting
-                if (!depositProcessed[operationId]) {
-                    if (totalPendingDeposits < op.amount) {
-                        revert Errors.InsufficientBalance();
-                    }
-                    totalPendingDeposits -= op.amount;
-                    depositProcessed[operationId] = true;
+                // Check and decrement FIRST - if this reverts, entire transaction rolls back
+                if (totalPendingDeposits < op.amount) {
+                    revert Errors.InsufficientBalance();
                 }
+                totalPendingDeposits -= op.amount;
             }
         }
+        
+        // v3.5.15 AUDIT FIX C-2: Set status AFTER accounting (atomic guard)
+        // If we reach here, accounting succeeded - safe to mark as cancelled
+        op.status = OperationStatus.CANCELLED;
         
         // Always decrement collected fees BEFORE external call
         collectedFees -= op.fee;
@@ -1066,8 +1063,27 @@ contract TrinityConsensusVerifier is ITrinityBatchVerifier, ReentrancyGuard {
     
     // ===== VIEW FUNCTIONS =====
     
-    function getOperation(bytes32 operationId) external view returns (Operation memory) {
-        return operations[operationId];
+    function getOperation(bytes32 operationId) 
+        external 
+        view 
+        returns (
+            address user,
+            address vault,
+            uint256 amount,
+            uint8 chainConfirmations,
+            uint256 expiresAt,
+            bool executed
+        ) 
+    {
+        Operation memory op = operations[operationId];
+        return (
+            op.user,
+            op.vault,  // INTEGRATION FIX: Now returns vault address
+            op.amount,
+            op.chainConfirmations,
+            op.expiresAt,
+            op.status == OperationStatus.EXECUTED
+        );
     }
     
     function getMerkleRoot(uint8 chainId) external view returns (bytes32) {

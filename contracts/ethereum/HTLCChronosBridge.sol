@@ -428,8 +428,8 @@ contract HTLCChronosBridge is IHTLC, IChronosVault, ReentrancyGuard, Pausable, O
         require(block.timestamp <= swap.timelock, "Expired"); // SECURITY FIX: <= allows last second
         require(keccak256(abi.encodePacked(secret)) == swap.secretHash, "Invalid secret");
 
-        // Check Trinity 2-of-3 consensus
-        (,, uint8 chainConfirmations,,) = trinityBridge.getOperation(swap.operationId);
+        // Check Trinity 2-of-3 consensus (INTEGRATION FIX: Updated for 6-tuple return)
+        (,,, uint8 chainConfirmations,,) = trinityBridge.getOperation(swap.operationId);
         require(chainConfirmations >= REQUIRED_CONSENSUS, "Trinity consensus required");
 
         swap.state = SwapState.EXECUTED;
@@ -473,7 +473,7 @@ contract HTLCChronosBridge is IHTLC, IChronosVault, ReentrancyGuard, Pausable, O
         // - If Trinity fails/reverts: Funds temporarily locked (ACCEPTABLE)
         // - Solution: Upgrade/fix Trinity contract, not bypass security
         // - Trade-off: Security over Liveness (prevents double-spend attacks)
-        (,,,, bool executed) = trinityBridge.getOperation(swap.operationId);
+        (,,,,, bool executed) = trinityBridge.getOperation(swap.operationId);
         require(!executed, "Trinity operation already executed - cannot refund");
 
         swap.state = SwapState.REFUNDED;
@@ -519,7 +519,7 @@ contract HTLCChronosBridge is IHTLC, IChronosVault, ReentrancyGuard, Pausable, O
         // - Solution: Upgrade/fix Trinity contract, not bypass security
         // - Trade-off: Security over Liveness (prevents double-spend attacks)
         // - The 67-day emergency delay provides time to fix Trinity if needed
-        (,, uint8 chainConfirmations,, bool executed) = trinityBridge.getOperation(swap.operationId);
+        (,,, uint8 chainConfirmations,, bool executed) = trinityBridge.getOperation(swap.operationId);
         require(chainConfirmations < REQUIRED_CONSENSUS, "Trinity consensus achieved - use claimHTLC");
         require(!executed, "Trinity operation already executed - cannot refund");
 
@@ -580,7 +580,7 @@ contract HTLCChronosBridge is IHTLC, IChronosVault, ReentrancyGuard, Pausable, O
 
     function checkConsensus(bytes32 swapId) external view override returns (bool approved, uint8 confirmations) {
         HTLCSwap storage swap = htlcSwaps[swapId];
-        (,, uint8 chainConfirmations,,) = trinityBridge.getOperation(swap.operationId);
+        (,,, uint8 chainConfirmations,,) = trinityBridge.getOperation(swap.operationId);
         return (chainConfirmations >= REQUIRED_CONSENSUS, chainConfirmations);
     }
 

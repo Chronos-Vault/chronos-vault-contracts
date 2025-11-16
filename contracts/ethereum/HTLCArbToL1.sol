@@ -253,8 +253,20 @@ contract HTLCArbToL1 is ReentrancyGuard, Pausable, Ownable {
 
         swapToExit[swapId] = exitId;
         
-        // Release HTLC funds to prevent double-spend
-        htlcBridge.releaseForExit(swapId);
+        // INTEGRATION FIX: Release HTLC funds with proper error handling
+        try htlcBridge.releaseForExit(swapId) {
+            // Success - HTLC funds released
+        } catch Error(string memory reason) {
+            // Rollback exit request on failure
+            delete exitRequests[exitId];
+            delete swapToExit[swapId];
+            revert(string.concat("HTLC release failed: ", reason));
+        } catch (bytes memory) {
+            // Rollback exit request on failure
+            delete exitRequests[exitId];
+            delete swapToExit[swapId];
+            revert("HTLC release failed");
+        }
 
         // Refund excess fee
         uint256 excess = msg.value - EXIT_FEE;
@@ -340,8 +352,20 @@ contract HTLCArbToL1 is ReentrancyGuard, Pausable, Ownable {
 
         swapToExit[swapId] = exitId;
         
-        // Release HTLC funds to prevent double-spend  
-        htlcBridge.releaseForExit(swapId);
+        // INTEGRATION FIX: Release HTLC funds with proper error handling
+        try htlcBridge.releaseForExit(swapId) {
+            // Success - HTLC funds released
+        } catch Error(string memory reason) {
+            // Rollback exit request on failure
+            delete exitRequests[exitId];
+            delete swapToExit[swapId];
+            revert(string.concat("HTLC release failed: ", reason));
+        } catch (bytes memory) {
+            // Rollback exit request on failure
+            delete exitRequests[exitId];
+            delete swapToExit[swapId];
+            revert("HTLC release failed");
+        }
 
         // Send to L1 immediately via Arbitrum bridge
         ArbSys(0x0000000000000000000000000000000000000064).sendTxToL1{value: swap.amount}(

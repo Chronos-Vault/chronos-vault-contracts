@@ -76,7 +76,8 @@ contract TrinityExitGateway is ReentrancyGuard, Ownable {
     mapping(bytes32 => Batch) public batches;
 
     /// @notice Track claimed exits to prevent double-claims
-    mapping(bytes32 => mapping(bytes32 => bool)) public exitClaimed; // batchRoot => exitId => claimed
+    /// @dev v3.5.15 AUDIT FIX C-3: Track by full leaf hash to prevent Merkle proof malleability
+    mapping(bytes32 => mapping(bytes32 => bool)) public exitClaimed; // batchRoot => leafHash => claimed
 
     /// @notice Challenge period duration (6 hours)
     uint256 public constant CHALLENGE_PERIOD = 6 hours;
@@ -253,24 +254,30 @@ contract TrinityExitGateway is ReentrancyGuard, Ownable {
         }
         
         require(batch.state == BatchState.FINALIZED, "Batch not finalized");
-        require(!exitClaimed[batchRoot][exitId], "Exit already claimed");
         require(recipient != address(0), "Invalid recipient");
         require(amount > 0, "Invalid amount");
+        
+        // v3.5.15 AUDIT FIX C-3: Construct leaf hash FIRST for claim tracking
+        // This prevents Merkle malleability attacks where multiple exits with same exitId
+        // but different (recipient, amount) could be claimed
+        bytes32 innerHash = keccak256(abi.encode(exitId, recipient, amount));
+        bytes32 leaf = keccak256(bytes.concat(innerHash));
+        
+        // v3.5.15 AUDIT FIX C-3: Check claimed status using FULL leaf hash (not just exitId)
+        require(!exitClaimed[batchRoot][leaf], "Exit already claimed");
         
         // Prevent over-claims
         require(batch.totalValue - batch.claimedValue >= amount, "Insufficient batch funds");
 
         // Verify Merkle proof with DOUBLE HASH (matches OpenZeppelin StandardMerkleTree)
         // Prevents second preimage attacks
-        bytes32 innerHash = keccak256(abi.encode(exitId, recipient, amount));
-        bytes32 leaf = keccak256(bytes.concat(innerHash));
         require(
             merkleProof.verify(batchRoot, leaf),
             "Invalid Merkle proof"
         );
 
-        // Update accounting
-        exitClaimed[batchRoot][exitId] = true;
+        // v3.5.15 AUDIT FIX C-3: Update accounting using FULL leaf hash
+        exitClaimed[batchRoot][leaf] = true;
         batch.claimedValue += amount;
 
         // Transfer funds
@@ -300,13 +307,18 @@ contract TrinityExitGateway is ReentrancyGuard, Ownable {
         // Use special batchRoot for priority exits
         bytes32 priorityBatchRoot = bytes32(0);
         
-        require(!exitClaimed[priorityBatchRoot][exitId], "Exit already claimed");
         require(recipient != address(0), "Invalid recipient");
         require(amount > 0, "Invalid amount");
         require(msg.value == amount, "Amount mismatch");
         
-        // Mark as claimed
-        exitClaimed[priorityBatchRoot][exitId] = true;
+        // v3.5.15 AUDIT FIX C-3: Construct leaf hash for claim tracking
+        bytes32 innerHash = keccak256(abi.encode(exitId, recipient, amount));
+        bytes32 leaf = keccak256(bytes.concat(innerHash));
+        
+        require(!exitClaimed[priorityBatchRoot][leaf], "Exit already claimed");
+        
+        // v3.5.15 AUDIT FIX C-3: Mark as claimed using FULL leaf hash
+        exitClaimed[priorityBatchRoot][leaf] = true;
 
         // Transfer funds
         (bool sent,) = payable(recipient).call{value: amount}("");
@@ -492,9 +504,23 @@ contract TrinityExitGateway is ReentrancyGuard, Ownable {
 
     /**
      * @notice Check if exit has been claimed
+     * @dev v3.5.15 AUDIT FIX C-3: Now requires full exit parameters to compute leaf hash
+     * @param batchRoot Merkle root of the batch
+     * @param exitId Exit identifier
+     * @param recipient Exit recipient address
+     * @param amount Exit amount
+     * @return claimed True if exit has been claimed
      */
-    function isExitClaimed(bytes32 batchRoot, bytes32 exitId) external view returns (bool) {
-        return exitClaimed[batchRoot][exitId];
+    function isExitClaimed(
+        bytes32 batchRoot, 
+        bytes32 exitId, 
+        address recipient, 
+        uint256 amount
+    ) external view returns (bool claimed) {
+        // Compute leaf hash same way as claimExit()
+        bytes32 innerHash = keccak256(abi.encode(exitId, recipient, amount));
+        bytes32 leaf = keccak256(bytes.concat(innerHash));
+        return exitClaimed[batchRoot][leaf];
     }
 
     /**
