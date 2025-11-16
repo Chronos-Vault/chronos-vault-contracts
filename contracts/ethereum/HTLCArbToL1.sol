@@ -69,6 +69,10 @@ contract HTLCArbToL1 is ReentrancyGuard, Pausable, Ownable {
     
     /// @notice Track exit IDs per batch for finalization
     mapping(bytes32 => bytes32[]) public batchToExitIds;
+    
+    /// @notice Temporary mapping for O(n) duplicate detection (cleared after use)
+    /// @dev SECURITY FIX H-01: Prevents O(n²) DoS attack on batch submission
+    mapping(bytes32 => bool) private tempSeenExits;
 
     /// @notice Standard exit fee (paid to keeper)
     uint256 public constant EXIT_FEE = 0.0001 ether;
@@ -308,6 +312,10 @@ contract HTLCArbToL1 is ReentrancyGuard, Pausable, Ownable {
         // Get swap details
         IHTLC.HTLCSwap memory swap = htlcBridge.getHTLC(swapId);
         require(swap.state == IHTLC.SwapState.LOCKED || swap.state == IHTLC.SwapState.CONSENSUS_ACHIEVED, "Swap not active");
+        
+        // SECURITY FIX M-04: Check timelock hasn't expired (prevents race with refund)
+        require(block.timestamp < swap.timelock, "HTLC timelock expired, use refund");
+        
         require(swap.recipient == msg.sender, "Not swap recipient");
         require(swap.secretHash != bytes32(0), "Invalid secret hash");
         require(swap.tokenAddress == address(0), "Only ETH supported");
@@ -436,16 +444,14 @@ contract HTLCArbToL1 is ReentrancyGuard, Pausable, Ownable {
         uint256 count = 0;
         uint256 totalAmount = 0;
         
-        // Duplicate check: O(n²) complexity but acceptable for MAX_BATCH_SIZE=200
-        // Solidity doesn't support memory mappings, storage mapping would add gas overhead
-        // 200 exits = ~20k comparisons, still within gas limits
+        // SECURITY FIX H-01: O(n) duplicate check using storage mapping
+        // Prevents DoS attack from O(n²) nested loop with large batches
         for (uint256 i = 0; i < exitIds.length; i++) {
             bytes32 exitId = exitIds[i];
             
-            // Check for duplicates against previous entries
-            for (uint256 j = 0; j < i; j++) {
-                require(exitId != exitIds[j], "Duplicate exit in batch");
-            }
+            // O(1) duplicate check
+            require(!tempSeenExits[exitId], "Duplicate exit in batch");
+            tempSeenExits[exitId] = true;
             
             ExitRequest storage exit = exitRequests[exitId];
             require(exit.state == ExitState.REQUESTED, "Exit not requested");
@@ -465,6 +471,11 @@ contract HTLCArbToL1 is ReentrancyGuard, Pausable, Ownable {
         batchExitCount[batchRoot] = count;
         batchFinalizedAt[batchRoot] = block.timestamp + CHALLENGE_PERIOD;
         batchToExitIds[batchRoot] = exitIds;
+        
+        // SECURITY FIX H-01: Clean up temporary mapping to prevent storage bloat
+        for (uint256 i = 0; i < exitIds.length; i++) {
+            delete tempSeenExits[exitIds[i]];
+        }
     }
 
     /**

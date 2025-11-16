@@ -257,7 +257,11 @@ contract EmergencyMultiSig {
         // Mark as executed
         proposal.executed = true;
         
-        // Execute action
+        // SECURITY NOTE M-02: Raw low-level call for flexibility but with risks
+        // This bypasses type-checking and interface matching for maximum flexibility
+        // Risk: Target contract changes or custom errors may cause unexpected behavior
+        // Mitigation: All target contracts MUST be thoroughly audited before deployment
+        // Emergency multi-sig requires this flexibility for unforeseen scenarios
         (bool success, ) = proposal.targetContract.call(proposal.callData);
         require(success, "Emergency action failed");
         

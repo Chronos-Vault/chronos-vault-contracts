@@ -553,7 +553,7 @@ contract ChronosVault is ERC4626, Ownable, ReentrancyGuard {
         uint8 chainId,
         bytes32 verificationHash,
         bytes32[] calldata merkleProof
-    ) external {
+    ) external onlyOwner { // SECURITY FIX M-01: Restrict to owner only
         require(chainId >= 1 && chainId <= 3, "Invalid chain ID");
         require(verificationHash != bytes32(0), "Invalid verification hash");
         require(merkleProof.length > 0, "Merkle proof required");
@@ -712,9 +712,8 @@ contract ChronosVault is ERC4626, Ownable, ReentrancyGuard {
      * @dev Internal function to collect accrued fees
      */
     function _collectFees() internal {
-        if (lastFeeCollection == block.timestamp) {
-            return;
-        }
+        // SECURITY FIX M-03: Removed block.timestamp check (prevented front-run DoS)
+        // Fee collection is idempotent - the timeElapsed logic below handles correctness
         
         uint256 totalAssets = totalAssets();
         if (totalAssets == 0) {
