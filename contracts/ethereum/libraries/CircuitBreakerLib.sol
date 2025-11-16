@@ -24,32 +24,34 @@ library CircuitBreakerLib {
     
     /**
      * @notice Detects volume spike anomaly (3x normal volume)
-     * @dev Trinity Protocol defense layer - prevents sudden large operations
+     * @dev HIGH-1 FIX: Added operationCount parameter for accurate average calculation
      * @param amount Current operation amount
      * @param totalVolume24h Rolling 24h volume
      * @param volumeSpikeThreshold Threshold multiplier (default: 3x)
+     * @param operationCount Number of operations in 24h window (min 1)
      * @return isAnomaly True if volume spike detected
      */
     function checkVolumeAnomaly(
         uint256 amount,
         uint128 totalVolume24h,
-        uint256 volumeSpikeThreshold
+        uint256 volumeSpikeThreshold,
+        uint256 operationCount
     ) internal pure returns (bool) {
         // Prevent division by zero - first operation is never anomalous
         if (totalVolume24h == 0) {
             return false;
         }
         
-        // Calculate average operation size (approximation)
-        // If current amount > threshold * average, it's an anomaly
-        uint256 averageOp = uint256(totalVolume24h) / 10; // Assume ~10 ops/24h
+        // HIGH-1 FIX: Use real operation count for accurate average
+        uint256 ops = operationCount > 0 ? operationCount : 1;
+        uint256 averageOp = uint256(totalVolume24h) / ops;
         
         return amount > (averageOp * volumeSpikeThreshold);
     }
     
     /**
      * @notice Detects high proof failure rate (>30%)
-     * @dev Trinity Protocol defense layer - prevents spam attacks
+     * @dev MEDIUM-2 FIX: Lowered threshold to 3 proofs to prevent spam attack
      * @param totalProofs Total proofs submitted in last hour
      * @param failedProofs Failed proofs in last hour
      * @return isAnomaly True if failure rate exceeds 30%
@@ -58,8 +60,9 @@ library CircuitBreakerLib {
         uint128 totalProofs,
         uint128 failedProofs
     ) internal pure returns (bool) {
-        // Need at least 10 proofs to detect anomaly
-        if (totalProofs < 10) {
+        // MEDIUM-2 FIX: Lowered threshold from 10 to 3 to prevent spam attacks
+        // Attackers can't spam 9 failing proofs without triggering
+        if (totalProofs < 3) {
             return false;
         }
         
@@ -98,16 +101,26 @@ library CircuitBreakerLib {
     
     /**
      * @notice Checks if same-block operations indicate potential attack
-     * @dev Multiple operations in same block can be flash loan attacks
+     * @dev LOW-3 FIX: Added counter to prevent false positives from legitimate batch operations
      * @param lastBlockNumber Last operation block number
      * @param currentBlockNumber Current block number
-     * @return isSameBlock True if operations in same block
+     * @param sameBlockOps Number of operations in the same block
+     * @param maxSameBlockOps Maximum allowed operations per block (e.g., 5)
+     * @return isAnomaly True if operations exceed threshold in same block
      */
     function checkSameBlockAnomaly(
         uint64 lastBlockNumber,
-        uint64 currentBlockNumber
+        uint64 currentBlockNumber,
+        uint256 sameBlockOps,
+        uint256 maxSameBlockOps
     ) internal pure returns (bool) {
-        return lastBlockNumber == currentBlockNumber;
+        // LOW-3 FIX: Only trigger if same block AND exceeds threshold
+        // This prevents false positives from legitimate batch operations
+        if (lastBlockNumber != currentBlockNumber) {
+            return false; // Different blocks, no anomaly
+        }
+        
+        return sameBlockOps > maxSameBlockOps;
     }
     
     /**

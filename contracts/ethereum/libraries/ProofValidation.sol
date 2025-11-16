@@ -67,8 +67,8 @@ library ProofValidation {
         bytes32 root,
         uint256 nonce
     ) internal pure returns (bool) {
-        // v3.5.4 LOW FIX: Prevent gas griefing with oversized merkle proofs
-        require(proof.length <= 32, "ProofTooDeep");
+        // MEDIUM-10 FIX: Removed duplicate check (already in TrinityConsensusVerifier)
+        // The 32-element check is enforced by calling contract, saves ~200 gas
         
         bytes32 nonceLeaf = keccak256(abi.encodePacked(leaf, nonce));
         bytes32 computedHash = nonceLeaf;
@@ -170,27 +170,5 @@ library ProofValidation {
             sender
         ));
     }
-    
-    /**
-     * @notice Creates chain-specific Merkle root hash for validation
-     * @dev Prevents cross-chain replay attacks by binding to chainId
-     * @param chainPrefix Chain identifier prefix (e.g., "SOLANA_MERKLE_ROOT")
-     * @param chainId Ethereum chain ID
-     * @param operationId Operation identifier
-     * @param merkleRoot The Merkle root from validator
-     * @return rootHash The chain-bound root hash
-     */
-    function createChainBoundRootHash(
-        string memory chainPrefix,
-        uint256 chainId,
-        uint256 operationId,
-        bytes32 merkleRoot
-    ) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked(
-            chainPrefix,
-            chainId,
-            operationId,
-            merkleRoot
-        ));
-    }
+    // LOW-11 FIX: Removed unused createChainBoundRootHash function to save ~120 bytes bytecode
 }

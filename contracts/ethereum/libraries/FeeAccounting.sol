@@ -83,10 +83,9 @@ library FeeAccounting {
         validatorShare = (totalFee * 80) / 100;  // Round DOWN (favors protocol)
         protocolShare = (totalFee * 20) / 100;   // Round DOWN (favors protocol)
         
-        // MEDIUM-03 FIX: Invariant validation (Balancer-inspired)
+        // MEDIUM-4 FIX: Check distributed <= totalFee before checking remainder
         uint256 distributed = validatorShare + protocolShare;
-        require(distributed <= totalFee, "Fee split exceeds total");
-        require(totalFee - distributed < 3, "Fee split rounding error too large");
+        require(distributed <= totalFee && totalFee - distributed <= 2, "Fee split rounding");
         
         return (validatorShare, protocolShare);
     }
@@ -110,8 +109,9 @@ library FeeAccounting {
         uint256 validatorShare,
         uint256 validatorCount
     ) internal pure returns (uint256 rewardPerValidator, uint256 dust) {
+        // MEDIUM-5 FIX: Return full dust amount when no validators (caller must handle)
         if (validatorCount == 0) {
-            return (0, 0);
+            return (0, validatorShare); // Return all as dust for caller to handle
         }
         
         rewardPerValidator = validatorShare / validatorCount;  // Round DOWN (favors protocol)
@@ -139,8 +139,18 @@ library FeeAccounting {
     function calculateCancellationRefund(
         uint256 originalFee
     ) internal pure returns (uint256 refundAmount, uint256 penaltyAmount) {
-        refundAmount = originalFee * (100 - CANCELLATION_PENALTY) / 100;  // Round DOWN
-        penaltyAmount = originalFee - refundAmount;  // Penalty = remainder (no dust loss!)
+        // LOW-6 FIX: Scale penalty only for amounts above 100 wei, ensure minimum refund
+        if (originalFee < 100) {
+            // For dust amounts, ensure minimum 1 wei refund if possible
+            refundAmount = originalFee > 0 ? (originalFee * 80) / 100 : 0;
+            if (refundAmount == 0 && originalFee > 0) {
+                refundAmount = 1; // Minimum 1 wei refund
+            }
+            penaltyAmount = originalFee - refundAmount;
+        } else {
+            refundAmount = originalFee * (100 - CANCELLATION_PENALTY) / 100;  // Round DOWN
+            penaltyAmount = originalFee - refundAmount;  // Penalty = remainder
+        }
         
         // MEDIUM-03 FIX: Invariant validation (exact equality enforced)
         require(refundAmount + penaltyAmount == originalFee, "Refund calculation error");
