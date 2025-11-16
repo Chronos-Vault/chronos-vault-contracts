@@ -281,8 +281,32 @@ contract TrinityConsensusVerifier is ITrinityBatchVerifier, ReentrancyGuard {
         IERC20 token,
         uint256 deadline
     ) external payable nonReentrant whenNotPaused returns (bytes32) {
+        // v3.5.11 HIGH FIX H-1: Check vault exists and authorization FIRST (before any fee processing)
+        // This prevents malicious vault from griefing users by accepting fees then rejecting authorization
         if (vault == address(0)) revert Errors.ZeroAddress();
         
+        // v3.4: Validate vault implements IChronosVault interface
+        try IChronosVault(vault).vaultType() returns (IChronosVault.VaultType) {
+            // Vault interface is valid
+        } catch {
+            revert Errors.InvalidVaultInterface(vault);
+        }
+        
+        // v3.5.11 HIGH FIX H-1: Check authorization IMMEDIATELY after vault interface validation
+        // User pays gas but msg.value reverts if unauthorized - prevents fee griefing
+        bool authorized;
+        try IChronosVault(vault).isAuthorized(msg.sender) returns (bool _authorized) {
+            authorized = _authorized;
+        } catch {
+            // If vault doesn't implement isAuthorized, revert for safety
+            revert Errors.InvalidVaultInterface(vault);
+        }
+        
+        if (!authorized) {
+            revert Errors.UnauthorizedVaultAccess(msg.sender, vault);
+        }
+        
+        // Now safe to proceed with validation and fee processing
         // v3.5.7 FIX #2: Validate amount bounds (prevent gas griefing/DoS)
         if (amount == 0 || amount > MAX_OPERATION_AMOUNT) {
             revert Errors.InvalidAmount(amount);
@@ -296,13 +320,6 @@ contract TrinityConsensusVerifier is ITrinityBatchVerifier, ReentrancyGuard {
         }
         if (deadline > block.timestamp + MAX_OPERATION_DURATION) {
             revert Errors.DeadlineTooLate(deadline, block.timestamp + MAX_OPERATION_DURATION);
-        }
-        
-        // v3.4: Validate vault implements IChronosVault interface
-        try IChronosVault(vault).vaultType() returns (IChronosVault.VaultType) {
-            // Vault interface is valid
-        } catch {
-            revert Errors.InvalidVaultInterface(vault);
         }
         
         // v3.4: Check vault security level for high-value operations
@@ -584,8 +601,9 @@ contract TrinityConsensusVerifier is ITrinityBatchVerifier, ReentrancyGuard {
         if (op.operationType == OperationType.DEPOSIT) {
             // Transfer deposited funds to vault
             if (address(op.token) == address(0)) {
-                // v3.5.7 FIX #3: Try to send ETH to vault with generous gas limit
-                (bool success,) = payable(op.vault).call{value: op.amount, gas: 100000}("");
+                // v3.5.11 HIGH FIX H-2: Remove gas limit - let EVM decide (prevents proxy/complex vault failures)
+                // Hard-coded 100k gas can fail on modern proxies due to EIP-150 (63/64 forwarding rule)
+                (bool success,) = payable(op.vault).call{value: op.amount}("");
                 
                 if (!success) {
                     // Vault rejected ETH - mark operation as FAILED (don't revert)
