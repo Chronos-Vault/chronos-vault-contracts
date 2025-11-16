@@ -404,8 +404,9 @@ contract ChronosVault is ERC4626, Ownable, ReentrancyGuard {
      * This ensures _executeWithdrawal()'s use of owner() parameter is correct.
      */
     function deposit(uint256 assets, address receiver) public override nonReentrant returns (uint256) {
-        // AUDIT FIX L-02: Enforce owner-only deposits for single-owner vault model
-        require(msg.sender == owner(), "Only owner can deposit in ChronosVault");
+        // v3.5.11 HIGH FIX H-6: Remove msg.sender restriction to comply with ERC-4626 spec
+        // ERC-4626 requires deposits from any address for DeFi composability
+        // Only restrict receiver to maintain single-owner vault model
         require(receiver == owner(), "Shares can only be minted to owner");
         
         uint256 shares = super.deposit(assets, receiver);
@@ -1201,6 +1202,7 @@ contract ChronosVault is ERC4626, Ownable, ReentrancyGuard {
      * @param _recoveryAddress Address authorized for emergency recovery
      */
     function setupEmergencyRecovery(address _recoveryAddress) external onlyOwner {
+        // LOW-9 FIX: Validate recovery address is not zero
         require(_recoveryAddress != address(0), "Invalid recovery address");
         
         crossChainVerification.emergencyRecoveryAddress = _recoveryAddress;
