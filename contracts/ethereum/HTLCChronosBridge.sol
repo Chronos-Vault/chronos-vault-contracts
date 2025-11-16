@@ -261,6 +261,12 @@ contract HTLCChronosBridge is IHTLC, IChronosVault, ReentrancyGuard, Pausable, O
         require(timelock >= block.timestamp + MIN_TIMELOCK, "Timelock too short");
         require(timelock <= block.timestamp + MAX_TIMELOCK, "Timelock too long");
 
+        // HIGH-19 FIX: Validate recipient can receive ETH if native token swap
+        if (tokenAddress == address(0) && recipient.code.length > 0) {
+            (bool canReceive,) = payable(recipient).call{value: 0}("");
+            require(canReceive, "Recipient contract cannot receive ETH");
+        }
+
         // ===== TOKEN VALIDATION =====
         
         if (tokenAddress != address(0)) {
@@ -311,11 +317,13 @@ contract HTLCChronosBridge is IHTLC, IChronosVault, ReentrancyGuard, Pausable, O
         
         IERC20 token = tokenAddress == address(0) ? IERC20(address(0)) : IERC20(tokenAddress);
         
-        // Create Trinity operation with separate fee
+        // SECURITY FIX v3.5.10: Set amount = 0 for Trinity (consensus-only mode)
+        // Trinity validates 2-of-3 consensus but doesn't custody funds (HTLC manages custody)
+        // This prevents Trinity from attempting to transfer funds it doesn't hold
         operationId = trinityBridge.createOperation{value: TRINITY_FEE}(
             address(this),                              // vault (this HTLC contract)
             ITrinityConsensusVerifier.OperationType.TRANSFER,
-            amount,
+            0,                                          // amount = 0 (consensus-only, no custody)
             token,
             timelock                                    // deadline matches HTLC timelock
         );
@@ -686,5 +694,20 @@ contract HTLCChronosBridge is IHTLC, IChronosVault, ReentrancyGuard, Pausable, O
         } else {
             IERC20(tokenAddress).safeTransfer(to, amount);
         }
+    }
+    
+    /**
+     * @notice Release swap funds for L1 exit (prevents double-spend)
+     * @param swapId Swap to release
+     * @dev Marks swap as REFUNDED to prevent L2 claim while bridging to L1
+     */
+    function releaseForExit(bytes32 swapId) external override nonReentrant {
+        HTLCSwap storage swap = htlcSwaps[swapId];
+        require(swap.state == SwapState.LOCKED || swap.state == SwapState.CONSENSUS_ACHIEVED, "Invalid state");
+        
+        // Mark as REFUNDED to prevent further claims on L2
+        swap.state = SwapState.REFUNDED;
+        
+        emit HTLCRefunded(swapId, swap.operationId, swap.sender, swap.amount);
     }
 }
