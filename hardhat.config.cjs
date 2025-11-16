@@ -5,15 +5,33 @@ require("dotenv").config();
 
 module.exports = {
   solidity: {
-    version: "0.8.20",
-    settings: {
-      optimizer: {
-        enabled: true,
-        runs: 1  // Minimum runs for smallest deployment size
+    compilers: [
+      {
+        version: "0.8.20",
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 1
+          },
+          viaIR: true,
+          evmVersion: "paris",
+          metadata: {
+            bytecodeHash: "none"
+          }
+        }
       },
-      viaIR: true,  // Required to avoid stack too deep errors
-      evmVersion: "paris"
-    }
+      {
+        version: "0.8.24",
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 200
+          },
+          viaIR: true,
+          evmVersion: "paris"
+        }
+      }
+    ]
   },
   paths: {
     sources: "./contracts/ethereum",
@@ -31,10 +49,12 @@ module.exports = {
       chainId: 11155111
     },
     arbitrumSepolia: {
-      url: "https://sepolia-rollup.arbitrum.io/rpc",
+      url: process.env.ARBITRUM_RPC_URL || "https://sepolia-rollup.arbitrum.io/rpc",
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
       chainId: 421614,
-      timeout: 120000
+      timeout: 120000,
+      gasPrice: 1000000000,
+      gas: 30000000
     },
     baseSepolia: {
       url: process.env.BASE_RPC_URL || "https://sepolia.base.org",
