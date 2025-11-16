@@ -347,12 +347,12 @@ contract HTLCChronosBridge is IHTLC, IChronosVault, ReentrancyGuard, Pausable, O
             
             uint256 balanceAfter = IERC20(tokenAddress).balanceOf(address(this));
             
-            // CORRECTED: Check the DELTA (amount actually received) not absolute balance
-            // This works even if contract already holds tokens from previous swaps
+            // HIGH-2 FIX: Strict equality check for standard ERC20 compliance
+            // Prevents issues with fee-on-transfer AND reward tokens
             uint256 received = balanceAfter - balanceBefore;
             require(
-                received >= amount,
-                "Token transfer incomplete - fee-on-transfer not supported"
+                received == amount,
+                "Token transfer mismatch - only standard ERC20 supported"
             );
         }
         // Native ETH already received in msg.value

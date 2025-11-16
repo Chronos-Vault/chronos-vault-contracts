@@ -352,13 +352,11 @@ contract ChronosVaultOptimized is ERC4626, Ownable, ReentrancyGuard {
         multiSig.enabled = false;
         multiSig.threshold = 0;
         
-        // CRITICAL BOOTSTRAP FIX: Auto-initialize to prevent inflation attack race-condition
-        // Deployer MUST approve MIN_BOOTSTRAP_DEPOSIT before deployment
-        bootstrapInitialized = true;
-        IERC20(_asset).safeTransferFrom(msg.sender, address(this), MIN_BOOTSTRAP_DEPOSIT);
-        _mint(address(0x000000000000000000000000000000000000dEaD), MIN_BOOTSTRAP_DEPOSIT);
+        // CRITICAL-1 FIX: Two-step bootstrap initialization
+        // Bootstrap must be called separately after deployment
+        // This removes dependency on external pre-approval in constructor
+        bootstrapInitialized = false;
         
-        emit BootstrapInitialized(msg.sender, MIN_BOOTSTRAP_DEPOSIT);
         emit VaultCreated(msg.sender, _unlockTime, _securityLevel);
     }
     
@@ -380,8 +378,23 @@ contract ChronosVaultOptimized is ERC4626, Ownable, ReentrancyGuard {
     }
     
     // ===== BALANCER-INSPIRED SECURITY: BOOTSTRAP PROTECTION =====
-    // Bootstrap is now AUTOMATIC in constructor - no external function needed
-    // This prevents the race-condition where an attacker could deploy and exploit before manual initialization
+    
+    /**
+     * @notice Initialize bootstrap deposit to prevent inflation attack
+     * @dev CRITICAL-1 FIX: Two-step initialization removes constructor pre-approval dependency
+     * @dev Callable only once by owner immediately after deployment
+     * @dev Deployer must approve MIN_BOOTSTRAP_DEPOSIT before calling this function
+     */
+    function initializeBootstrap() external onlyOwner {
+        require(!bootstrapInitialized, "Bootstrap already initialized");
+        
+        // Transfer bootstrap assets and mint shares to dead address
+        IERC20(asset()).safeTransferFrom(msg.sender, address(this), MIN_BOOTSTRAP_DEPOSIT);
+        _mint(address(0x000000000000000000000000000000000000dEaD), MIN_BOOTSTRAP_DEPOSIT);
+        
+        bootstrapInitialized = true;
+        emit BootstrapInitialized(msg.sender, MIN_BOOTSTRAP_DEPOSIT);
+    }
     
     /// @notice Emitted when bootstrap deposit is initialized
     event BootstrapInitialized(address indexed initializer, uint256 amount);
@@ -896,9 +909,9 @@ contract ChronosVaultOptimized is ERC4626, Ownable, ReentrancyGuard {
         
         emit WithdrawalApproved(_requestId, msg.sender);
         
-        // H-01 FIX: Use strict equality to prevent race condition
-        // Only the final signer (who reaches exactly threshold) executes
-        if (request.approvalCount == _threshold && !request.executed) {
+        // MEDIUM-1 FIX: Use >= to prevent race condition gas waste
+        // Any signer reaching or exceeding threshold can execute
+        if (request.approvalCount >= _threshold && !request.executed) {
             _executeWithdrawal(_requestId);
         }
     }

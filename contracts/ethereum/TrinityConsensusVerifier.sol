@@ -847,6 +847,9 @@ contract TrinityConsensusVerifier is ITrinityBatchVerifier, ReentrancyGuard {
         // Always decrement collected fees BEFORE external call
         collectedFees -= op.fee;
         
+        // HIGH-1 FIX: Validate invariant BEFORE external interactions (defense-in-depth)
+        _validateBalanceInvariant();
+        
         // NOW make external calls (Interactions last)
         uint256 totalRefund;
         if (op.operationType == OperationType.DEPOSIT) {
