@@ -51,6 +51,7 @@ interface ITrinityConsensusVerifier {
      * @notice Get the current state of a Trinity Protocol operation
      * @param operationId The unique operation identifier
      * @return user Address that initiated the operation
+     * @return vault Address of the vault for this operation
      * @return amount Amount of tokens in the operation
      * @return chainConfirmations Number of chains that have confirmed (0-3)
      * @return expiresAt Unix timestamp when operation expires
@@ -59,12 +60,14 @@ interface ITrinityConsensusVerifier {
      * @dev chainConfirmations >= 2 means consensus achieved (2-of-3)
      * @dev executed = true means operation completed on destination chain
      * @dev SECURITY: Check executed flag to prevent double-spend attacks
+     * @dev INTEGRATION FIX: Added vault address to return values for proper validation
      */
     function getOperation(bytes32 operationId)
         external
         view
         returns (
-            address user, 
+            address user,
+            address vault,     // INTEGRATION FIX: Added vault address
             uint256 amount, 
             uint8 chainConfirmations, 
             uint256 expiresAt, 
