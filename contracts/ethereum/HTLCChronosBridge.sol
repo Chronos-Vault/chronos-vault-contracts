@@ -68,6 +68,10 @@ contract HTLCChronosBridge is IHTLC, IChronosVault, ReentrancyGuard, Pausable, O
 
     /// @notice TrinityConsensusVerifier v3.5.4 for 2-of-3 consensus
     ITrinityConsensusVerifier public immutable trinityBridge;
+    
+    /// @notice Arbitrum Exit Contract authorized to call releaseForExit()
+    /// @dev Set at construction - only this contract can release swaps for L1 exit
+    address public immutable arbitrumExitContract;
 
     /// @notice Trinity operation fee (0.001 ETH)
     uint256 public constant TRINITY_FEE = 0.001 ether;
@@ -179,14 +183,17 @@ contract HTLCChronosBridge is IHTLC, IChronosVault, ReentrancyGuard, Pausable, O
      * @notice Initialize HTLCChronosBridge with Trinity Protocol
      * @param _trinityBridge TrinityConsensusVerifier v3.5.4 address
      * @param _owner Initial owner (should be multi-sig wallet for production)
+     * @param _arbitrumExitContract HTLCArbToL1 contract address authorized to release exits
      * 
      * @dev SECURITY: Owner can pause contract in emergency situations
      * @dev RECOMMENDATION: Use Gnosis Safe multi-sig as owner for decentralization
      */
-    constructor(address _trinityBridge, address _owner) Ownable(_owner) {
+    constructor(address _trinityBridge, address _owner, address _arbitrumExitContract) Ownable(_owner) {
         require(_trinityBridge != address(0), "Invalid Trinity address");
         require(_owner != address(0), "Invalid owner address");
+        require(_arbitrumExitContract != address(0), "Invalid exit contract address");
         trinityBridge = ITrinityConsensusVerifier(_trinityBridge);
+        arbitrumExitContract = _arbitrumExitContract;
     }
     
     /**
@@ -700,8 +707,11 @@ contract HTLCChronosBridge is IHTLC, IChronosVault, ReentrancyGuard, Pausable, O
      * @notice Release swap funds for L1 exit (prevents double-spend)
      * @param swapId Swap to release
      * @dev Marks swap as REFUNDED to prevent L2 claim while bridging to L1
+     * @dev SECURITY FIX HIGH-8: Only authorized exit contract can call this
      */
     function releaseForExit(bytes32 swapId) external override nonReentrant {
+        require(msg.sender == arbitrumExitContract, "Unauthorized: only exit contract");
+        
         HTLCSwap storage swap = htlcSwaps[swapId];
         require(swap.state == SwapState.LOCKED || swap.state == SwapState.CONSENSUS_ACHIEVED, "Invalid state");
         

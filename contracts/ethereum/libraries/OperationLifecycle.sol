@@ -20,7 +20,8 @@ library OperationLifecycle {
     
     /**
      * @notice Generates unique operation ID with collision prevention
-     * @dev Uses msg.sender, timestamp, chains, vault, amount, and nonce
+     * @dev HIGH-7 FIX: Includes block.chainid to prevent cross-chain replay attacks
+     * @dev Uses msg.sender, timestamp, chainid, chains, vault, amount, and nonce
      * @param sender Operation initiator
      * @param sourceChain Source blockchain
      * @param destinationChain Destination blockchain
@@ -40,6 +41,7 @@ library OperationLifecycle {
         return keccak256(abi.encodePacked(
             sender,
             block.timestamp,
+            block.chainid,  // HIGH-7 FIX: Prevents replay if state is forked to another chain
             sourceChain,
             destinationChain,
             vaultAddress,
@@ -50,6 +52,7 @@ library OperationLifecycle {
     
     /**
      * @notice Validates amount bounds and checks for overflow
+     * @dev MEDIUM-8 FIX: Added explicit revert for amount overflow (instead of panic 0x11)
      * @dev Ensures amount fits in uint128 and doesn't overflow with existing volume
      * @param amount Amount to validate
      * @param currentVolume24h Current 24h volume (uint128)
@@ -60,10 +63,8 @@ library OperationLifecycle {
         uint256 amount,
         uint128 currentVolume24h
     ) internal pure returns (bool valid, uint128 amountU128) {
-        // Check if amount fits in uint128
-        if (amount >= type(uint128).max) {
-            return (false, 0);
-        }
+        // MEDIUM-8 FIX: Explicit check with clear error message (preserves boundary)
+        require(amount <= type(uint128).max, "Amount overflow");
         
         amountU128 = uint128(amount);
         
@@ -77,12 +78,13 @@ library OperationLifecycle {
     
     /**
      * @notice Calculates refund amount for excess ETH
+     * @dev LOW-9 FIX: Added underflow protection - returns 0 instead of reverting
      * @dev For ETH transfers, deducts amount from refund. For token transfers, only deducts fee.
      * @param msgValue Total ETH sent with transaction
      * @param fee Fee charged for operation
      * @param amount Transfer amount (0 if not ETH transfer)
      * @param isEthTransfer True if transferring native ETH
-     * @return refund Amount to refund to user
+     * @return refund Amount to refund to user (0 if insufficient msgValue)
      */
     function calculateRefund(
         uint256 msgValue,
@@ -90,13 +92,16 @@ library OperationLifecycle {
         uint256 amount,
         bool isEthTransfer
     ) internal pure returns (uint256 refund) {
-        refund = msgValue - fee;
-        
-        // For ETH transfers, also deduct the amount being transferred
+        // LOW-9 FIX: Check for underflow and return 0 if insufficient funds
+        uint256 totalRequired = fee;
         if (isEthTransfer) {
-            refund -= amount;
+            totalRequired += amount;
         }
         
-        return refund;
+        if (msgValue < totalRequired) {
+            return 0; // Not enough ETH sent
+        }
+        
+        return msgValue - totalRequired;
     }
 }

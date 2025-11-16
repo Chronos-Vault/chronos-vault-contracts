@@ -352,6 +352,13 @@ contract ChronosVaultOptimized is ERC4626, Ownable, ReentrancyGuard {
         multiSig.enabled = false;
         multiSig.threshold = 0;
         
+        // CRITICAL BOOTSTRAP FIX: Auto-initialize to prevent inflation attack race-condition
+        // Deployer MUST approve MIN_BOOTSTRAP_DEPOSIT before deployment
+        bootstrapInitialized = true;
+        IERC20(_asset).safeTransferFrom(msg.sender, address(this), MIN_BOOTSTRAP_DEPOSIT);
+        _mint(address(0x000000000000000000000000000000000000dEaD), MIN_BOOTSTRAP_DEPOSIT);
+        
+        emit BootstrapInitialized(msg.sender, MIN_BOOTSTRAP_DEPOSIT);
         emit VaultCreated(msg.sender, _unlockTime, _securityLevel);
     }
     
@@ -372,30 +379,9 @@ contract ChronosVaultOptimized is ERC4626, Ownable, ReentrancyGuard {
         emit MerkleRootStored(chainId, merkleRoot);
     }
     
-    // ===== BALANCER-INSPIRED SECURITY: BOOTSTRAP INITIALIZATION =====
-    
-    /**
-     * @dev CRITICAL-01: Initialize bootstrap deposit to prevent inflation attack
-     * @notice Must be called by deployer immediately after deployment
-     * @notice Deposits MIN_BOOTSTRAP_DEPOSIT and mints shares to dead address
-     */
-    function initializeBootstrap() external {
-        // LOW-13 FIX: Only owner can initialize bootstrap
-        require(msg.sender == owner(), "Only owner can initialize bootstrap");
-        require(!bootstrapInitialized, "Bootstrap already initialized");
-        require(totalSupply() == 0, "Vault already has shares");
-        require(totalAssets() == 0, "Vault already has assets");
-        
-        bootstrapInitialized = true;
-        
-        // Transfer bootstrap assets from caller
-        IERC20(asset()).safeTransferFrom(msg.sender, address(this), MIN_BOOTSTRAP_DEPOSIT);
-        
-        // Mint shares to dead address (permanently locked)
-        _mint(address(0x000000000000000000000000000000000000dEaD), MIN_BOOTSTRAP_DEPOSIT);
-        
-        emit BootstrapInitialized(msg.sender, MIN_BOOTSTRAP_DEPOSIT);
-    }
+    // ===== BALANCER-INSPIRED SECURITY: BOOTSTRAP PROTECTION =====
+    // Bootstrap is now AUTOMATIC in constructor - no external function needed
+    // This prevents the race-condition where an attacker could deploy and exploit before manual initialization
     
     /// @notice Emitted when bootstrap deposit is initialized
     event BootstrapInitialized(address indexed initializer, uint256 amount);

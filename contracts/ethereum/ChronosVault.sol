@@ -7,18 +7,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-
-/**
- * @notice Minimal interface for CrossChainBridgeOptimized v1.5 integration
- * @dev Allows vault to query REAL Trinity Protocol consensus
- */
-interface ICrossChainBridgeOptimized {
-    function hasConsensusApproval(bytes32 operationId) external view returns (bool approved);
-    function getChainVerifications(bytes32 operationId) 
-        external 
-        view 
-        returns (bool arbitrumVerified, bool solanaVerified, bool tonVerified);
-}
+import "./ITrinityConsensusVerifier.sol";
 
 /**
  * @title ChronosVault - Trinity Protocol v1.4-PRODUCTION (Standard Vaults)
@@ -82,7 +71,7 @@ contract ChronosVault is ERC4626, Ownable, ReentrancyGuard {
     
     // TRINITY PROTOCOL INTEGRATION (v1.5+)
     // Optional: If set, vault can query REAL Trinity consensus instead of manual verification
-    ICrossChainBridgeOptimized public trinityBridge;
+    ITrinityConsensusVerifier public trinity;
     
     // Trinity operation tracking for withdrawals (security level 3+)
     mapping(address => bytes32) public userTrinityOperation; // Track Trinity operation per user
@@ -310,9 +299,9 @@ contract ChronosVault is ERC4626, Ownable, ReentrancyGuard {
         lastFeeCollection = block.timestamp;
         nextWithdrawalRequestId = 1;
         
-        // Initialize Trinity Bridge integration (optional)
+        // Initialize Trinity Protocol integration (optional)
         if (_trinityBridge != address(0)) {
-            trinityBridge = ICrossChainBridgeOptimized(_trinityBridge);
+            trinity = ITrinityConsensusVerifier(_trinityBridge);
         }
         
         // Initialize metadata
@@ -1050,7 +1039,7 @@ contract ChronosVault is ERC4626, Ownable, ReentrancyGuard {
      * @notice Operation expires after trinityOperationExpiry (default 1 hour)
      */
     function setTrinityOperation(bytes32 _operationId) external {
-        require(address(trinityBridge) != address(0), "Trinity Bridge not configured");
+        require(address(trinity) != address(0), "Trinity Protocol not configured");
         require(_operationId != bytes32(0), "Invalid operation ID");
         require(securityLevel >= 3, "Trinity operations only for security level 3+");
         
@@ -1067,8 +1056,8 @@ contract ChronosVault is ERC4626, Ownable, ReentrancyGuard {
      * @return approved True if Trinity 2-of-3 consensus achieved
      */
     function checkTrinityApproval(address _user) public view returns (bool approved) {
-        if (address(trinityBridge) == address(0)) {
-            return false; // No bridge configured
+        if (address(trinity) == address(0)) {
+            return false; // No Trinity Protocol configured
         }
         
         bytes32 operationId = userTrinityOperation[_user];
@@ -1081,8 +1070,9 @@ contract ChronosVault is ERC4626, Ownable, ReentrancyGuard {
             return false; // Operation expired
         }
         
-        // Query REAL Trinity consensus from bridge
-        return trinityBridge.hasConsensusApproval(operationId);
+        // Query REAL Trinity consensus
+        (,, uint8 confirmations, uint256 expiresAt, bool executed) = trinity.getOperation(operationId);
+        return !executed && confirmations >= 2 && block.timestamp <= expiresAt;
     }
     
     /**
@@ -1090,25 +1080,24 @@ contract ChronosVault is ERC4626, Ownable, ReentrancyGuard {
      * @param _user User address to check
      * @return satisfied True if consensus requirements are met
      * 
-     * AUDIT FIX L-01: For security level 3+ with Trinity Bridge configured,
-     * ONLY use Trinity Bridge verification (no manual verification fallback).
+     * AUDIT FIX L-01: For security level 3+ with Trinity configured,
+     * ONLY use Trinity Protocol verification (no manual verification fallback).
      * Manual verification is deprecated for high-security vaults.
      */
     function has2of3Consensus(address _user) public view returns (bool satisfied) {
-        // AUDIT FIX L-01: Strictly enforce Trinity Bridge for security level 3+ when configured
-        if (securityLevel >= 3 && address(trinityBridge) != address(0)) {
-            // High-security vaults MUST use Trinity Bridge (no manual override)
-            return checkTrinityApproval(_user);
+        bytes32 opId = userTrinityOperation[_user];
+        if (opId == bytes32(0)) return false;
+
+        // Check if operation expired
+        if (block.timestamp > operationSetTime[opId] + trinityOperationExpiry) {
+            return false;
         }
+
+        // Get Trinity operation details
+        (,, uint8 confirmations, uint256 expiresAt, bool executed) = trinity.getOperation(opId);
         
-        // For lower security levels or if Trinity Bridge not configured:
-        // Option 1: Manual cross-chain verification (legacy/backward compatible)
-        bool manualVerified = crossChainVerification.tonVerified && crossChainVerification.solanaVerified;
-        
-        // Option 2: Trinity Bridge consensus (if available)
-        bool trinityVerified = checkTrinityApproval(_user);
-        
-        return manualVerified || trinityVerified;
+        // Require 2-of-3 consensus, not expired, and not already executed
+        return !executed && confirmations >= 2 && block.timestamp <= expiresAt;
     }
     
     /**
