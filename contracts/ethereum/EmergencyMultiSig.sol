@@ -259,12 +259,10 @@ contract EmergencyMultiSig {
         // Mark as executed
         proposal.executed = true;
         
-        // SECURITY NOTE M-02: Raw low-level call for flexibility but with risks
-        // This bypasses type-checking and interface matching for maximum flexibility
-        // Risk: Target contract changes or custom errors may cause unexpected behavior
-        // Mitigation: All target contracts MUST be thoroughly audited before deployment
-        // Emergency multi-sig requires this flexibility for unforeseen scenarios
-        (bool success, ) = proposal.targetContract.call(proposal.callData);
+        // CRITICAL FIX C-5: Add gas limit to prevent gas griefing and DoS
+        // Generous 500k gas limit allows complex operations while preventing griefing
+        // Target contract can still self-destruct but won't brick the multi-sig
+        (bool success, ) = proposal.targetContract.call{gas: 500000}(proposal.callData);
         require(success, "Emergency action failed");
         
         // SMT POST-CONDITIONS: Verify execution state

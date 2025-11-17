@@ -117,4 +117,25 @@ library ConsensusProposalLib {
     function validateMerkleRoot(bytes32 newRoot) internal pure returns (bool) {
         return newRoot != bytes32(0);
     }
+    
+    /**
+     * @notice Validate proposer is not confirming their own proposal
+     * @dev CRITICAL FIX: Enforces no-self-confirmation rule
+     * @param proposer Address that created the proposal
+     * @param confirmer Address attempting to confirm
+     * @return valid True if confirmer is not the proposer
+     */
+    function requireNotProposer(address proposer, address confirmer) internal pure returns (bool) {
+        require(proposer != confirmer, "Cannot confirm own proposal");
+        return true;
+    }
+    
+    /**
+     * @notice Validate chain ID is within valid range (1-3)
+     * @dev MEDIUM FIX: Prevents cross-chain proposal replay
+     * @param chainId Chain identifier to validate
+     */
+    function requireValidChainId(uint8 chainId) internal pure {
+        require(chainId >= 1 && chainId <= 3, "Invalid chain ID");
+    }
 }

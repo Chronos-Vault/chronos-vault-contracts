@@ -78,13 +78,13 @@ library OperationLifecycle {
     
     /**
      * @notice Calculates refund amount for excess ETH
-     * @dev LOW-9 FIX: Added underflow protection - returns 0 instead of reverting
-     * @dev For ETH transfers, deducts amount from refund. For token transfers, only deducts fee.
+     * @dev CRITICAL FIX: Reverts on insufficient funds instead of returning 0
+     * @dev Prevents caller from proceeding with invalid operation
      * @param msgValue Total ETH sent with transaction
      * @param fee Fee charged for operation
      * @param amount Transfer amount (0 if not ETH transfer)
      * @param isEthTransfer True if transferring native ETH
-     * @return refund Amount to refund to user (0 if insufficient msgValue)
+     * @return refund Amount to refund to user
      */
     function calculateRefund(
         uint256 msgValue,
@@ -92,15 +92,13 @@ library OperationLifecycle {
         uint256 amount,
         bool isEthTransfer
     ) internal pure returns (uint256 refund) {
-        // LOW-9 FIX: Check for underflow and return 0 if insufficient funds
         uint256 totalRequired = fee;
         if (isEthTransfer) {
             totalRequired += amount;
         }
         
-        if (msgValue < totalRequired) {
-            return 0; // Not enough ETH sent
-        }
+        // CRITICAL FIX: Revert if insufficient funds (prevents silent failures)
+        require(msgValue >= totalRequired, "Insufficient ETH");
         
         return msgValue - totalRequired;
     }

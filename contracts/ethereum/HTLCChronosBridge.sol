@@ -335,29 +335,9 @@ contract HTLCChronosBridge is IHTLC, IChronosVault, ReentrancyGuard, Pausable, O
             timelock                                    // deadline matches HTLC timelock
         );
 
-        // ===== LOCK FUNDS IN ESCROW =====
-        
-        if (tokenAddress != address(0)) {
-            // SECURITY FIX C-1: Token Accounting Check (Fee-on-Transfer Protection)
-            // Measure balance before and after transfer to detect fee-on-transfer tokens
-            uint256 balanceBefore = IERC20(tokenAddress).balanceOf(address(this));
-            
-            // ERC20: Transfer tokens from sender (fee already received)
-            IERC20(tokenAddress).safeTransferFrom(msg.sender, address(this), amount);
-            
-            uint256 balanceAfter = IERC20(tokenAddress).balanceOf(address(this));
-            
-            // HIGH-2 FIX: Strict equality check for standard ERC20 compliance
-            // Prevents issues with fee-on-transfer AND reward tokens
-            uint256 received = balanceAfter - balanceBefore;
-            require(
-                received == amount,
-                "Token transfer mismatch - only standard ERC20 supported"
-            );
-        }
-        // Native ETH already received in msg.value
-
-        // ===== CREATE SWAP =====
+        // ===== CREATE SWAP ===== 
+        // CRITICAL CEI FIX C-4: Create swap struct BEFORE external token transfer
+        // Prevents re-entrancy attack via ERC-777 or malicious token callback
         
         htlcSwaps[swapId] = HTLCSwap({
             id: swapId,
@@ -388,6 +368,30 @@ contract HTLCChronosBridge is IHTLC, IChronosVault, ReentrancyGuard, Pausable, O
         
         emit ActiveSwapCountChanged(msg.sender, activeSwapCount[msg.sender], "swap_created");
         emit ActiveSwapCountChanged(recipient, activeSwapCount[recipient], "swap_created");
+        
+        // ===== LOCK FUNDS IN ESCROW =====
+        // CRITICAL CEI FIX C-4: External token transfer AFTER all state updates
+        // Now safe from re-entrancy because swap state is already written
+        
+        if (tokenAddress != address(0)) {
+            // SECURITY FIX C-1: Token Accounting Check (Fee-on-Transfer Protection)
+            // Measure balance before and after transfer to detect fee-on-transfer tokens
+            uint256 balanceBefore = IERC20(tokenAddress).balanceOf(address(this));
+            
+            // ERC20: Transfer tokens from sender (fee already received)
+            IERC20(tokenAddress).safeTransferFrom(msg.sender, address(this), amount);
+            
+            uint256 balanceAfter = IERC20(tokenAddress).balanceOf(address(this));
+            
+            // HIGH-2 FIX: Strict equality check for standard ERC20 compliance
+            // Prevents issues with fee-on-transfer AND reward tokens
+            uint256 received = balanceAfter - balanceBefore;
+            require(
+                received == amount,
+                "Token transfer mismatch - only standard ERC20 supported"
+            );
+        }
+        // Native ETH already received in msg.value
 
         emit HTLCCreatedAndLocked(
             swapId,

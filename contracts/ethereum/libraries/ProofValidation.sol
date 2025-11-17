@@ -67,8 +67,9 @@ library ProofValidation {
         bytes32 root,
         uint256 nonce
     ) internal pure returns (bool) {
-        // MEDIUM-10 FIX: Removed duplicate check (already in TrinityConsensusVerifier)
-        // The 32-element check is enforced by calling contract, saves ~200 gas
+        // HIGH FIX: Enforce proof length limit in library (defense-in-depth)
+        // Prevents gas griefing even if caller forgets to check
+        require(proof.length <= 32, "Proof too deep");
         
         bytes32 nonceLeaf = keccak256(abi.encodePacked(leaf, nonce));
         bytes32 computedHash = nonceLeaf;

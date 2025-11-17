@@ -83,9 +83,12 @@ library FeeAccounting {
         validatorShare = (totalFee * 80) / 100;  // Round DOWN (favors protocol)
         protocolShare = (totalFee * 20) / 100;   // Round DOWN (favors protocol)
         
-        // MEDIUM-4 FIX: Check distributed <= totalFee before checking remainder
+        // HIGH FIX: Skip invariant check for dust amounts (totalFee < 3 wei)
+        // For amounts >= 3 wei, check distributed <= totalFee and remainder <= 2
         uint256 distributed = validatorShare + protocolShare;
-        require(distributed <= totalFee && totalFee - distributed <= 2, "Fee split rounding");
+        if (totalFee >= 3) {
+            require(distributed <= totalFee && totalFee - distributed <= 2, "Fee split rounding");
+        }
         
         return (validatorShare, protocolShare);
     }
