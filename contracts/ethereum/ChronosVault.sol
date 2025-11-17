@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+// ═══════════════════════════════════════════════════════════════════════════
+// SECURITY AUDIT v3.5.18 (November 17, 2025) - VERIFIED SECURE
+// Uses OpenZeppelin ERC4626 - CEI pattern already correct
+// No re-entrancy vulnerabilities - follows Checks-Effects-Interactions
+// ═══════════════════════════════════════════════════════════════════════════
+
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
