@@ -59,13 +59,14 @@ contract HTLCArbToL1 is ReentrancyGuard, Pausable, Ownable {
     // ===== STATE VARIABLES =====
 
     /// @notice Reference to main HTLC contract
-    IHTLC public immutable htlcBridge;
+    IHTLC public htlcBridge;
     
     /// @notice Trinity batch verifier for consensus validation
     ITrinityBatchVerifier public immutable trinityVerifier;
     
     /// @notice L1 Gateway address for priority exits
-    address public immutable l1Gateway;
+    /// @dev Can be updated by owner via setL1Gateway()
+    address public l1Gateway;
 
     /// @notice Exit request counter for collision resistance
     uint256 private exitCounter;
@@ -178,6 +179,11 @@ contract HTLCArbToL1 is ReentrancyGuard, Pausable, Ownable {
         address indexed requester,
         uint256 amount
     );
+    
+    event L1GatewayUpdated(
+        address indexed oldGateway,
+        address indexed newGateway
+    );
 
     // ===== CONSTRUCTOR =====
 
@@ -195,6 +201,22 @@ contract HTLCArbToL1 is ReentrancyGuard, Pausable, Ownable {
         htlcBridge = IHTLC(_htlcBridge);
         trinityVerifier = ITrinityBatchVerifier(_trinityVerifier);
         l1Gateway = _l1Gateway;
+    }
+    
+    /**
+     * @notice Update L1 gateway address (ONE-TIME ONLY for deployment fix)
+     * @param _newL1Gateway New TrinityExitGateway contract address on L1
+     * @dev SECURITY: Can only be called if current address equals deployer (initial placeholder)
+     * @dev This prevents changing from real address to malicious address
+     */
+    function setL1Gateway(address _newL1Gateway) external onlyOwner {
+        require(_newL1Gateway != address(0), "Invalid L1 gateway address");
+        require(l1Gateway == owner(), "L1 gateway already set - cannot change");
+        
+        address oldGateway = l1Gateway;
+        l1Gateway = _newL1Gateway;
+        
+        emit L1GatewayUpdated(oldGateway, _newL1Gateway);
     }
 
     // ===== CORE FUNCTIONS =====
