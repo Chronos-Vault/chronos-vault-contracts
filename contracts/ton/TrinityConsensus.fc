@@ -7,7 +7,12 @@
 ;; Integration: TON → Ethereum/Arbitrum L2
 ;; Role: Emergency recovery and quantum-safe backup (<60 seconds)
 
-#include "imports/stdlib.fc";
+;; ============================================================================
+;; Custom Helper Functions
+;; ============================================================================
+
+int equal_slices(slice a, slice b) asm "SDEQ";
+() emit_log_simple(int event_id, cell data) impure asm(data event_id) "STRDUMP" "DROP";
 
 ;; ============================================================================
 ;; Storage Variables
@@ -63,13 +68,23 @@ const int OP_CROSS_CHAIN_TRANSFER = 3;
     is_active = ds~load_uint(1);
     proof_records = ds~load_dict();
     vault_verifications = ds~load_dict();
-    ml_kem_public_key = ds~load_uint(256);
-    dilithium_public_key = ds~load_uint(256);
+    
+    ;; Load quantum keys from reference cell (fixes BitBuilder overflow)
+    var quantum_keys = ds~load_ref().begin_parse();
+    ml_kem_public_key = quantum_keys~load_uint(256);
+    dilithium_public_key = quantum_keys~load_uint(256);
+    quantum_keys.end_parse();
     
     ds.end_parse();
 }
 
 () save_data() impure {
+    ;; Store quantum keys in reference cell (fixes BitBuilder overflow)
+    cell quantum_keys_cell = begin_cell()
+        .store_uint(ml_kem_public_key, 256)
+        .store_uint(dilithium_public_key, 256)
+        .end_cell();
+    
     set_data(begin_cell()
         .store_slice(ethereum_bridge_address)
         .store_slice(validator_ethereum_address)
@@ -80,8 +95,7 @@ const int OP_CROSS_CHAIN_TRANSFER = 3;
         .store_uint(is_active, 1)
         .store_dict(proof_records)
         .store_dict(vault_verifications)
-        .store_uint(ml_kem_public_key, 256)
-        .store_uint(dilithium_public_key, 256)
+        .store_ref(quantum_keys_cell)
         .end_cell());
 }
 
@@ -116,32 +130,8 @@ int calculate_merkle_root(cell merkle_proof_cell, int leaf_hash) method_id {
 }
 
 ;; ============================================================================
-;; Public Methods
+;; Public Methods (called from recv_internal with real sender verification)
 ;; ============================================================================
-
-;; Initialize Trinity Consensus Validator
-;; Sets up connection to Ethereum CrossChainBridgeOptimized
-() initialize(
-    slice eth_bridge_addr,
-    slice validator_eth_addr,
-    slice arbitrum_rpc,
-    int ml_kem_pubkey,
-    int dilithium_pubkey
-) impure {
-    ethereum_bridge_address = eth_bridge_addr;
-    validator_ethereum_address = validator_eth_addr;
-    arbitrum_rpc_url = arbitrum_rpc;
-    authority_address = get_data().begin_parse().skip_bits(160 + 160).~load_msg_addr();
-    total_proofs_submitted = 0;
-    last_processed_operation = 0;
-    is_active = 1;
-    proof_records = new_dict();
-    vault_verifications = new_dict();
-    ml_kem_public_key = ml_kem_pubkey;
-    dilithium_public_key = dilithium_pubkey;
-    
-    save_data();
-}
 
 ;; Submit Trinity consensus proof to Ethereum
 ;; Called by off-chain validator service after monitoring Ethereum events
@@ -151,12 +141,12 @@ int calculate_merkle_root(cell merkle_proof_cell, int leaf_hash) method_id {
     int ton_block_hash,            ;; TON block hash (256-bit)
     int ton_tx_hash,               ;; TON transaction hash (256-bit)
     int ton_block_number,          ;; TON block number
-    slice sender_addr
+    slice real_sender              ;; REAL sender from recv_internal message
 ) impure {
     load_data();
     
-    ;; Verify sender is authority
-    throw_unless(ERROR_NOT_AUTHORITY, equal_slices(sender_addr, authority_address));
+    ;; Verify sender is authority (using REAL sender from message)
+    throw_unless(ERROR_NOT_AUTHORITY, equal_slices(real_sender, authority_address));
     
     ;; Verify validator is active
     throw_unless(ERROR_VALIDATOR_NOT_ACTIVE, is_active == 1);
@@ -200,12 +190,12 @@ int calculate_merkle_root(cell merkle_proof_cell, int leaf_hash) method_id {
 () confirm_ethereum_submission(
     int operation_id,
     int ethereum_tx_hash,
-    slice sender_addr
+    slice real_sender              ;; REAL sender from recv_internal message
 ) impure {
     load_data();
     
-    ;; Verify sender is authority
-    throw_unless(ERROR_NOT_AUTHORITY, equal_slices(sender_addr, authority_address));
+    ;; Verify sender is authority (using REAL sender from message)
+    throw_unless(ERROR_NOT_AUTHORITY, equal_slices(real_sender, authority_address));
     
     ;; Get proof record
     (var proof_record_slice, var found) = proof_records.udict_get?(256, operation_id);
@@ -256,12 +246,12 @@ int calculate_merkle_root(cell merkle_proof_cell, int leaf_hash) method_id {
     int operation_type,
     int amount,
     slice user_address,
-    slice sender_addr
+    slice real_sender              ;; REAL sender from recv_internal message
 ) impure {
     load_data();
     
-    ;; Verify sender is authority
-    throw_unless(ERROR_NOT_AUTHORITY, equal_slices(sender_addr, authority_address));
+    ;; Verify sender is authority (using REAL sender from message)
+    throw_unless(ERROR_NOT_AUTHORITY, equal_slices(real_sender, authority_address));
     
     ;; Generate verification hash
     int verification_hash = string_hash(begin_cell()
@@ -302,12 +292,12 @@ int calculate_merkle_root(cell merkle_proof_cell, int leaf_hash) method_id {
     slice new_arbitrum_rpc,
     slice new_ethereum_bridge,
     int new_is_active,
-    slice sender_addr
+    slice real_sender              ;; REAL sender from recv_internal message
 ) impure {
     load_data();
     
-    ;; Verify sender is authority
-    throw_unless(ERROR_NOT_AUTHORITY, equal_slices(sender_addr, authority_address));
+    ;; Verify sender is authority (using REAL sender from message)
+    throw_unless(ERROR_NOT_AUTHORITY, equal_slices(real_sender, authority_address));
     
     ;; Update configuration
     if (~ new_arbitrum_rpc.slice_empty?()) {
@@ -410,6 +400,18 @@ int get_is_active() method_id {
     return (ml_kem_public_key, dilithium_public_key);
 }
 
+;; Get authority address
+slice get_authority_address() method_id {
+    load_data();
+    return authority_address;
+}
+
+;; Get Arbitrum RPC URL
+slice get_arbitrum_rpc_url() method_id {
+    load_data();
+    return arbitrum_rpc_url;
+}
+
 ;; ============================================================================
 ;; Message Handlers
 ;; ============================================================================
@@ -432,13 +434,30 @@ int get_is_active() method_id {
     
     ;; Operation codes
     if (op == 0x01) {  ;; initialize
+        ;; SECURITY: Only allow initialization once (authority must be unset)
+        load_data();
+        throw_if(ERROR_NOT_AUTHORITY, ~ slice_empty?(authority_address));
+        
         slice eth_bridge = in_msg_body~load_bits(160);
         slice validator_eth = in_msg_body~load_bits(160);
         slice rpc_url = in_msg_body~load_ref().begin_parse();
         int ml_kem = in_msg_body~load_uint(256);
         int dilithium = in_msg_body~load_uint(256);
         
-        initialize(eth_bridge, validator_eth, rpc_url, ml_kem, dilithium);
+        ;; Set sender as authority during initialization
+        ethereum_bridge_address = eth_bridge;
+        validator_ethereum_address = validator_eth;
+        arbitrum_rpc_url = rpc_url;
+        authority_address = sender_address;
+        total_proofs_submitted = 0;
+        last_processed_operation = 0;
+        is_active = 1;
+        proof_records = new_dict();
+        vault_verifications = new_dict();
+        ml_kem_public_key = ml_kem;
+        dilithium_public_key = dilithium;
+        save_data();
+        
         return ();
     }
     
