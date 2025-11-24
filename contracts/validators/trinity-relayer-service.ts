@@ -49,7 +49,7 @@ const TESTNET_CONFIG: RelayerConfig = {
     network: "testnet",
     ethereum: {
         rpcUrl: process.env.ARBITRUM_RPC_URL || "https://arb-sepolia.g.alchemy.com/v2/YOUR_KEY",
-        bridgeAddress: "0x3E205dc9881Cf0E9377683aDd22bC1aBDBdF462D",
+        bridgeAddress: "0x4a8Bc58f441Ae7E7eC2879e434D9D7e31CF80e30",
         privateKey: process.env.ETHEREUM_PRIVATE_KEY || "",
     },
     solana: {
