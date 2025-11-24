@@ -67,11 +67,11 @@ contract HTLCChronosBridge is IHTLC, IChronosVault, ReentrancyGuard, Pausable, O
     // ===== STATE VARIABLES =====
 
     /// @notice TrinityConsensusVerifier v3.5.4 for 2-of-3 consensus
-    ITrinityConsensusVerifier public immutable trinityBridge;
+    ITrinityConsensusVerifier public trinityBridge;
     
     /// @notice Arbitrum Exit Contract authorized to call releaseForExit()
-    /// @dev Set at construction - only this contract can release swaps for L1 exit
-    address public immutable arbitrumExitContract;
+    /// @dev Can be updated by owner via setArbitrumExitContract()
+    address public arbitrumExitContract;
 
     /// @notice Trinity operation fee (0.001 ETH)
     uint256 public constant TRINITY_FEE = 0.001 ether;
@@ -176,6 +176,11 @@ contract HTLCChronosBridge is IHTLC, IChronosVault, ReentrancyGuard, Pausable, O
         address indexed recipient,
         uint256 amount
     );
+    
+    event ArbitrumExitContractUpdated(
+        address indexed oldContract,
+        address indexed newContract
+    );
 
     // ===== CONSTRUCTOR =====
 
@@ -230,6 +235,22 @@ contract HTLCChronosBridge is IHTLC, IChronosVault, ReentrancyGuard, Pausable, O
      */
     function unpause() external onlyOwner {
         _unpause();
+    }
+    
+    /**
+     * @notice Update Arbitrum exit contract address (ONE-TIME ONLY for deployment fix)
+     * @param _newExitContract New HTLCArbToL1 contract address
+     * @dev SECURITY: Can only be called if current address equals deployer (initial placeholder)
+     * @dev This prevents changing from real address to malicious address
+     */
+    function setArbitrumExitContract(address _newExitContract) external onlyOwner {
+        require(_newExitContract != address(0), "Invalid exit contract address");
+        require(arbitrumExitContract == owner(), "Exit contract already set - cannot change");
+        
+        address oldContract = arbitrumExitContract;
+        arbitrumExitContract = _newExitContract;
+        
+        emit ArbitrumExitContractUpdated(oldContract, _newExitContract);
     }
 
     // ===== HTLC LIFECYCLE =====
