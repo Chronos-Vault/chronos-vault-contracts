@@ -1,0 +1,181 @@
+#include "imports/stdlib.fc";
+#include "imports/jetton-utils.fc";
+#include "imports/op-codes.fc";
+
+;; CVT Buyback and Burn Contract
+;; Implements the deflationary mechanism for the CVT token
+
+;; Storage TL-B:
+;; storage#_ owner_address:MsgAddress jetton_master_address:MsgAddress
+;;           treasury_address:MsgAddress burn_rate_bp:uint16 
+;;           last_burn_timestamp:uint64 = Storage;
+
+(slice, slice, slice, int, int) load_data() {
+  var ds = get_data().begin_parse();
+  return (
+    ds~load_msg_addr(), ;; owner_address
+    ds~load_msg_addr(), ;; jetton_master_address
+    ds~load_msg_addr(), ;; treasury_address
+    ds~load_uint(16),   ;; burn_rate_bp (basis points, 1 bp = 0.01%)
+    ds~load_uint(64)    ;; last_burn_timestamp
+  );
+}
+
+() save_data(slice owner_address, slice jetton_master_address, slice treasury_address, int burn_rate_bp, int last_burn_timestamp) impure {
+  set_data(begin_cell()
+    .store_slice(owner_address)
+    .store_slice(jetton_master_address)
+    .store_slice(treasury_address)
+    .store_uint(burn_rate_bp, 16)
+    .store_uint(last_burn_timestamp, 64)
+    .end_cell());
+}
+
+() recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
+  if (in_msg_body.slice_empty?()) { ;; ignore empty messages
+    return ();
+  }
+  
+  slice cs = in_msg_full.begin_parse();
+  int flags = cs~load_uint(4);
+  
+  if (flags & 1) { ;; handle bounced messages
+    return ();
+  }
+  
+  slice sender_address = cs~load_msg_addr();
+  cs~load_msg_addr(); ;; skip dst
+  cs~load_coins(); ;; skip value
+  cs~skip_bits(1); ;; skip extracurrency collection
+  cs~load_coins(); ;; skip ihr_fee
+  int fwd_fee = cs~load_coins(); ;; we use message fwd_fee for calculation
+  
+  int op = in_msg_body~load_uint(32);
+  int query_id = in_msg_body~load_uint(64);
+  
+  (slice owner_address, slice jetton_master_address, slice treasury_address, int burn_rate_bp, int last_burn_timestamp) = load_data();
+  
+  if (op == op::execute_buyback()) {
+    ;; Verify sender is owner or treasury
+    throw_unless(401, equal_slices(sender_address, owner_address) | equal_slices(sender_address, treasury_address));
+    
+    ;; Verify we haven't burned too recently (at least a week since last burn)
+    int current_time = now();
+    int min_burn_interval = 60 * 60 * 24 * 7; ;; 7 days in seconds
+    throw_unless(402, (current_time - last_burn_timestamp) >= min_burn_interval);
+    
+    ;; Parse jetton data to determine circulating supply
+    int amount_to_burn = in_msg_body~load_coins();
+    throw_unless(403, amount_to_burn > 0);
+    
+    ;; Request stable tokens from treasury
+    var msg = begin_cell()
+      .store_uint(0x18, 6)
+      .store_slice(treasury_address)
+      .store_coins(50000000) ;; 0.05 TON for fees
+      .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+      .store_uint(op::request_tokens(), 32)
+      .store_uint(query_id, 64)
+      .store_slice(owner_address) ;; Return address for confirmations
+      .store_coins(amount_to_burn);
+    send_raw_message(msg.end_cell(), 1);
+    
+    ;; Update last burn timestamp
+    save_data(owner_address, jetton_master_address, treasury_address, burn_rate_bp, current_time);
+    
+    return ();
+  }
+  
+  if (op == op::tokens_received()) {
+    ;; Verify sender is the treasury
+    throw_unless(401, equal_slices(sender_address, treasury_address));
+    
+    ;; Get stable token amounts for purchasing CVT
+    int stable_amount = in_msg_body~load_coins();
+    throw_unless(403, stable_amount > 0);
+    
+    ;; This is a simplified version. In a real implementation:
+    ;; 1. Connect to DEX (e.g., TON Swap) to buy CVT tokens
+    ;; 2. Execute the trade
+    ;; 3. Burn the purchased CVT
+    
+    ;; For this example, we'll simulate the receipt of CVT tokens:
+    int estimated_cvt = stable_amount * 100 / 30; ;; Simplified price calculation (100 CVT = 30 USDT)
+    
+    ;; Burn the purchased tokens:
+    var burn_msg = begin_cell()
+      .store_uint(0x18, 6)
+      .store_slice(jetton_master_address)
+      .store_coins(50000000) ;; 0.05 TON for fees
+      .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+      .store_uint(op::burn(), 32)
+      .store_uint(query_id, 64)
+      .store_coins(estimated_cvt)
+      .store_slice(my_address());
+    send_raw_message(burn_msg.end_cell(), 1);
+    
+    return ();
+  }
+  
+  if (op == op::set_burn_rate()) {
+    ;; Only owner can set burn rate
+    throw_unless(401, equal_slices(sender_address, owner_address));
+    
+    ;; Get new burn rate
+    int new_burn_rate_bp = in_msg_body~load_uint(16);
+    
+    ;; Validate burn rate (max 5% = 500 basis points)
+    throw_unless(402, (new_burn_rate_bp > 0) & (new_burn_rate_bp <= 500));
+    
+    ;; Update burn rate
+    save_data(owner_address, jetton_master_address, treasury_address, new_burn_rate_bp, last_burn_timestamp);
+    
+    return ();
+  }
+  
+  if (op == op::change_treasury()) {
+    ;; Only owner can change treasury
+    throw_unless(401, equal_slices(sender_address, owner_address));
+    
+    ;; Get new treasury address
+    slice new_treasury_address = in_msg_body~load_msg_addr();
+    
+    ;; Update treasury address
+    save_data(owner_address, jetton_master_address, new_treasury_address, burn_rate_bp, last_burn_timestamp);
+    
+    return ();
+  }
+  
+  if (op == op::change_owner()) {
+    ;; Only owner can change ownership
+    throw_unless(401, equal_slices(sender_address, owner_address));
+    
+    ;; Get new owner address
+    slice new_owner_address = in_msg_body~load_msg_addr();
+    
+    ;; Update owner address
+    save_data(new_owner_address, jetton_master_address, treasury_address, burn_rate_bp, last_burn_timestamp);
+    
+    return ();
+  }
+  
+  throw(0xffff); ;; If the message is not processed
+}
+
+;; Get methods
+
+(slice, slice, slice, int, int) get_buyback_data() method_id {
+  return load_data();
+}
+
+int get_next_burn_time() method_id {
+  (_, _, _, _, int last_burn_timestamp) = load_data();
+  int min_burn_interval = 60 * 60 * 24 * 7; ;; 7 days in seconds
+  return last_burn_timestamp + min_burn_interval;
+}
+
+int is_burn_available() method_id {
+  (_, _, _, _, int last_burn_timestamp) = load_data();
+  int min_burn_interval = 60 * 60 * 24 * 7; ;; 7 days in seconds
+  return (now() - last_burn_timestamp) >= min_burn_interval;
+}
