@@ -48,7 +48,7 @@ contract TrinityExitGateway is ReentrancyGuard, Ownable {
     // ===== TRINITY INTEGRATION =====
 
     /// @notice Trinity Protocol consensus verifier (real production contract)
-    address public immutable trinityVerifier;
+    address public trinityVerifier;
 
     /// @notice Minimum Trinity consensus required (2 of 3)
     uint8 public constant MIN_CONSENSUS = 2;
@@ -138,6 +138,11 @@ contract TrinityExitGateway is ReentrancyGuard, Ownable {
     );
 
     event EmergencyPause(bool paused);
+    
+    event TrinityVerifierUpdated(
+        address indexed oldVerifier,
+        address indexed newVerifier
+    );
 
     // ===== MODIFIERS =====
 
@@ -162,6 +167,22 @@ contract TrinityExitGateway is ReentrancyGuard, Ownable {
     constructor(address _trinityVerifier, address _owner) Ownable(_owner) {
         require(_trinityVerifier != address(0), "Invalid Trinity address");
         trinityVerifier = _trinityVerifier;
+    }
+    
+    /**
+     * @notice Update Trinity verifier address (ONE-TIME ONLY for deployment fix)
+     * @param _newVerifier New TrinityConsensusVerifier contract address
+     * @dev SECURITY: Can only be called if current address equals deployer (initial placeholder)
+     * @dev This prevents changing from real address to malicious address
+     */
+    function setTrinityVerifier(address _newVerifier) external onlyOwner {
+        require(_newVerifier != address(0), "Invalid Trinity verifier address");
+        require(trinityVerifier == owner(), "Trinity verifier already set - cannot change");
+        
+        address oldVerifier = trinityVerifier;
+        trinityVerifier = _newVerifier;
+        
+        emit TrinityVerifierUpdated(oldVerifier, _newVerifier);
     }
 
     // ===== CORE FUNCTIONS =====
