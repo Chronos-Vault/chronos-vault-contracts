@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: MIT
-// Trinity Protocol v3.5.18 - Updated: 2025-11-25T19:34:01.166Z
 pragma solidity ^0.8.20;
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -288,7 +287,17 @@ contract TrinityExitGateway is ReentrancyGuard, Ownable {
         // v3.5.15 AUDIT FIX C-3: Construct leaf hash FIRST for claim tracking
         // This prevents Merkle malleability attacks where multiple exits with same exitId
         // but different (recipient, amount) could be claimed
-        bytes32 innerHash = keccak256(abi.encode(exitId, recipient, amount));
+        // HIGH-9 FIX v3.5.18: Added domain separator and context binding
+        // External audit: Hash collisions possible without domain binding
+        bytes32 DOMAIN_SEPARATOR = keccak256("TrinityExitGateway.claimExit.v1");
+        bytes32 innerHash = keccak256(abi.encode(
+            DOMAIN_SEPARATOR,  // Domain separator prevents collision
+            exitId,
+            recipient,
+            amount,
+            batchRoot,         // Binds to specific batch
+            block.chainid      // Binds to specific network
+        ));
         bytes32 leaf = keccak256(bytes.concat(innerHash));
         
         // v3.5.15 AUDIT FIX C-3: Check claimed status using FULL leaf hash (not just exitId)
