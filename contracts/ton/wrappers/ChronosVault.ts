@@ -1,3 +1,4 @@
+// Trinity Protocol v3.5.18 - Updated: 2025-11-25T19:34:32.560Z
 import { 
   Address, 
   beginCell, 
