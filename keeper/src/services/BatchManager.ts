@@ -1,3 +1,4 @@
+// Trinity Protocol v3.5.18 - Updated: 2025-11-25T19:28:08.324Z
 import { StandardMerkleTree } from "@openzeppelin/merkle-tree";
 import { config } from "../config";
 import { Analytics } from "./Analytics";
