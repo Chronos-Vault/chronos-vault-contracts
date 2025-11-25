@@ -1,6 +1,8 @@
 /**
  * Type definitions for Exit-Batch Keeper
  */
+// Trinity Protocol v3.5.18 - Updated: 2025-11-25T19:28:14.829Z
+
 
 export interface ExitRequest {
   exitId: string;
