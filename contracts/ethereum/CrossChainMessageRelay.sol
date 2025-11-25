@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: MIT
-// Trinity Protocol v3.5.18 - Updated: 2025-11-25T19:34:06.173Z
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
@@ -264,15 +263,20 @@ contract CrossChainMessageRelay is ReentrancyGuard, Ownable {
         require(proof.length > 0, "Empty proof");
         require(signature.length == 65, "Invalid signature length");
         
-        // SECURITY FIX: Verify signature using TrinityConsensusVerifier
-        // This ensures the proof is actually from a valid Trinity validator
-        bytes32 proofHash = keccak256(abi.encode(messageId, chainId, proof));
+        // CRITICAL-1 FIX v3.5.18: Include message-specific data in signature hash
+        // External audit: Previous implementation allowed signature replay across messages
+        // Now includes payload, sender, targetChain to bind signature to specific message
+        bytes32 proofHash = keccak256(abi.encode(
+            messageId,
+            chainId,
+            proof,
+            message.payload,       // Include payload
+            message.sender,        // Include sender
+            message.targetChain,   // Include target chain
+            address(this),         // Include contract address (cross-contract replay protection)
+            block.chainid          // Include network chain ID (cross-network replay protection)
+        ));
         require(_verifySignature(proofHash, signature, chainId), "Invalid signature");
-
-        // SECURITY FIX: Assign relayer on FIRST proof submission (prevent front-running)
-        if (assignedRelayer[messageId] == address(0)) {
-            assignedRelayer[messageId] = msg.sender;
-        }
 
         // Mark proof as received
         message.chainProofReceived[chainId] = true;
@@ -280,9 +284,11 @@ contract CrossChainMessageRelay is ReentrancyGuard, Ownable {
 
         emit ProofReceived(messageId, chainId, message.proofsReceived);
 
-        // If 2-of-3 consensus reached, relay message
+        // CRITICAL-2 FIX v3.5.18: Pay msg.sender who achieves consensus, not first relayer
+        // External audit: Previous implementation allowed front-running fee theft
+        // Now pays the relayer who submits the consensus-achieving proof
         if (message.proofsReceived >= 2) {
-            _relayMessage(messageId, assignedRelayer[messageId]);
+            _relayMessage(messageId, msg.sender);
         }
     }
 
