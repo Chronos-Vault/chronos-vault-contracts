@@ -2,6 +2,8 @@
  * CVT Vesting Program - Chronos Vault
  * REAL Cryptographic Time-Lock Enforcement
  */
+// Trinity Protocol v3.5.18 - Updated: 2025-11-25T19:34:27.532Z
+
 
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Token, TokenAccount, Transfer, Mint};
