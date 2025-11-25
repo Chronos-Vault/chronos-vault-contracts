@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: MIT
-// Trinity Protocol v3.5.18 - Updated: 2025-11-25T19:34:02.262Z
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
@@ -482,6 +481,12 @@ contract TrinityKeeperRegistry is ReentrancyGuard, Pausable, Ownable {
         k.registeredAt = 0;
         k.activatedAt = 0;
         k.withdrawalInitiatedAt = 0;
+        
+        // HIGH-11 FIX v3.5.18: Decrement totalKeepers on withdrawal
+        // External audit: totalKeepers was never decremented, causing accounting inflation
+        if (totalKeepers > 0) {
+            totalKeepers--;
+        }
         
         // SECURITY NOTE: We do NOT reset hasRegistered here
         // This ensures allKeepers[] never has duplicates (critical for verifyAccounting)
