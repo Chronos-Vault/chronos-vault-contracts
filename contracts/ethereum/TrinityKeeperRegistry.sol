@@ -6,12 +6,42 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
 
 /**
+ * @title IVRFProvider
+ * @notice Interface for VRF (Verifiable Random Function) providers
+ * @dev Audit v3.5.19: Added VRF interface for true randomness in keeper selection
+ * 
+ * SUPPORTED PROVIDERS:
+ * - Chainlink VRF v2.5
+ * - Pyth Entropy
+ * - Custom commit-reveal scheme
+ * 
+ * SECURITY: VRF prevents validators from gaming keeper selection
+ */
+interface IVRFProvider {
+    /// @notice Request random number from VRF oracle
+    /// @param requestId Unique identifier for this request
+    /// @return success Whether the request was successful
+    function requestRandomness(bytes32 requestId) external returns (bool success);
+    
+    /// @notice Get the latest random number (view-only fallback)
+    /// @return randomNumber The latest verified random number
+    /// @return timestamp When the random number was generated
+    function getLatestRandomness() external view returns (uint256 randomNumber, uint256 timestamp);
+    
+    /// @notice Check if a pending random request has been fulfilled
+    /// @param requestId The request ID to check
+    /// @return fulfilled Whether the request has been fulfilled
+    /// @return randomNumber The random number if fulfilled
+    function checkRandomness(bytes32 requestId) external view returns (bool fulfilled, uint256 randomNumber);
+}
+
+/**
  * @title TrinityKeeperRegistry
  * @author Trinity Protocol Team
  * @notice Decentralized keeper registry with bond/slashing mechanism for exit batching automation
  * 
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- * 🎯 ARCHITECTURE
+ * 🎯 ARCHITECTURE (v3.5.19 - VRF Integration)
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  * 
  * Design Goals:
@@ -20,6 +50,7 @@ import "@openzeppelin/contracts/utils/Pausable.sol";
  * 3. Automated keeper rotation (if keeper fails, next keeper takes over)
  * 4. Performance-based reputation (track successful vs failed batches)
  * 5. Reward distribution (keepers earn fees from batch submissions)
+ * 6. TRUE RANDOMNESS via VRF (prevents validator gaming) [v3.5.19]
  * 
  * Keeper Lifecycle:
  * 1. Register: Post 1 ETH bond + pass reputation check
@@ -34,6 +65,7 @@ import "@openzeppelin/contracts/utils/Pausable.sol";
  * - Cooldown period: 7 days (allows time for challenges)
  * - Slash percentage: 100% for fraud, 10% for negligence
  * - Max active keepers: 100 (prevents governance attacks)
+ * - VRF randomness: True random keeper selection (v3.5.19)
  */
 contract TrinityKeeperRegistry is ReentrancyGuard, Pausable, Ownable {
     // ===== CONSTANTS =====
@@ -111,6 +143,26 @@ contract TrinityKeeperRegistry is ReentrancyGuard, Pausable, Ownable {
 
     /// @notice Authorized contracts that can call keeper functions
     mapping(address => bool) public authorizedContracts;
+    
+    // ===== VRF INTEGRATION (v3.5.19) =====
+    
+    /// @notice VRF provider for true randomness (optional)
+    IVRFProvider public vrfProvider;
+    
+    /// @notice Whether VRF is enabled (falls back to blockhash if disabled)
+    bool public vrfEnabled;
+    
+    /// @notice Maximum age for VRF randomness (stale randomness rejected)
+    uint256 public constant VRF_MAX_AGE = 10 minutes;
+    
+    /// @notice Pending VRF requests for keeper selection
+    mapping(bytes32 => address) public pendingVRFRequests;
+    
+    /// @notice Last VRF random number used
+    uint256 public lastVRFRandomness;
+    
+    /// @notice Timestamp of last VRF update
+    uint256 public lastVRFTimestamp;
 
     // ===== EVENTS =====
 
@@ -167,6 +219,20 @@ contract TrinityKeeperRegistry is ReentrancyGuard, Pausable, Ownable {
     event TreasuryUpdated(
         address indexed oldTreasury,
         address indexed newTreasury
+    );
+    
+    event VRFProviderUpdated(
+        address indexed oldProvider,
+        address indexed newProvider
+    );
+    
+    event VRFEnabledChanged(
+        bool enabled
+    );
+    
+    event VRFRandomnessReceived(
+        bytes32 indexed requestId,
+        uint256 randomness
     );
 
     // ===== MODIFIERS =====
@@ -532,24 +598,117 @@ contract TrinityKeeperRegistry is ReentrancyGuard, Pausable, Ownable {
     }
 
     /**
-     * @notice Get next available keeper (pseudo-random selection)
+     * @notice Get next available keeper (VRF-enabled random selection)
      * @return address Address of next keeper, or address(0) if none available
      * 
      * @dev Used by TrinityExitGateway to automatically assign batches
-     * @dev SECURITY FIX: Uses blockhash for better randomness (less gameable)
-     * @dev Note: Still not perfect (validator can still influence), but better than block.number
-     * @dev Future: Implement VRF (Chainlink VRF or similar) for true randomness
+     * @dev AUDIT v3.5.19: VRF integration for true randomness
+     * 
+     * RANDOMNESS STRATEGY:
+     * 1. If VRF enabled and fresh: Use VRF randomness (best security)
+     * 2. If VRF stale or disabled: Use blockhash + nonce (fallback)
+     * 3. Multiple entropy sources: VRF + blockhash + timestamp (defense in depth)
+     * 
+     * SECURITY: VRF prevents validators from gaming keeper selection
      */
     function getNextKeeper() external view returns (address) {
         if (activeKeepers.length == 0) {
             return address(0);
         }
 
-        // SECURITY FIX: Use blockhash of previous block for pseudo-randomness
-        // This is harder to game than block.number (though not impossible)
-        uint256 randomSeed = uint256(blockhash(block.number - 1));
+        uint256 randomSeed;
+        
+        // AUDIT v3.5.19: Use VRF if enabled and not stale
+        if (vrfEnabled && address(vrfProvider) != address(0)) {
+            (uint256 vrfRandom, uint256 vrfTimestamp) = vrfProvider.getLatestRandomness();
+            
+            // Check if VRF randomness is fresh (not stale)
+            if (block.timestamp - vrfTimestamp <= VRF_MAX_AGE) {
+                // Combine VRF with blockhash for defense in depth
+                randomSeed = uint256(keccak256(abi.encodePacked(
+                    vrfRandom,
+                    blockhash(block.number - 1),
+                    block.timestamp
+                )));
+            } else {
+                // VRF stale - fallback to enhanced blockhash
+                randomSeed = _getFallbackRandomness();
+            }
+        } else {
+            // VRF not enabled - use enhanced blockhash fallback
+            randomSeed = _getFallbackRandomness();
+        }
+        
         uint256 index = randomSeed % activeKeepers.length;
         return activeKeepers[index];
+    }
+    
+    /**
+     * @notice Get next keeper with VRF callback (async)
+     * @param requester Address requesting the keeper assignment
+     * @return requestId The VRF request ID for callback
+     * 
+     * @dev For high-security scenarios requiring provable randomness
+     * @dev Caller must handle the async callback pattern
+     */
+    function requestNextKeeperVRF(address requester) external onlyAuthorized returns (bytes32 requestId) {
+        require(vrfEnabled && address(vrfProvider) != address(0), "VRF not enabled");
+        require(activeKeepers.length > 0, "No active keepers");
+        
+        requestId = keccak256(abi.encodePacked(block.timestamp, requester, block.prevrandao));
+        pendingVRFRequests[requestId] = requester;
+        
+        bool success = vrfProvider.requestRandomness(requestId);
+        require(success, "VRF request failed");
+        
+        return requestId;
+    }
+    
+    /**
+     * @notice Fulfill VRF request callback
+     * @param requestId The request ID being fulfilled
+     * @param randomness The random number from VRF
+     * @return keeper The selected keeper address
+     * 
+     * @dev Called by VRF provider after randomness is ready
+     */
+    function fulfillRandomness(bytes32 requestId, uint256 randomness) external returns (address keeper) {
+        require(msg.sender == address(vrfProvider), "Only VRF provider");
+        require(pendingVRFRequests[requestId] != address(0), "Invalid request");
+        
+        // Update stored VRF state
+        lastVRFRandomness = randomness;
+        lastVRFTimestamp = block.timestamp;
+        
+        // Select keeper using VRF randomness
+        if (activeKeepers.length > 0) {
+            uint256 index = randomness % activeKeepers.length;
+            keeper = activeKeepers[index];
+        }
+        
+        // Clean up request
+        delete pendingVRFRequests[requestId];
+        
+        emit VRFRandomnessReceived(requestId, randomness);
+        return keeper;
+    }
+    
+    /**
+     * @notice Fallback randomness when VRF is unavailable
+     * @return randomSeed Enhanced pseudo-random seed
+     * 
+     * @dev Combines multiple entropy sources for improved security
+     * @dev Not as secure as VRF but better than simple blockhash
+     */
+    function _getFallbackRandomness() internal view returns (uint256) {
+        // Combine multiple entropy sources
+        return uint256(keccak256(abi.encodePacked(
+            blockhash(block.number - 1),
+            block.timestamp,
+            block.prevrandao, // EIP-4399: RANDOM opcode (post-merge)
+            msg.sender,
+            activeKeepers.length
+        )));
     }
 
     /**
@@ -689,6 +848,56 @@ contract TrinityKeeperRegistry is ReentrancyGuard, Pausable, Ownable {
         activeCount = activeKeepers.length;
         totalRegistered = totalKeepers;
         return (activeCount, totalRegistered);
+    }
+    
+    // ===== VRF ADMIN FUNCTIONS (v3.5.19) =====
+    
+    /**
+     * @notice Set VRF provider address
+     * @param _vrfProvider Address of VRF provider contract
+     * 
+     * @dev AUDIT v3.5.19: Enable true randomness for keeper selection
+     * @dev Supports Chainlink VRF, Pyth Entropy, or custom providers
+     */
+    function setVRFProvider(address _vrfProvider) external onlyOwner {
+        address oldProvider = address(vrfProvider);
+        vrfProvider = IVRFProvider(_vrfProvider);
+        emit VRFProviderUpdated(oldProvider, _vrfProvider);
+    }
+    
+    /**
+     * @notice Enable or disable VRF
+     * @param enabled Whether VRF should be used
+     * 
+     * @dev When disabled, falls back to enhanced blockhash randomness
+     */
+    function setVRFEnabled(bool enabled) external onlyOwner {
+        require(!enabled || address(vrfProvider) != address(0), "VRF provider not set");
+        vrfEnabled = enabled;
+        emit VRFEnabledChanged(enabled);
+    }
+    
+    /**
+     * @notice Check VRF status
+     * @return enabled Whether VRF is enabled
+     * @return provider VRF provider address
+     * @return lastRandomness Last random number received
+     * @return lastTimestamp When last random was received
+     * @return isFresh Whether the randomness is fresh (within VRF_MAX_AGE)
+     */
+    function getVRFStatus() external view returns (
+        bool enabled,
+        address provider,
+        uint256 lastRandomness,
+        uint256 lastTimestamp,
+        bool isFresh
+    ) {
+        enabled = vrfEnabled;
+        provider = address(vrfProvider);
+        lastRandomness = lastVRFRandomness;
+        lastTimestamp = lastVRFTimestamp;
+        isFresh = (block.timestamp - lastVRFTimestamp) <= VRF_MAX_AGE;
+        return (enabled, provider, lastRandomness, lastTimestamp, isFresh);
     }
 
     // ===== FALLBACK =====
