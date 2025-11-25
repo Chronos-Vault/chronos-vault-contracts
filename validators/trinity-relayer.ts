@@ -10,6 +10,8 @@
  * - Proof Submitter: Submit proofs to the other 2 chains
  * - Nonce Manager: Track sequential nonces to prevent replay attacks
  */
+// Trinity Protocol v3.5.18 - Updated: 2025-11-25T19:28:17.359Z
+
 
 import { ethers } from 'ethers';
 import { Connection, PublicKey, Keypair } from '@solana/web3.js';
