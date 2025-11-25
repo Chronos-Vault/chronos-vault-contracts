@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: MIT
-// Trinity Protocol v3.5.18 - Updated: 2025-11-25T19:34:07.506Z
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
@@ -114,6 +113,10 @@ contract TrinityFeeSplitter is ReentrancyGuard, Ownable, Pausable {
     
     /// @notice SECURITY FIX: Timelock for beneficiary changes (48 hours)
     uint256 public constant BENEFICIARY_CHANGE_DELAY = 48 hours;
+    
+    /// @notice HIGH-10 FIX v3.5.18: Track beneficiary migration status
+    /// External audit: Old beneficiaries could withdraw tokens before migration complete
+    mapping(address => bool) public migrationInProgress;
 
     // ===== EVENTS =====
 
@@ -351,9 +354,13 @@ contract TrinityFeeSplitter is ReentrancyGuard, Ownable, Pausable {
     /**
      * @notice Withdraw accumulated ERC-20 token fees
      * @param token Token address to withdraw
+     * HIGH-10 FIX v3.5.18: Check migration freeze status
      */
     function withdrawToken(address token) external nonReentrant {
         require(token != address(0), "Invalid token");
+        
+        // HIGH-10 FIX: Prevent withdrawals during migration period
+        require(!migrationInProgress[msg.sender], "Migration in progress - wait for completion");
         
         uint256 amount = balances[msg.sender].tokenBalances[token];
         require(amount > 0, "No balance");
@@ -463,6 +470,7 @@ contract TrinityFeeSplitter is ReentrancyGuard, Ownable, Pausable {
      * @notice SECURITY FIX: Execute beneficiary change (step 2 of 2-step process)
      * @param role Beneficiary role to update
      * @dev Can only be called after BENEFICIARY_CHANGE_DELAY has passed
+     * HIGH-10 FIX v3.5.18: Freeze old beneficiary withdrawals until migration complete
      */
     function executeBeneficiaryChange(BeneficiaryRole role) external onlyOwner {
         address newBeneficiary = pendingBeneficiaries[role];
@@ -474,6 +482,10 @@ contract TrinityFeeSplitter is ReentrancyGuard, Ownable, Pausable {
         
         address oldBeneficiary = beneficiaries[role];
         beneficiaries[role] = newBeneficiary;
+        
+        // HIGH-10 FIX: Freeze old beneficiary withdrawals during migration
+        // External audit: Old beneficiary could race to withdraw tokens before migration
+        migrationInProgress[oldBeneficiary] = true;
 
         // SECURITY FIX: Transfer ALL pending balances (ETH + all tokens)
         // ETH balance transfer - ADD to new beneficiary's balance (don't overwrite!)
@@ -485,12 +497,23 @@ contract TrinityFeeSplitter is ReentrancyGuard, Ownable, Pausable {
         // NOTE: Token balances need to be migrated manually per token
         // This is because we can't enumerate all tokens in the mapping
         // Use migrateTokenBalance() function for each token
+        // Then call completeMigration() to unfreeze withdrawals
 
         // Clear pending change
         delete pendingBeneficiaries[role];
         delete beneficiaryChangeTimestamp[role];
 
         emit BeneficiaryUpdated(role, oldBeneficiary, newBeneficiary);
+    }
+    
+    /**
+     * @notice HIGH-10 FIX: Complete migration and unfreeze old beneficiary
+     * @param oldBeneficiary Address to complete migration for
+     * @dev Call after all token balances have been migrated via migrateTokenBalance()
+     */
+    function completeMigration(address oldBeneficiary) external onlyOwner {
+        require(migrationInProgress[oldBeneficiary], "No migration in progress");
+        migrationInProgress[oldBeneficiary] = false;
     }
 
     /**
