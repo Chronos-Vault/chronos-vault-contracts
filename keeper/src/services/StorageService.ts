@@ -1,3 +1,4 @@
+// Trinity Protocol v3.5.18 - Updated: 2025-11-25T19:28:13.530Z
 import { create as ipfsCreate } from "ipfs-http-client";
 import Arweave from "arweave";
 import { config } from "../config";
