@@ -1,3 +1,4 @@
+// Trinity Protocol v3.5.18 - Updated: 2025-11-25T19:28:05.384Z
 import dotenv from "dotenv";
 
 dotenv.config();
