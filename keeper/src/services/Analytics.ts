@@ -1,3 +1,4 @@
+// Trinity Protocol v3.5.18 - Updated: 2025-11-25T19:28:06.688Z
 import { ExitRequest, Batch, Challenge, KeeperMetrics } from "../types";
 import { logger } from "../utils/logger";
 
