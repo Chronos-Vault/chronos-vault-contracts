@@ -1,3 +1,4 @@
+// Trinity Protocol v3.5.18 - Updated: 2025-11-25T19:34:24.064Z
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 use std::convert::TryFrom;
