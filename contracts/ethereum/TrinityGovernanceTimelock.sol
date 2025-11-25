@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 /**
  * @title TrinityGovernanceTimelock
@@ -10,7 +11,7 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
  * @notice Timelock controller for delayed parameter changes and governance actions
  * 
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- * 🎯 ARCHITECTURE
+ * 🎯 ARCHITECTURE (v3.5.19 - Emergency Bypass + Veto)
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  * 
  * Problem:
@@ -26,6 +27,7 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
  * 2. EXECUTOR_ROLE: Can execute actions after timelock
  * 3. CANCELLER_ROLE: Can cancel malicious proposals
  * 4. TIMELOCK_ADMIN_ROLE: Can manage roles
+ * 5. VETOER_ROLE: Can veto malicious proposals (v3.5.19)
  * 
  * Design:
  * - 48-hour minimum delay for critical actions
@@ -33,6 +35,7 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
  * - 7-day maximum execution window
  * - Multi-sig requirement for critical proposals
  * - Emergency bypass for critical security fixes (requires 2-of-3 multi-sig)
+ * - VETO MECHANISM: VETOER_ROLE can block malicious proposals (v3.5.19)
  * 
  * Security:
  * - Proposals are hashed to prevent tampering
@@ -40,14 +43,23 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
  * - Ready timestamp prevents premature execution
  * - Expiry prevents stale proposals
  * - Cancellation prevents malicious execution
+ * - EMERGENCY BYPASS: 2-of-3 multi-sig for critical security fixes (v3.5.19)
+ * - VETO: Independent oversight prevents governance attacks (v3.5.19)
  */
 contract TrinityGovernanceTimelock is ReentrancyGuard, AccessControl {
+    using ECDSA for bytes32;
     // ===== ROLES =====
 
     bytes32 public constant PROPOSER_ROLE = keccak256("PROPOSER_ROLE");
     bytes32 public constant EXECUTOR_ROLE = keccak256("EXECUTOR_ROLE");
     bytes32 public constant CANCELLER_ROLE = keccak256("CANCELLER_ROLE");
     bytes32 public constant TIMELOCK_ADMIN_ROLE = keccak256("TIMELOCK_ADMIN_ROLE");
+    
+    /// @notice AUDIT v3.5.19: Vetoer role for blocking malicious proposals
+    bytes32 public constant VETOER_ROLE = keccak256("VETOER_ROLE");
+    
+    /// @notice AUDIT v3.5.19: Emergency signer role for bypass (2-of-3 multi-sig)
+    bytes32 public constant EMERGENCY_SIGNER_ROLE = keccak256("EMERGENCY_SIGNER_ROLE");
 
     // ===== CONSTANTS =====
 
@@ -106,6 +118,31 @@ contract TrinityGovernanceTimelock is ReentrancyGuard, AccessControl {
 
     /// @notice SECURITY FIX: Track executed proposal IDs to prevent replay
     mapping(bytes32 => bool) public hasBeenExecuted;
+    
+    // ===== VETO MECHANISM (v3.5.19) =====
+    
+    /// @notice Track vetoed proposals (cannot be executed)
+    mapping(bytes32 => bool) public isVetoed;
+    
+    /// @notice Veto expiry (vetoes can be lifted after this period)
+    uint256 public vetoExpiryPeriod;
+    
+    /// @notice When a veto was placed
+    mapping(bytes32 => uint256) public vetoTimestamp;
+    
+    // ===== EMERGENCY BYPASS (v3.5.19) =====
+    
+    /// @notice Emergency signers for 2-of-3 bypass
+    address[3] public emergencySigners;
+    
+    /// @notice Emergency actions executed (prevent replay)
+    mapping(bytes32 => bool) public emergencyExecuted;
+    
+    /// @notice Nonce for emergency actions (prevent replay)
+    uint256 public emergencyNonce;
+    
+    /// @notice Domain separator for emergency signatures
+    bytes32 public EMERGENCY_DOMAIN_SEPARATOR;
 
     // ===== EVENTS =====
 
@@ -139,6 +176,33 @@ contract TrinityGovernanceTimelock is ReentrancyGuard, AccessControl {
         uint256 oldMinDelay,
         uint256 newMinDelay
     );
+    
+    // ===== VETO & EMERGENCY EVENTS (v3.5.19) =====
+    
+    event ProposalVetoed(
+        bytes32 indexed id,
+        address indexed vetoer,
+        string reason
+    );
+    
+    event VetoLifted(
+        bytes32 indexed id,
+        address indexed lifter
+    );
+    
+    event EmergencyExecuted(
+        bytes32 indexed actionHash,
+        address indexed target,
+        uint256 value,
+        bytes data,
+        address[3] signers
+    );
+    
+    event EmergencySignerUpdated(
+        uint256 indexed index,
+        address indexed oldSigner,
+        address indexed newSigner
+    );
 
     // ===== CONSTRUCTOR =====
 
@@ -153,7 +217,8 @@ contract TrinityGovernanceTimelock is ReentrancyGuard, AccessControl {
         uint256 _minDelay,
         address[] memory proposers,
         address[] memory executors,
-        address admin
+        address admin,
+        address[3] memory _emergencySigners
     ) {
         require(_minDelay >= ABSOLUTE_MIN_DELAY, "Delay too short");
         minDelay = _minDelay;
@@ -162,6 +227,9 @@ contract TrinityGovernanceTimelock is ReentrancyGuard, AccessControl {
         minDelayCritical = 48 hours;
         minDelayNormal = 24 hours;
         gracePeriod = 7 days;
+        
+        // AUDIT v3.5.19: Initialize veto expiry period (30 days)
+        vetoExpiryPeriod = 30 days;
 
         // Setup roles
         _grantRole(TIMELOCK_ADMIN_ROLE, admin);
@@ -175,6 +243,36 @@ contract TrinityGovernanceTimelock is ReentrancyGuard, AccessControl {
         for (uint256 i = 0; i < executors.length; i++) {
             _grantRole(EXECUTOR_ROLE, executors[i]);
         }
+        
+        // AUDIT v3.5.19: Initialize emergency signers (2-of-3 multi-sig)
+        require(
+            _emergencySigners[0] != address(0) &&
+            _emergencySigners[1] != address(0) &&
+            _emergencySigners[2] != address(0),
+            "Invalid emergency signers"
+        );
+        require(
+            _emergencySigners[0] != _emergencySigners[1] &&
+            _emergencySigners[1] != _emergencySigners[2] &&
+            _emergencySigners[0] != _emergencySigners[2],
+            "Duplicate emergency signers"
+        );
+        
+        emergencySigners = _emergencySigners;
+        
+        // Grant emergency signer roles
+        for (uint256 i = 0; i < 3; i++) {
+            _grantRole(EMERGENCY_SIGNER_ROLE, _emergencySigners[i]);
+        }
+        
+        // Initialize domain separator for emergency signatures
+        EMERGENCY_DOMAIN_SEPARATOR = keccak256(abi.encode(
+            keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+            keccak256(bytes("TrinityGovernanceTimelock")),
+            keccak256(bytes("3.5.19")),
+            block.chainid,
+            address(this)
+        ));
     }
 
     // ===== PROPOSAL CREATION =====
@@ -368,6 +466,9 @@ contract TrinityGovernanceTimelock is ReentrancyGuard, AccessControl {
         require(block.timestamp >= proposal.readyAt, "Not ready");
         require(block.timestamp <= proposal.expiresAt, "Expired");
         
+        // AUDIT v3.5.19: Check if proposal is vetoed
+        require(!_isActiveVeto(id), "Proposal vetoed");
+        
         // SECURITY FIX: Verify predecessor is executed (enforce ordering)
         if (predecessor != bytes32(0)) {
             require(
@@ -407,6 +508,9 @@ contract TrinityGovernanceTimelock is ReentrancyGuard, AccessControl {
         require(proposal.state == ProposalState.PENDING, "Not pending");
         require(block.timestamp >= proposal.readyAt, "Not ready");
         require(block.timestamp <= proposal.expiresAt, "Expired");
+        
+        // AUDIT v3.5.19: Check if proposal is vetoed
+        require(!_isActiveVeto(id), "Proposal vetoed");
         
         // SECURITY FIX: Verify predecessor is executed (enforce ordering)
         if (predecessor != bytes32(0)) {
@@ -573,6 +677,248 @@ contract TrinityGovernanceTimelock is ReentrancyGuard, AccessControl {
             returnData := add(returnData, 0x04)
         }
         return abi.decode(returnData, (string));
+    }
+
+    // ===== VETO MECHANISM (v3.5.19) =====
+    
+    /**
+     * @notice Veto a pending proposal
+     * @param id Proposal ID to veto
+     * @param reason Human-readable reason for veto
+     * 
+     * @dev AUDIT v3.5.19: Prevents malicious proposals from executing
+     * @dev Veto can only be placed on pending proposals
+     * @dev Veto expires after vetoExpiryPeriod (allows re-submission)
+     */
+    function veto(bytes32 id, string calldata reason) external onlyRole(VETOER_ROLE) {
+        Proposal storage proposal = proposals[id];
+        require(proposal.state == ProposalState.PENDING, "Not pending");
+        require(!isVetoed[id], "Already vetoed");
+        
+        isVetoed[id] = true;
+        vetoTimestamp[id] = block.timestamp;
+        
+        emit ProposalVetoed(id, msg.sender, reason);
+    }
+    
+    /**
+     * @notice Lift an expired veto
+     * @param id Proposal ID to lift veto from
+     * 
+     * @dev Anyone can lift expired vetoes (democratic governance)
+     * @dev Veto must be older than vetoExpiryPeriod
+     */
+    function liftVeto(bytes32 id) external {
+        require(isVetoed[id], "Not vetoed");
+        require(
+            block.timestamp >= vetoTimestamp[id] + vetoExpiryPeriod,
+            "Veto not expired"
+        );
+        
+        isVetoed[id] = false;
+        delete vetoTimestamp[id];
+        
+        emit VetoLifted(id, msg.sender);
+    }
+    
+    /**
+     * @notice Check if a veto is active (not expired)
+     * @param id Proposal ID to check
+     * @return active Whether the veto is still active
+     */
+    function _isActiveVeto(bytes32 id) internal view returns (bool active) {
+        if (!isVetoed[id]) {
+            return false;
+        }
+        // Veto is active if it hasn't expired
+        return block.timestamp < vetoTimestamp[id] + vetoExpiryPeriod;
+    }
+    
+    /**
+     * @notice Check if a proposal is currently vetoed
+     * @param id Proposal ID to check
+     * @return vetoed Whether the proposal is currently vetoed (active veto)
+     */
+    function isProposalVetoed(bytes32 id) external view returns (bool vetoed) {
+        return _isActiveVeto(id);
+    }
+    
+    // ===== EMERGENCY BYPASS (v3.5.19) =====
+    
+    /**
+     * @notice Emergency bypass with 2-of-3 multi-sig
+     * @param target Target contract address
+     * @param value ETH value to send
+     * @param data Encoded function call
+     * @param signatures Array of 3 signatures (at least 2 must be valid)
+     * 
+     * @dev AUDIT v3.5.19: Allows critical security fixes without timelock
+     * @dev Requires 2-of-3 emergency signers to authorize
+     * @dev Uses EIP-712 typed data for signatures
+     * @dev Includes nonce to prevent replay attacks
+     * 
+     * SECURITY MODEL:
+     * - Emergency signers should be geographically distributed
+     * - Signers should use hardware wallets
+     * - Emergency actions should be logged and audited
+     * - Only use for CRITICAL security fixes (not regular governance)
+     */
+    function emergencyExecute(
+        address target,
+        uint256 value,
+        bytes calldata data,
+        bytes[3] calldata signatures
+    ) external payable nonReentrant {
+        require(target != address(0), "Invalid target");
+        require(msg.value == value, "ETH value mismatch");
+        
+        // Generate action hash with nonce
+        bytes32 actionHash = keccak256(abi.encode(
+            target,
+            value,
+            keccak256(data),
+            emergencyNonce,
+            block.chainid
+        ));
+        
+        // Prevent replay
+        require(!emergencyExecuted[actionHash], "Already executed");
+        
+        // Create EIP-712 digest
+        bytes32 digest = keccak256(abi.encodePacked(
+            "\x19\x01",
+            EMERGENCY_DOMAIN_SEPARATOR,
+            keccak256(abi.encode(
+                keccak256("EmergencyAction(address target,uint256 value,bytes32 dataHash,uint256 nonce,uint256 chainId)"),
+                target,
+                value,
+                keccak256(data),
+                emergencyNonce,
+                block.chainid
+            ))
+        ));
+        
+        // Verify 2-of-3 signatures
+        uint256 validSignatures = 0;
+        address[3] memory recoveredSigners;
+        bool[3] memory signerUsed;
+        
+        for (uint256 i = 0; i < 3; i++) {
+            if (signatures[i].length == 0) continue;
+            
+            address recovered = digest.recover(signatures[i]);
+            
+            // Check if recovered address is an emergency signer
+            for (uint256 j = 0; j < 3; j++) {
+                if (recovered == emergencySigners[j] && !signerUsed[j]) {
+                    signerUsed[j] = true;
+                    recoveredSigners[validSignatures] = recovered;
+                    validSignatures++;
+                    break;
+                }
+            }
+        }
+        
+        require(validSignatures >= 2, "Requires 2-of-3 signatures");
+        
+        // Update state BEFORE external call (CEI pattern)
+        emergencyExecuted[actionHash] = true;
+        emergencyNonce++;
+        
+        // Execute emergency action
+        (bool success, bytes memory returnData) = target.call{value: value}(data);
+        require(success, _getRevertMsg(returnData));
+        
+        emit EmergencyExecuted(actionHash, target, value, data, recoveredSigners);
+    }
+    
+    /**
+     * @notice Get the current emergency nonce
+     * @return nonce Current nonce for emergency actions
+     */
+    function getEmergencyNonce() external view returns (uint256) {
+        return emergencyNonce;
+    }
+    
+    /**
+     * @notice Get all emergency signers
+     * @return signers Array of 3 emergency signer addresses
+     */
+    function getEmergencySigners() external view returns (address[3] memory) {
+        return emergencySigners;
+    }
+    
+    /**
+     * @notice Update an emergency signer
+     * @param index Index of signer to update (0, 1, or 2)
+     * @param newSigner New signer address
+     * 
+     * @dev Can only be called via timelock itself (requires proposal)
+     * @dev Ensures emergency signers can be rotated securely
+     */
+    function updateEmergencySigner(uint256 index, address newSigner) external {
+        require(msg.sender == address(this), "Only timelock");
+        require(index < 3, "Invalid index");
+        require(newSigner != address(0), "Invalid signer");
+        require(
+            newSigner != emergencySigners[0] &&
+            newSigner != emergencySigners[1] &&
+            newSigner != emergencySigners[2],
+            "Duplicate signer"
+        );
+        
+        address oldSigner = emergencySigners[index];
+        
+        // Revoke old signer role and grant new
+        _revokeRole(EMERGENCY_SIGNER_ROLE, oldSigner);
+        _grantRole(EMERGENCY_SIGNER_ROLE, newSigner);
+        
+        emergencySigners[index] = newSigner;
+        
+        emit EmergencySignerUpdated(index, oldSigner, newSigner);
+    }
+    
+    /**
+     * @notice Update veto expiry period
+     * @param newPeriod New expiry period in seconds
+     * 
+     * @dev Can only be called via timelock itself
+     * @dev Minimum 7 days, maximum 90 days
+     */
+    function updateVetoExpiryPeriod(uint256 newPeriod) external {
+        require(msg.sender == address(this), "Only timelock");
+        require(newPeriod >= 7 days, "Period too short");
+        require(newPeriod <= 90 days, "Period too long");
+        
+        vetoExpiryPeriod = newPeriod;
+    }
+    
+    /**
+     * @notice Hash emergency action for signing
+     * @param target Target contract
+     * @param value ETH value
+     * @param data Encoded function call
+     * @return digest EIP-712 digest to sign
+     * 
+     * @dev Helper function for emergency signers to generate signature
+     */
+    function hashEmergencyAction(
+        address target,
+        uint256 value,
+        bytes calldata data
+    ) external view returns (bytes32 digest) {
+        return keccak256(abi.encodePacked(
+            "\x19\x01",
+            EMERGENCY_DOMAIN_SEPARATOR,
+            keccak256(abi.encode(
+                keccak256("EmergencyAction(address target,uint256 value,bytes32 dataHash,uint256 nonce,uint256 chainId)"),
+                target,
+                value,
+                keccak256(data),
+                emergencyNonce,
+                block.chainid
+            ))
+        ));
     }
 
     // ===== FALLBACK =====
