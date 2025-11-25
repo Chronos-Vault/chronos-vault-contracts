@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Trinity Protocol v3.5.18 - Updated: 2025-11-25T19:33:57.835Z
 pragma solidity 0.8.20;
 
 // ═══════════════════════════════════════════════════════════════════════════
