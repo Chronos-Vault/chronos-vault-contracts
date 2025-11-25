@@ -1,6 +1,28 @@
 // SPDX-License-Identifier: MIT
-// Trinity Protocol v3.5.18 - Updated: 2025-11-25T19:34:10.762Z
 pragma solidity ^0.8.20;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SECURITY AUDIT v3.5.18 (November 25, 2025) - REENTRANCY FIX APPLIED
+// ═══════════════════════════════════════════════════════════════════════════
+// FIXES APPLIED:
+// 1. Added ReentrancyGuard inheritance from OpenZeppelin
+// 2. Added nonReentrant modifier to ALL state-changing functions:
+//    - createEmergencyProposal()
+//    - signProposal()  
+//    - executeEmergencyProposal()
+//    - signCancellation()
+//    - cancelProposal()
+// 
+// ISSUE: Cross-function reentrancy via malicious target contract callbacks
+// SEVERITY: HIGH - External audit identified missing reentrancy protection
+// ATTACK VECTOR: Malicious contract could reenter via signCancellation() during
+//                executeEmergencyProposal() callback to corrupt proposal state
+// 
+// CEI Pattern verified, state updates before external calls
+// All external entry points now protected by shared reentrancy mutex
+// ═══════════════════════════════════════════════════════════════════════════
+
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /**
  * @title EmergencyMultiSig - TRUSTLESS Emergency Pause System
@@ -46,7 +68,7 @@ pragma solidity ^0.8.20;
  * @custom:invariant REQUIRED_SIGNATURES == 2 && TIME_LOCK_DELAY == 48 hours
  *   → Constants are immutable (2-of-3 threshold, 48h timelock)
  */
-contract EmergencyMultiSig {
+contract EmergencyMultiSig is ReentrancyGuard {
     // Emergency signers (3 independent parties)
     address public immutable signer1;
     address public immutable signer2;
@@ -152,12 +174,13 @@ contract EmergencyMultiSig {
     
     /**
      * @dev Create emergency proposal (any signer can propose)
+     * SECURITY FIX v3.5.18: Added nonReentrant to prevent cross-function reentrancy
      */
     function createEmergencyProposal(
         EmergencyAction action,
         address targetContract,
         bytes calldata callData
-    ) external onlySigner returns (uint256 proposalId) {
+    ) external onlySigner nonReentrant returns (uint256 proposalId) {
         proposalId = ++proposalCount;
         
         EmergencyProposal storage proposal = proposals[proposalId];
@@ -185,8 +208,9 @@ contract EmergencyMultiSig {
     
     /**
      * @dev Sign emergency proposal
+     * SECURITY FIX v3.5.18: Added nonReentrant to prevent cross-function reentrancy
      */
-    function signProposal(uint256 proposalId) external onlySigner proposalExists(proposalId) {
+    function signProposal(uint256 proposalId) external onlySigner proposalExists(proposalId) nonReentrant {
         _signProposal(proposalId, msg.sender);
     }
     
@@ -235,17 +259,26 @@ contract EmergencyMultiSig {
      * - Pre-condition: 48h timelock must be respected (block.timestamp >= executionTime)
      * - Pre-condition: Proposal not already executed (executed == false)
      * - Post-condition: Proposal marked as executed (executed == true)
+     * 
+     * SECURITY FIX v3.5.18: Added nonReentrant modifier to prevent cross-function reentrancy
+     * External audit identified vulnerability: malicious target contract could reenter via
+     * signCancellation() or other functions during callback, potentially causing state corruption
      */
     function executeEmergencyProposal(uint256 proposalId) 
         external 
         onlySigner 
-        proposalExists(proposalId) 
+        proposalExists(proposalId)
+        nonReentrant
     {
         EmergencyProposal storage proposal = proposals[proposalId];
         
         require(!proposal.executed, "Proposal already executed");
         require(proposal.signatureCount >= REQUIRED_SIGNATURES, "Insufficient signatures (need 2-of-3)");
         require(block.timestamp >= proposal.executionTime, "Time-lock not expired");
+        
+        // CRITICAL-3 FIX v3.5.18: Check cancellation counter - cannot execute if cancelled by 2-of-3
+        // External audit: Malicious proposals could execute despite cancellation consensus
+        require(proposal.cancellationCount < REQUIRED_SIGNATURES, "Proposal cancelled by 2-of-3 consensus");
         
         // v3.5.11 MEDIUM FIX M-14: Prevent self-call re-entrancy attack
         require(proposal.targetContract != address(this), "Cannot target self");
@@ -279,11 +312,13 @@ contract EmergencyMultiSig {
     /**
      * @dev Sign proposal for cancellation (requires 2-of-3 consensus)
      * CRITICAL FIX: Separate cancellation signatures from execution signatures
+     * SECURITY FIX v3.5.18: Added nonReentrant to prevent cross-function reentrancy
      */
     function signCancellation(uint256 proposalId)
         external
         onlySigner
         proposalExists(proposalId)
+        nonReentrant
     {
         EmergencyProposal storage proposal = proposals[proposalId];
         require(!proposal.executed, "Proposal already executed");
@@ -306,11 +341,13 @@ contract EmergencyMultiSig {
      * @dev DEPRECATED: Use signCancellation() instead
      * @dev Cancel proposal (requires 2-of-3 consensus)
      * CRITICAL FIX: Uses separate cancellation counter, not execution counter
+     * SECURITY FIX v3.5.18: Added nonReentrant to prevent cross-function reentrancy
      */
     function cancelProposal(uint256 proposalId) 
         external 
         onlySigner 
-        proposalExists(proposalId) 
+        proposalExists(proposalId)
+        nonReentrant
     {
         EmergencyProposal storage proposal = proposals[proposalId];
         require(!proposal.executed, "Proposal already executed");
