@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: MIT
-// Trinity Protocol v3.5.18 - Updated: 2025-11-25T19:34:00.116Z
 pragma solidity ^0.8.20;
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -246,7 +245,19 @@ contract HTLCArbToL1 is ReentrancyGuard, Pausable, Ownable {
         require(swap.tokenAddress == address(0), "Only ETH supported");
         require(swapToExit[swapId] == bytes32(0), "Exit already requested");
 
-        // Generate collision-resistant exit ID
+        // HIGH-3 FIX v3.5.18: Release HTLC BEFORE creating exit request
+        // External audit: Race condition allowed duplicate exits for same swap
+        // Now HTLC is released first - if it fails, no exit is created
+        // This prevents the attack: create exit → HTLC fails → cleanup → repeat rapidly
+        try htlcBridge.releaseForExit(swapId) {
+            // Success - HTLC funds released, now safe to create exit
+        } catch Error(string memory reason) {
+            revert(string.concat("HTLC release failed: ", reason));
+        } catch (bytes memory) {
+            revert("HTLC release failed");
+        }
+
+        // Generate collision-resistant exit ID (only after successful HTLC release)
         uint256 currentCounter;
         uint256 currentUserNonce;
         unchecked {
@@ -269,7 +280,7 @@ contract HTLCArbToL1 is ReentrancyGuard, Pausable, Ownable {
 
         require(exitRequests[exitId].state == ExitState.INVALID, "Exit ID collision");
 
-        // Create exit request
+        // Create exit request (only after HTLC successfully released)
         exitRequests[exitId] = ExitRequest({
             exitId: exitId,
             swapId: swapId,
@@ -285,21 +296,6 @@ contract HTLCArbToL1 is ReentrancyGuard, Pausable, Ownable {
         });
 
         swapToExit[swapId] = exitId;
-        
-        // INTEGRATION FIX: Release HTLC funds with proper error handling
-        try htlcBridge.releaseForExit(swapId) {
-            // Success - HTLC funds released
-        } catch Error(string memory reason) {
-            // Rollback exit request on failure
-            delete exitRequests[exitId];
-            delete swapToExit[swapId];
-            revert(string.concat("HTLC release failed: ", reason));
-        } catch (bytes memory) {
-            // Rollback exit request on failure
-            delete exitRequests[exitId];
-            delete swapToExit[swapId];
-            revert("HTLC release failed");
-        }
 
         // Refund excess fee
         uint256 excess = msg.value - EXIT_FEE;
@@ -350,7 +346,17 @@ contract HTLCArbToL1 is ReentrancyGuard, Pausable, Ownable {
         require(swap.tokenAddress == address(0), "Only ETH supported");
         require(swapToExit[swapId] == bytes32(0), "Exit already requested");
 
-        // Generate exit ID
+        // HIGH-3 FIX v3.5.18: Release HTLC BEFORE creating exit request (same fix as requestExit)
+        // External audit: Race condition allowed duplicate priority exits for same swap
+        try htlcBridge.releaseForExit(swapId) {
+            // Success - HTLC funds released, now safe to create exit
+        } catch Error(string memory reason) {
+            revert(string.concat("HTLC release failed: ", reason));
+        } catch (bytes memory) {
+            revert("HTLC release failed");
+        }
+
+        // Generate exit ID (only after successful HTLC release)
         uint256 currentCounter;
         uint256 currentUserNonce;
         unchecked {
@@ -372,7 +378,7 @@ contract HTLCArbToL1 is ReentrancyGuard, Pausable, Ownable {
             "PRIORITY"
         ));
 
-        // Create priority exit
+        // Create priority exit (only after HTLC successfully released)
         exitRequests[exitId] = ExitRequest({
             exitId: exitId,
             swapId: swapId,
@@ -388,21 +394,6 @@ contract HTLCArbToL1 is ReentrancyGuard, Pausable, Ownable {
         });
 
         swapToExit[swapId] = exitId;
-        
-        // INTEGRATION FIX: Release HTLC funds with proper error handling
-        try htlcBridge.releaseForExit(swapId) {
-            // Success - HTLC funds released
-        } catch Error(string memory reason) {
-            // Rollback exit request on failure
-            delete exitRequests[exitId];
-            delete swapToExit[swapId];
-            revert(string.concat("HTLC release failed: ", reason));
-        } catch (bytes memory) {
-            // Rollback exit request on failure
-            delete exitRequests[exitId];
-            delete swapToExit[swapId];
-            revert("HTLC release failed");
-        }
 
         // Send to L1 immediately via Arbitrum bridge
         ArbSys(0x0000000000000000000000000000000000000064).sendTxToL1{value: swap.amount}(
