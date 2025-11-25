@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: MIT
-// Trinity Protocol v3.5.18 - Updated: 2025-11-25T19:33:57.835Z
 pragma solidity 0.8.20;
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -746,6 +745,14 @@ contract TrinityConsensusVerifier is ITrinityBatchVerifier, ReentrancyGuard {
         validators[proposal.chainId] = proposal.newValidator;
         authorizedValidators[proposal.newValidator] = true;
         
+        // HIGH-8 FIX v3.5.18: Invalidate old Merkle proofs on validator rotation
+        // External audit: Compromised validator's fraudulent proofs remained valid after rotation
+        // Reset Merkle root and increment nonce to prevent replay attacks
+        bytes32 oldRoot = merkleRoots[proposal.chainId];
+        merkleRoots[proposal.chainId] = bytes32(0);
+        merkleNonces[proposal.chainId]++;
+        
+        emit MerkleRootUpdated(proposal.chainId, oldRoot, bytes32(0), merkleNonces[proposal.chainId]);
         emit ValidatorRotationExecuted(proposalId, proposal.chainId, proposal.oldValidator, proposal.newValidator);
     }
     
