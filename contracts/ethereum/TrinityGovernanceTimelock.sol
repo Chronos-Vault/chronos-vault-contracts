@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: MIT
-// Trinity Protocol v3.5.18 - Updated: 2025-11-25T19:34:05.053Z
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
