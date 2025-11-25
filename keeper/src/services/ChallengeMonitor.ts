@@ -1,3 +1,4 @@
+// Trinity Protocol v3.5.18 - Updated: 2025-11-25T19:28:09.702Z
 import { ethers } from "ethers";
 import { config } from "../config";
 import { L1Submitter } from "./L1Submitter";
