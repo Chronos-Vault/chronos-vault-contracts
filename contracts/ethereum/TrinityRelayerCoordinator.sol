@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: MIT
-// Trinity Protocol v3.5.18 - Updated: 2025-11-25T19:34:03.697Z
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
@@ -107,6 +106,7 @@ contract TrinityRelayerCoordinator is ReentrancyGuard, Pausable, Ownable {
         address assignedRelayer;
         uint8 proofsReceived;                    // ARCHITECTURE FIX: Track number of chain proofs received
         mapping(uint8 => bool) chainProofReceived; // ARCHITECTURE FIX: Track which chains submitted proofs
+        mapping(uint8 => address) chainRelayer;  // HIGH-12 FIX v3.5.18: Track relayer per chain
     }
 
     // ===== STATE VARIABLES =====
@@ -300,16 +300,21 @@ contract TrinityRelayerCoordinator is ReentrancyGuard, Pausable, Ownable {
             if (!request.chainProofReceived[chainId]) {
                 request.chainProofReceived[chainId] = true;
                 request.proofsReceived++;
-            }
-            
-            // SECURITY FIX: Only increment activePendingProofs on FIRST assignment
-            // Multiple signatures for same operation should not count multiple times
-            if (request.assignedRelayer == address(0)) {
+                
+                // HIGH-12 FIX v3.5.18: Track ALL participating relayers
+                // External audit: Only first relayer was tracked, causing counter desync
+                // Now each relayer who submits a new chain proof gets their counter incremented
                 relayer.activePendingProofs++;
-                request.assignedRelayer = msg.sender;
+                request.chainRelayer[chainId] = msg.sender; // Track which relayer submitted this chain
+                
+                // Track first relayer for compatibility (but don't use for payment)
+                if (request.assignedRelayer == address(0)) {
+                    request.assignedRelayer = msg.sender;
+                }
             }
             
             // Check if operation reached consensus (2-of-3 chains)
+            // HIGH-12 FIX: Pay msg.sender who achieves consensus
             if (request.proofsReceived >= 2) {
                 _completeProofRelay(operationId, msg.sender);
             }
@@ -325,6 +330,7 @@ contract TrinityRelayerCoordinator is ReentrancyGuard, Pausable, Ownable {
      * @notice Complete proof relay and pay relayer
      * @dev SECURITY FIX: CEI pattern - state updates BEFORE external transfer
      * @dev SECURITY FIX: Prevent double-relay race (check state immediately)
+     * @dev HIGH-12 FIX: Decrement ALL participating relayers' counters
      */
     function _completeProofRelay(bytes32 operationId, address relayerAddress) internal {
         ProofRequest storage request = proofRequests[operationId];
@@ -341,9 +347,14 @@ contract TrinityRelayerCoordinator is ReentrancyGuard, Pausable, Ownable {
         relayer.successfulRelays++;
         relayer.totalFeesEarned += request.relayFee;
         
-        // SECURITY FIX: Decrement activePendingProofs for ASSIGNED relayer (if any)
-        if (request.assignedRelayer != address(0)) {
-            relayers[request.assignedRelayer].activePendingProofs--;
+        // HIGH-12 FIX v3.5.18: Decrement activePendingProofs for ALL participating relayers
+        // External audit: Only first relayer was decremented, causing counter inflation
+        // Check all 3 chains (1=Arbitrum, 2=Solana, 3=TON)
+        for (uint8 i = 1; i <= 3; i++) {
+            address chainRelayer = request.chainRelayer[i];
+            if (chainRelayer != address(0) && relayers[chainRelayer].activePendingProofs > 0) {
+                relayers[chainRelayer].activePendingProofs--;
+            }
         }
         
         uint256 paymentAmount = request.relayFee;
