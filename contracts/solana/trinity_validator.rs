@@ -1,3 +1,4 @@
+// Trinity Protocol v3.5.18 - Updated: 2025-11-25T19:34:21.983Z
 ///! Trinity Protocol Validator for Solana
 ///! 
 ///! This program monitors Ethereum CrossChainBridgeOptimized events and submits
