@@ -1,386 +1,193 @@
-# 🔐 Chronos Vault API Reference
+# Trinity Protocol v3.5.20 — API Reference
 
-**Version:** 1.0.0  
-**Last Updated:** October 2025  
-**Base URL:** `https://api.chronosvault.com/api`
+Complete REST API reference for Trinity Protocol cross-chain operations.
 
----
-
-## 📋 Table of Contents
-
-- [Overview](#overview)
-- [Authentication](#authentication)
-- [Core Endpoints](#core-api-endpoints)
-- [Vault Management](#vault-management-api)
-- [Trinity Protocol](#trinity-protocol-api)
-- [Cross-Chain Operations](#cross-chain-api)
-- [WebSocket Events](#websocket-api)
-- [Error Handling](#error-handling)
+**Version:** 3.5.20  
+**Deployed:** November 26, 2025  
+**Status:** Production-Ready (Testnet)
 
 ---
 
-## 🌟 Overview
+## Base URLs
 
-The Chronos Vault API provides RESTful endpoints for managing multi-chain digital vaults with Trinity Protocol security. All responses are in JSON format with comprehensive error handling.
-
-### Base URLs
-
-**Production:**
-```
-https://api.chronosvault.com/api
-```
-
-**Testnet:**
-```
-https://testnet-api.chronosvault.com/api
-```
-
-**Local Development:**
+**Development (Local):**
 ```
 http://localhost:5000/api
 ```
 
-### API Versioning
+**Testnet:**
+```
+https://testnet.chronosvault.io/api
+```
 
-All endpoints support versioning through the URL path:
+**WebSocket Events (Real-time):**
 ```
-/api/v1/vaults
-/api/v2/vaults  (future)
+wss://testnet.chronosvault.io/ws
 ```
+
+---
 
 ## Authentication
 
-Most API endpoints require authentication. The Chronos Vault API supports multiple authentication methods:
+All API endpoints require wallet-based authentication. Supported wallets:
 
-### Wallet-Based Authentication
+- **Ethereum:** MetaMask, WalletConnect
+- **Solana:** Phantom, Solflare
+- **TON:** Tonkeeper, TON Wallet
 
-Connect your blockchain wallet to authenticate. Supported wallets:
-
-- Ethereum (MetaMask, WalletConnect)
-- TON (Tonkeeper, TON Wallet)
-- Solana (Phantom, Solflare)
-- Bitcoin (via xPub)
-
-### API Key Authentication
-
-For programmatic access, use API key authentication:
+### Sign Message
 
 ```
-Authorization: Bearer YOUR_API_KEY
+POST /api/auth/sign-message
 ```
 
-## Core API Endpoints
-
-### Health Check
-
-```
-GET /api/health-check
-```
-
-Lightweight endpoint to verify API availability.
-
-#### Response
+Request wallet signature for authentication:
 
 ```json
 {
-  "status": "ok",
-  "timestamp": 1716151282742,
-  "version": "1.0.0"
+  "walletAddress": "0x1234567890abcdef1234567890abcdef12345678",
+  "message": "Sign to authenticate with Trinity Protocol",
+  "chain": "arbitrum"
 }
 ```
+
+Response:
+
+```json
+{
+  "message": "Sign to authenticate with Trinity Protocol",
+  "signature": "0xabc123...",
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
+```
+
+---
+
+## Health & Status
 
 ### System Health
 
 ```
-GET /api/health/system
+GET /api/health
 ```
 
-Detailed system health information.
+Returns system health status across all chains.
 
-#### Response
+Response:
 
 ```json
 {
   "status": "healthy",
-  "components": {
-    "database": "connected",
-    "blockchain": {
-      "ethereum": "online",
-      "ton": "online",
-      "solana": "online",
-      "bitcoin": "online"
+  "chains": {
+    "arbitrum": {
+      "status": "online",
+      "latency": "120ms",
+      "blockNumber": 12345678
     },
-    "storage": "operational"
-  },
-  "uptime": 1234567,
-  "timestamp": 1716151282742
-}
-```
-
-### Component Health
-
-```
-GET /api/health/component/:componentId
-```
-
-Retrieves health status for a specific system component.
-
-#### Parameters
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| componentId | string | ID of the system component to check |
-
-#### Response
-
-```json
-{
-  "componentId": "database",
-  "status": "healthy",
-  "metrics": {
-    "responseTime": 12,
-    "connections": 5,
-    "queriesPerSecond": 42
-  },
-  "lastChecked": "2025-05-20T13:00:00Z"
-}
-```
-
-### Performance Metrics
-
-```
-GET /api/performance/metrics
-```
-
-Retrieves performance metrics for the platform.
-
-#### Query Parameters
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| timeframe | string | Optional timeframe for metrics (e.g., "hour", "day", "week") |
-
-#### Response
-
-```json
-{
-  "cpu": {
-    "usage": 32.5,
-    "trend": "stable"
-  },
-  "memory": {
-    "used": 1024,
-    "total": 4096,
-    "percentage": 25.0
-  },
-  "requests": {
-    "perSecond": 42.3,
-    "trend": "increasing"
-  },
-  "responseTime": {
-    "average": 120,
-    "p95": 250,
-    "p99": 450
-  },
-  "timeframe": "hour",
-  "timestamp": "2025-05-20T13:00:00Z"
-}
-```
-
-### Security Logs
-
-```
-GET /api/security/logs
-```
-
-Retrieves security-related logs.
-
-#### Query Parameters
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| level | string | Filter logs by level (e.g., "info", "warning", "critical") |
-| page | integer | Page number for pagination |
-| limit | integer | Number of logs per page |
-
-#### Response
-
-```json
-{
-  "logs": [
-    {
-      "id": "log_1a2b3c4d5e6f",
-      "timestamp": "2025-05-20T12:34:56Z",
-      "level": "warning",
-      "message": "Multiple failed authentication attempts detected",
-      "source": "authentication_service",
-      "metadata": {
-        "ipAddress": "192.168.1.1",
-        "attempts": 5
-      }
+    "solana": {
+      "status": "online",
+      "latency": "250ms",
+      "slot": 165432109
+    },
+    "ton": {
+      "status": "online",
+      "latency": "500ms",
+      "seqno": 876543
     }
-  ],
-  "pagination": {
-    "total": 42,
-    "page": 1,
-    "limit": 20,
-    "hasMore": true
-  }
+  },
+  "validators": {
+    "arbitrum": "active",
+    "solana": "active",
+    "ton": "active"
+  },
+  "consensusStatus": "2-of-3 operational"
 }
 ```
 
-### Incident Management
+### Validator Status
 
 ```
-GET /api/incidents
+GET /api/validators/status
 ```
 
-Retrieves security incidents.
+Returns status of all three validators.
 
-#### Query Parameters
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| status | string | Filter by status (e.g., "open", "resolved", "in_progress") |
-| severity | string | Filter by severity (e.g., "low", "medium", "high", "critical") |
-| page | integer | Page number for pagination |
-
-#### Response
+Response:
 
 ```json
 {
-  "incidents": [
+  "validators": [
     {
-      "id": "incident_1a2b3c4d5e6f",
-      "title": "Suspicious activity detected",
-      "description": "Multiple failed authentication attempts from unusual location",
-      "status": "resolved",
-      "severity": "medium",
-      "createdAt": "2025-05-20T12:34:56Z",
-      "resolvedAt": "2025-05-20T13:45:00Z",
-      "affectedVaults": ["v_1a2b3c4d5e6f"]
-    }
-  ],
-  "pagination": {
-    "total": 5,
-    "page": 1,
-    "limit": 20,
-    "hasMore": false
-  }
-}
-```
-
-### Emergency Reset
-
-```
-POST /api/emergency-reset
-```
-
-Initiates an emergency reset procedure for account recovery.
-
-#### Request Body
-
-```json
-{
-  "accountId": "acc_1a2b3c4d5e6f",
-  "resetCode": "12345678",
-  "verificationFactors": {
-    "email": true,
-    "phone": true
-  }
-}
-```
-
-#### Response
-
-```json
-{
-  "resetId": "reset_1a2b3c4d5e6f",
-  "status": "initiated",
-  "nextSteps": {
-    "verificationRequired": true,
-    "verificationMethod": "email",
-    "expiresAt": "2025-05-20T14:34:56Z"
-  }
-}
-```
-
-### Mobile Reset
-
-```
-POST /api/mobile-reset
-```
-
-Initiates a reset procedure specifically for mobile applications.
-
-#### Request Body
-
-```json
-{
-  "deviceId": "device_1a2b3c4d5e6f",
-  "accountId": "acc_1a2b3c4d5e6f",
-  "biometricVerification": true
-}
-```
-
-#### Response
-
-```json
-{
-  "resetId": "reset_1a2b3c4d5e6f",
-  "status": "initiated",
-  "tempAccessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "expiresAt": "2025-05-20T14:34:56Z"
-}
-```
-
-## Vault Management API
-
-### List Vaults
-
-```
-GET /api/vaults
-```
-
-Returns a list of vaults associated with the authenticated user.
-
-#### Query Parameters
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| type | string | Filter by vault type (e.g., "time-lock", "quantum-resistant") |
-| status | string | Filter by status (e.g., "active", "pending", "locked") |
-| page | integer | Page number for pagination |
-| limit | integer | Number of items per page (default: 20, max: 100) |
-
-#### Response
-
-```json
-{
-  "vaults": [
-    {
-      "id": "v_1a2b3c4d5e6f",
-      "name": "My Savings Vault",
-      "type": "time-lock",
+      "chainId": 1,
+      "name": "Arbitrum Validator",
+      "address": "0x3A92fD5b39Ec9598225DB5b9f15af0523445E3d8",
       "status": "active",
-      "createdAt": "2025-04-15T12:34:56Z",
-      "lockUntil": "2026-01-01T00:00:00Z",
-      "chains": ["ethereum", "ton"],
-      "assets": [
-        {
-          "assetId": "eth_mainnet_native",
-          "amount": "1.5",
-          "valueUsd": 4500.00
-        }
-      ]
+      "lastHeartbeat": "2025-05-20T12:34:56Z",
+      "proofCount": 1250,
+      "feeBalance": "5.25 ETH"
+    },
+    {
+      "chainId": 2,
+      "name": "Solana Validator",
+      "address": "0x2554324ae222673F4C36D1Ae0E58C19fFFf69cd5",
+      "status": "active",
+      "lastHeartbeat": "2025-05-20T12:34:50Z",
+      "proofCount": 1247,
+      "feeBalance": "125.5 SOL"
+    },
+    {
+      "chainId": 3,
+      "name": "TON Validator",
+      "address": "0x9662e22D1f037C7EB370DD0463c597C6cd69B4c4",
+      "status": "active",
+      "lastHeartbeat": "2025-05-20T12:34:45Z",
+      "proofCount": 1240,
+      "feeBalance": "85.25 TON"
     }
   ],
-  "pagination": {
-    "total": 12,
-    "page": 1,
-    "limit": 20,
-    "hasMore": false
+  "consensusReady": true
+}
+```
+
+---
+
+## Vaults
+
+### Create Vault
+
+```
+POST /api/vaults/create
+```
+
+Creates a new multi-chain vault requiring 2-of-3 consensus.
+
+Request:
+
+```json
+{
+  "name": "My Secure Vault",
+  "description": "Cross-chain vault with Trinity consensus",
+  "chains": ["arbitrum", "solana"],
+  "features": {
+    "quantumResistant": false,
+    "timelock": 86400,
+    "multiSig": false
   }
+}
+```
+
+Response:
+
+```json
+{
+  "vaultId": "v_abc123def456",
+  "address": "0xabc123def456...",
+  "status": "created",
+  "depositAddresses": {
+    "arbitrum": "0xdef456abc123...",
+    "solana": "TokenAccount..."
+  },
+  "createdAt": "2025-05-20T12:34:56Z"
 }
 ```
 
@@ -390,1123 +197,498 @@ Returns a list of vaults associated with the authenticated user.
 GET /api/vaults/:vaultId
 ```
 
-Returns detailed information about a specific vault.
+Returns vault information and balance.
 
-#### Parameters
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| vaultId | string | Unique identifier of the vault |
-
-#### Response
+Response:
 
 ```json
 {
-  "id": "v_1a2b3c4d5e6f",
-  "name": "My Savings Vault",
-  "description": "Long-term savings vault",
-  "type": "time-lock",
+  "vaultId": "v_abc123def456",
+  "name": "My Secure Vault",
+  "owner": "0x1234567890abcdef1234567890abcdef12345678",
   "status": "active",
-  "createdAt": "2025-04-15T12:34:56Z",
-  "lockUntil": "2026-01-01T00:00:00Z",
-  "chains": ["ethereum", "ton"],
-  "features": {
-    "quantumResistant": true,
-    "crossChainVerification": true,
-    "multiSignature": false
-  },
-  "assets": [
-    {
-      "assetId": "eth_mainnet_native",
-      "type": "native",
-      "chain": "ethereum",
-      "symbol": "ETH",
+  "chains": ["arbitrum", "solana"],
+  "balance": {
+    "arbitrum": {
+      "asset": "native",
       "amount": "1.5",
-      "valueUsd": 4500.00
+      "valueUsd": 4500
+    },
+    "solana": {
+      "asset": "SOL",
+      "amount": "25.0",
+      "valueUsd": 5000
     }
-  ],
-  "security": {
-    "verificationLevel": "advanced",
-    "requireMultiSignature": false,
-    "timeDelay": 86400
   },
-  "accessControl": {
-    "owner": "0x1234567890abcdef1234567890abcdef12345678",
-    "authorized": []
-  }
-}
-```
-
-### Create Vault
-
-```
-POST /api/vaults
-```
-
-Creates a new vault.
-
-#### Request Body
-
-```json
-{
-  "name": "My Savings Vault",
-  "description": "Long-term savings vault",
-  "type": "time-lock",
-  "lockUntil": "2026-01-01T00:00:00Z",
-  "chains": ["ethereum", "ton"],
-  "features": {
-    "quantumResistant": true,
-    "crossChainVerification": true,
-    "multiSignature": false
-  },
-  "security": {
-    "verificationLevel": "advanced",
-    "requireMultiSignature": false,
-    "timeDelay": 86400
-  }
-}
-```
-
-#### Response
-
-```json
-{
-  "id": "v_1a2b3c4d5e6f",
-  "status": "created",
-  "depositAddresses": {
-    "ethereum": "0xabcdef1234567890abcdef1234567890abcdef12",
-    "ton": "UQAkIXbCToQ6LowMrDNG2K3ERmMH8m4XB2owWgL0BAB14Jtl"
-  },
+  "consensusStatus": "2-of-3 ready",
   "createdAt": "2025-05-20T12:34:56Z"
 }
 ```
 
-### Update Vault
+### List Vaults
 
 ```
-PATCH /api/vaults/:vaultId
+GET /api/vaults
 ```
 
-Updates an existing vault.
+Query Parameters:
+- `status`: "active", "locked", "paused"
+- `chain`: "arbitrum", "solana", "ton"
+- `page`: page number (default: 1)
+- `limit`: results per page (default: 20)
 
-#### Parameters
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| vaultId | string | Unique identifier of the vault |
-
-#### Request Body
+Response:
 
 ```json
 {
-  "name": "Updated Vault Name",
-  "description": "Updated description",
-  "security": {
-    "verificationLevel": "maximum"
+  "vaults": [
+    {
+      "vaultId": "v_abc123def456",
+      "name": "My Secure Vault",
+      "status": "active",
+      "chains": ["arbitrum", "solana"],
+      "totalBalance": "$9,500"
+    }
+  ],
+  "pagination": {
+    "total": 1,
+    "page": 1,
+    "limit": 20
   }
 }
 ```
 
-#### Response
+---
 
-```json
-{
-  "id": "v_1a2b3c4d5e6f",
-  "status": "updated",
-  "updatedAt": "2025-05-20T13:45:12Z"
-}
-```
+## Operations
 
-### Deposit Assets
+### Deposit
 
 ```
 POST /api/vaults/:vaultId/deposit
 ```
 
-Initiates a deposit to a vault.
+Initiates deposit requiring 2-of-3 consensus.
 
-#### Parameters
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| vaultId | string | Unique identifier of the vault |
-
-#### Request Body
+Request:
 
 ```json
 {
-  "chain": "ethereum",
-  "assetType": "native",
+  "chain": "arbitrum",
+  "asset": "native",
   "amount": "0.5"
 }
 ```
 
-#### Response
+Response:
 
 ```json
 {
-  "depositId": "d_7h8j9k0l1m2n",
-  "status": "pending",
-  "depositAddress": "0xabcdef1234567890abcdef1234567890abcdef12",
-  "expiresAt": "2025-05-20T14:34:56Z"
+  "operationId": "op_xyz789",
+  "type": "deposit",
+  "status": "pending_consensus",
+  "chain": "arbitrum",
+  "amount": "0.5",
+  "depositAddress": "0xabc123...",
+  "expiresAt": "2025-05-20T13:34:56Z",
+  "consensusProgress": {
+    "required": 2,
+    "received": 0,
+    "validators": []
+  }
 }
 ```
 
-### Withdraw Assets
+### Withdraw
 
 ```
 POST /api/vaults/:vaultId/withdraw
 ```
 
-Initiates a withdrawal from a vault.
+Initiates withdrawal requiring 2-of-3 consensus.
 
-#### Parameters
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| vaultId | string | Unique identifier of the vault |
-
-#### Request Body
+Request:
 
 ```json
 {
-  "chain": "ethereum",
-  "assetType": "native",
+  "chain": "arbitrum",
+  "asset": "native",
   "amount": "0.5",
-  "destinationAddress": "0x1234567890abcdef1234567890abcdef12345678"
+  "recipient": "0x1234567890abcdef1234567890abcdef12345678"
 }
 ```
 
-#### Response
+Response:
 
 ```json
 {
-  "withdrawalId": "w_7h8j9k0l1m2n",
-  "status": "pending",
-  "estimatedCompletionTime": "2025-05-21T12:34:56Z"
+  "operationId": "op_xyz789",
+  "type": "withdraw",
+  "status": "pending_consensus",
+  "chain": "arbitrum",
+  "amount": "0.5",
+  "recipient": "0x1234567890...",
+  "estimatedCompletion": "2025-05-20T12:49:56Z",
+  "consensusProgress": {
+    "required": 2,
+    "received": 0,
+    "validators": []
+  }
 }
 ```
 
-### Get Vault Types
+### Atomic Swap
 
 ```
-GET /api/vault-types
+POST /api/operations/atomic-swap
 ```
 
-Returns a list of all available vault types with their features.
+Initiates atomic swap between chains (HTLC).
 
-#### Response
+Request:
 
 ```json
 {
-  "vaultTypes": [
-    {
-      "id": "time-lock",
-      "name": "Time Lock Vault",
-      "description": "Secure assets with time-based unlocking conditions",
-      "features": ["quantumResistant", "crossChainVerification"],
-      "securityLevel": "high"
-    },
-    {
-      "id": "quantum-resistant",
-      "name": "Quantum-Resistant Vault",
-      "description": "Future-proof security against quantum computing threats",
-      "features": ["quantumResistant", "advancedEncryption", "crossChainVerification"],
-      "securityLevel": "maximum"
-    },
-    {
-      "id": "multi-signature",
-      "name": "Multi-Signature Vault",
-      "description": "Enhanced security requiring multiple approvals",
-      "features": ["multiSignature", "quantumResistant", "delayedWithdrawal"],
-      "securityLevel": "very-high"
-    }
-  ]
+  "sourceChain": "arbitrum",
+  "targetChain": "solana",
+  "sourceAsset": "native",
+  "targetAsset": "SOL",
+  "amount": "1.0",
+  "recipient": "SolanaPubKey...",
+  "timelock": 3600
 }
 ```
 
-## Security and Verification API
-
-### Vault Verification
-
-```
-GET /api/vault-verification/:vaultId
-```
-
-Verifies the security and integrity of a vault.
-
-#### Parameters
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| vaultId | string | Unique identifier of the vault |
-
-#### Response
+Response:
 
 ```json
 {
-  "vaultId": "v_1a2b3c4d5e6f",
-  "verificationStatus": "verified",
-  "crossChainVerification": {
-    "ethereum": {
-      "status": "verified",
-      "blockNumber": 12345678,
-      "transactionHash": "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
-    },
-    "ton": {
-      "status": "verified",
-      "blockNumber": 87654321,
-      "transactionHash": "97a5bbd8581347aaa99e2d3af5301102c4048cca571a55311fe2ffeb6beeec88"
-    }
+  "swapId": "swap_abc123",
+  "status": "pending_consensus",
+  "hashLock": "0xabc123...",
+  "timelock": 3600,
+  "consensusProgress": {
+    "required": 2,
+    "received": 0,
+    "validators": ["arbitrum"]
   },
-  "integrityCheck": {
-    "status": "passed",
-    "lastVerified": "2025-05-20T12:00:00Z"
-  },
-  "quantumResistanceLevel": "high"
+  "estimatedExecution": "2025-05-20T12:44:56Z"
 }
 ```
 
-### Verification History
+---
+
+## Operations Monitoring
+
+### Get Operation Status
 
 ```
-GET /api/vault-verification/:vaultId/history
+GET /api/operations/:operationId
 ```
 
-Retrieves the verification history for a vault.
-
-#### Parameters
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| vaultId | string | Unique identifier of the vault |
-| limit | integer | Number of history records to return (default: 10) |
-
-#### Response
+Response:
 
 ```json
 {
-  "vaultId": "v_1a2b3c4d5e6f",
-  "history": [
-    {
-      "timestamp": "2025-05-20T12:00:00Z",
-      "status": "verified",
-      "details": {
-        "integrityCheck": "passed",
-        "quantumResistanceCheck": "passed",
-        "crossChainVerification": "passed"
+  "operationId": "op_xyz789",
+  "type": "deposit",
+  "status": "consensus_reached",
+  "vaultId": "v_abc123def456",
+  "consensusProgress": {
+    "required": 2,
+    "received": 2,
+    "validators": [
+      {
+        "chainId": 1,
+        "name": "Arbitrum Validator",
+        "status": "approved",
+        "timestamp": "2025-05-20T12:35:10Z",
+        "proofHash": "0x123abc..."
+      },
+      {
+        "chainId": 2,
+        "name": "Solana Validator",
+        "status": "approved",
+        "timestamp": "2025-05-20T12:35:15Z",
+        "proofHash": "0x456def..."
       }
-    },
-    {
-      "timestamp": "2025-05-19T12:00:00Z",
-      "status": "verified",
-      "details": {
-        "integrityCheck": "passed",
-        "quantumResistanceCheck": "passed",
-        "crossChainVerification": "passed"
-      }
-    }
-  ]
-}
-```
-
-### Run Security Scan
-
-```
-POST /api/vault-verification/:vaultId/scan
-```
-
-Initiates a comprehensive security scan for a vault.
-
-#### Parameters
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| vaultId | string | Unique identifier of the vault |
-
-#### Request Body
-
-```json
-{
-  "scanTypes": ["integrity", "quantum", "cross-chain"],
-  "depth": "comprehensive"
-}
-```
-
-#### Response
-
-```json
-{
-  "scanId": "scan_1a2b3c4d5e6f",
-  "status": "in_progress",
-  "estimatedCompletionTime": "2025-05-20T12:10:00Z"
-}
-```
-
-### Get Scan Results
-
-```
-GET /api/vault-verification/scan/:scanId
-```
-
-Retrieves the results of a security scan.
-
-#### Parameters
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| scanId | string | Unique identifier of the scan |
-
-#### Response
-
-```json
-{
-  "scanId": "scan_1a2b3c4d5e6f",
-  "vaultId": "v_1a2b3c4d5e6f",
-  "status": "completed",
-  "startedAt": "2025-05-20T12:00:00Z",
-  "completedAt": "2025-05-20T12:08:34Z",
-  "results": {
-    "overallStatus": "passed",
-    "integrityCheck": {
-      "status": "passed",
-      "details": "All integrity checks passed with 100% verification"
-    },
-    "quantumCheck": {
-      "status": "passed",
-      "resistanceLevel": "high",
-      "vulnerabilities": []
-    },
-    "crossChainCheck": {
-      "status": "passed",
-      "networks": {
-        "ethereum": "verified",
-        "ton": "verified"
-      }
-    }
-  }
-}
-```
-
-### Progressive Quantum Vault Configuration
-
-```
-POST /api/security/progressive-quantum/:vaultId
-```
-
-Configures progressive quantum security settings for a vault.
-
-#### Parameters
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| vaultId | string | Unique identifier of the vault |
-
-#### Request Body
-
-```json
-{
-  "algorithms": ["lattice-based", "multivariate", "hash-based"],
-  "keySize": "maximum",
-  "adaptiveMode": true
-}
-```
-
-#### Response
-
-```json
-{
-  "vaultId": "v_1a2b3c4d5e6f",
-  "status": "configured",
-  "quantumResistanceLevel": "maximum",
-  "estimatedProtectionYears": 50
-}
-```
-
-### Get Quantum Security Status
-
-```
-GET /api/security/progressive-quantum/:vaultId
-```
-
-Retrieves the current quantum security configuration for a vault.
-
-#### Parameters
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| vaultId | string | Unique identifier of the vault |
-
-#### Response
-
-```json
-{
-  "vaultId": "v_1a2b3c4d5e6f",
-  "quantumResistanceLevel": "maximum",
-  "algorithms": ["lattice-based", "multivariate", "hash-based"],
-  "keySize": "maximum",
-  "adaptiveMode": true,
-  "lastUpdated": "2025-05-20T12:00:00Z",
-  "estimatedProtectionYears": 50,
-  "quantumThreatAssessment": "minimal"
-}
-```
-
-## Intent-Based Inheritance API
-
-### Configure Inheritance
-
-```
-POST /api/intent-inheritance/:vaultId
-```
-
-Configures intent-based inheritance for a vault.
-
-#### Parameters
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| vaultId | string | Unique identifier of the vault |
-
-#### Request Body
-
-```json
-{
-  "beneficiaries": [
-    {
-      "address": "0x9876543210abcdef9876543210abcdef98765432",
-      "email": "beneficiary@example.com",
-      "allocation": 100,
-      "unlockConditions": {
-        "timeBasedTrigger": {
-          "inactivityPeriod": 31536000
-        }
-      }
-    }
-  ],
-  "verificationRequirements": {
-    "requireLegalDocumentation": true,
-    "identityVerificationLevel": "advanced"
-  }
-}
-```
-
-#### Response
-
-```json
-{
-  "vaultId": "v_1a2b3c4d5e6f",
-  "status": "configured",
-  "inheritanceId": "i_7h8j9k0l1m2n",
-  "activationDate": "2025-05-20T13:00:00Z"
-}
-```
-
-### Get Inheritance Configuration
-
-```
-GET /api/intent-inheritance/:vaultId
-```
-
-Retrieves the current inheritance configuration for a vault.
-
-#### Parameters
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| vaultId | string | Unique identifier of the vault |
-
-#### Response
-
-```json
-{
-  "vaultId": "v_1a2b3c4d5e6f",
-  "inheritanceId": "i_7h8j9k0l1m2n",
-  "status": "active",
-  "activationDate": "2025-05-20T13:00:00Z",
-  "lastProofOfLifeDate": "2025-05-19T10:30:45Z",
-  "beneficiaries": [
-    {
-      "address": "0x9876543210abcdef9876543210abcdef98765432",
-      "email": "beneficiary@example.com",
-      "allocation": 100,
-      "unlockConditions": {
-        "timeBasedTrigger": {
-          "inactivityPeriod": 31536000
-        }
-      }
-    }
-  ],
-  "verificationRequirements": {
-    "requireLegalDocumentation": true,
-    "identityVerificationLevel": "advanced"
-  }
-}
-```
-
-### Update Inheritance Configuration
-
-```
-PATCH /api/intent-inheritance/:vaultId
-```
-
-Updates an existing inheritance configuration.
-
-#### Parameters
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| vaultId | string | Unique identifier of the vault |
-
-#### Request Body
-
-```json
-{
-  "beneficiaries": [
-    {
-      "address": "0x9876543210abcdef9876543210abcdef98765432",
-      "email": "updated-email@example.com",
-      "allocation": 50
-    },
-    {
-      "address": "0x1234567890abcdef1234567890abcdef12345678",
-      "email": "new-beneficiary@example.com",
-      "allocation": 50
-    }
-  ],
-  "verificationRequirements": {
-    "identityVerificationLevel": "maximum"
-  }
-}
-```
-
-#### Response
-
-```json
-{
-  "vaultId": "v_1a2b3c4d5e6f",
-  "status": "updated",
-  "inheritanceId": "i_7h8j9k0l1m2n",
-  "updatedAt": "2025-05-20T14:30:00Z"
-}
-```
-
-### Provide Proof of Life
-
-```
-POST /api/intent-inheritance/:vaultId/proof-of-life
-```
-
-Records a proof of life event to reset the inactivity timer.
-
-#### Parameters
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| vaultId | string | Unique identifier of the vault |
-
-#### Request Body
-
-```json
-{
-  "verificationMethod": "signature"
-}
-```
-
-#### Response
-
-```json
-{
-  "vaultId": "v_1a2b3c4d5e6f",
-  "inheritanceId": "i_7h8j9k0l1m2n",
-  "proofOfLifeRecorded": true,
-  "timestamp": "2025-05-20T14:30:00Z",
-  "nextRequiredProofDate": "2025-08-20T14:30:00Z"
-}
-```
-
-## WebSocket API
-
-In addition to REST endpoints, Chronos Vault offers real-time updates via WebSockets.
-
-### Connection
-
-```
-wss://api.chronosvault.org/api/ws
-```
-
-Authentication is required via:
-
-```
-?token=YOUR_API_KEY
-```
-
-### Events
-
-#### Transaction Updates
-
-```json
-{
-  "type": "TRANSACTION_CONFIRMED",
-  "data": {
-    "transactionId": "tx_7h8j9k0l1m2n",
-    "vaultId": "v_1a2b3c4d5e6f",
-    "chainId": "ethereum",
-    "status": "confirmed",
-    "blockNumber": 12345678,
-    "timestamp": "2025-05-20T13:00:00Z"
-  }
-}
-```
-
-#### Security Alerts
-
-```json
-{
-  "type": "SECURITY_ALERT",
-  "data": {
-    "alertId": "alert_7h8j9k0l1m2n",
-    "vaultId": "v_1a2b3c4d5e6f",
-    "severity": "high",
-    "type": "UNUSUAL_ACTIVITY",
-    "description": "Multiple failed authentication attempts detected",
-    "timestamp": "2025-05-20T13:00:00Z",
-    "recommendations": [
-      "Review recent activity",
-      "Consider enabling multi-signature"
     ]
-  }
+  },
+  "executionTx": {
+    "arbitrum": "0xabc123...",
+    "solana": "SolanaTxId...",
+    "ton": null
+  },
+  "executedAt": "2025-05-20T12:35:20Z"
 }
 ```
 
-#### Vault Status Updates
+### List Recent Operations
+
+```
+GET /api/operations?vaultId=:vaultId&type=deposit
+```
+
+Query Parameters:
+- `vaultId`: Filter by vault
+- `type`: "deposit", "withdraw", "swap"
+- `status`: "pending", "consensus_reached", "executed", "failed"
+- `limit`: max results (default: 50)
+
+Response:
 
 ```json
 {
-  "type": "VAULT_STATUS_CHANGED",
-  "data": {
-    "vaultId": "v_1a2b3c4d5e6f",
-    "previousStatus": "pending",
-    "newStatus": "active",
-    "timestamp": "2025-05-20T13:00:00Z"
-  }
+  "operations": [
+    {
+      "operationId": "op_xyz789",
+      "type": "deposit",
+      "status": "executed",
+      "amount": "0.5",
+      "chain": "arbitrum",
+      "timestamp": "2025-05-20T12:35:20Z"
+    }
+  ],
+  "total": 1
 }
 ```
 
-#### Inheritance Events
+---
+
+## Consensus Details
+
+### Get Consensus Requirements
+
+```
+GET /api/consensus/requirements
+```
+
+Response:
 
 ```json
 {
-  "type": "INHERITANCE_TRIGGERED",
-  "data": {
-    "vaultId": "v_1a2b3c4d5e6f",
-    "inheritanceId": "i_7h8j9k0l1m2n",
-    "triggerReason": "inactivity_threshold_exceeded",
-    "timestamp": "2025-05-20T13:00:00Z",
-    "nextSteps": {
-      "verificationRequired": true,
-      "waitingPeriod": 604800 // 1 week in seconds
+  "operationTypes": {
+    "standard": {
+      "operationTypes": ["deposit", "withdraw", "transfer"],
+      "votesRequired": 2,
+      "totalValidators": 3,
+      "timelock": 0,
+      "description": "Standard operations need 2-of-3 consensus"
+    },
+    "emergency": {
+      "operationTypes": ["pause", "validator_rotation"],
+      "votesRequired": 3,
+      "totalValidators": 3,
+      "timelock": 0,
+      "description": "Emergency operations need 3-of-3 unanimous consensus"
+    },
+    "recovery": {
+      "operationTypes": ["catastrophic_recovery"],
+      "votesRequired": 3,
+      "totalValidators": 3,
+      "timelock": 172800,
+      "description": "Recovery operations need 3-of-3 + 48 hour timelock"
     }
   }
 }
 ```
 
-## Blockchain-Specific Endpoints
-
-### Ethereum Integration
+### Get Consensus Proofs
 
 ```
-GET /api/blockchain/ethereum/gas-price
+GET /api/operations/:operationId/proofs
 ```
 
-Returns current gas prices for Ethereum transactions.
-
-#### Response
+Response:
 
 ```json
 {
-  "slow": {
-    "gwei": 20,
-    "estimatedSeconds": 120
-  },
-  "standard": {
-    "gwei": 30,
-    "estimatedSeconds": 30
-  },
-  "fast": {
-    "gwei": 40,
-    "estimatedSeconds": 15
-  },
-  "timestamp": "2025-05-20T13:00:00Z"
-}
-```
-
-### TON Integration
-
-```
-GET /api/blockchain/ton/account/:address
-```
-
-Returns TON account information.
-
-#### Parameters
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| address | string | TON wallet address |
-
-#### Response
-
-```json
-{
-  "address": "UQAkIXbCToQ6LowMrDNG2K3ERmMH8m4XB2owWgL0BAB14Jtl",
-  "balance": "10.5",
-  "status": "active",
-  "lastTransaction": {
-    "hash": "97a5bbd8581347aaa99e2d3af5301102c4048cca571a55311fe2ffeb6beeec88",
-    "timestamp": "2025-05-20T12:34:56Z"
-  }
-}
-```
-
-### Solana Integration
-
-```
-GET /api/blockchain/solana/account/:address
-```
-
-Returns Solana account information.
-
-#### Parameters
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| address | string | Solana wallet address |
-
-#### Response
-
-```json
-{
-  "address": "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS",
-  "balance": "25.75",
-  "status": "active",
-  "lastTransaction": {
-    "signature": "5UfgccJLrTWrUJcRXQZveqUZKfF15XaJLBAXrHxZJnzJ2r9Jgx6GphU35XGQTKZvSuLjbyxoZ1dyKXV2xSx4V3pJ",
-    "slot": 123456789,
-    "timestamp": "2025-05-20T12:34:56Z"
-  }
-}
-```
-
-### Bitcoin Integration
-
-```
-GET /api/blockchain/bitcoin/account/:address
-```
-
-Returns Bitcoin account information.
-
-#### Parameters
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| address | string | Bitcoin address |
-
-#### Response
-
-```json
-{
-  "address": "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh",
-  "balance": "0.25",
-  "totalReceived": "1.5",
-  "totalSent": "1.25",
-  "unconfirmedBalance": "0",
-  "lastTransaction": {
-    "txid": "9f3c60e887a9ca8cff8a701aadad0c2874f8ac7a1fcb6b55149337010fa31b4b",
-    "confirmations": 3,
-    "timestamp": "2025-05-20T12:34:56Z"
-  }
-}
-```
-
-### Cross-Chain Transfers
-
-```
-POST /api/blockchain/cross-chain/transfer
-```
-
-Initiates a cross-chain transfer between supported blockchains.
-
-#### Request Body
-
-```json
-{
-  "sourceChain": "ethereum",
-  "destinationChain": "solana",
-  "sourceAsset": "ETH",
-  "destinationAsset": "SOL",
-  "amount": "0.5",
-  "destinationAddress": "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS",
-  "securityLevel": "maximum"
-}
-```
-
-#### Response
-
-```json
-{
-  "transferId": "transfer_1a2b3c4d5e6f",
-  "status": "initiated",
-  "sourceTransaction": {
-    "chain": "ethereum",
-    "hash": "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
-    "status": "pending"
-  },
-  "estimatedCompletionTime": "2025-05-20T13:30:00Z",
-  "fee": {
-    "amount": "0.005",
-    "asset": "ETH"
-  }
-}
-```
-
-## Payments API
-
-### Get Payment Methods
-
-```
-GET /api/payments/methods
-```
-
-Returns available payment methods for the authenticated user.
-
-#### Response
-
-```json
-{
-  "methods": [
+  "operationId": "op_xyz789",
+  "proofs": [
     {
-      "id": "pm_1a2b3c4d5e6f",
-      "type": "card",
-      "brand": "visa",
-      "last4": "4242",
-      "expiryMonth": 12,
-      "expiryYear": 2025,
-      "isDefault": true
+      "validator": "Arbitrum Validator",
+      "chainId": 1,
+      "merkleRoot": "0x123abc...",
+      "merkleProof": ["0x456def...", "0x789ghi..."],
+      "signature": "0xabc123...",
+      "timestamp": "2025-05-20T12:35:10Z"
     },
     {
-      "id": "pm_2b3c4d5e6f7g",
-      "type": "blockchain",
-      "chain": "ethereum",
-      "address": "0x1234567890abcdef1234567890abcdef12345678",
-      "isDefault": false
+      "validator": "Solana Validator",
+      "chainId": 2,
+      "merkleRoot": "0x123abc...",
+      "merkleProof": ["0x456def...", "0x789ghi..."],
+      "signature": "0xdef456...",
+      "timestamp": "2025-05-20T12:35:15Z"
     }
   ]
 }
 ```
 
-### Create Payment Intent
+---
 
+## WebSocket Events
+
+### Connect to Events
+
+```javascript
+const ws = new WebSocket('wss://testnet.chronosvault.io/ws?token=YOUR_AUTH_TOKEN');
+
+ws.onmessage = (event) => {
+  const message = JSON.parse(event.data);
+  console.log('Received:', message);
+};
 ```
-POST /api/payments/intents
-```
 
-Creates a payment intent for service fees or premium features.
+### Event Types
 
-#### Request Body
-
+**Operation Started**
 ```json
 {
-  "amount": 19.99,
-  "currency": "USD",
-  "description": "Premium Vault Subscription - 1 Month",
-  "paymentMethodId": "pm_1a2b3c4d5e6f"
+  "type": "operation_started",
+  "operationId": "op_xyz789",
+  "operationType": "deposit",
+  "vaultId": "v_abc123def456",
+  "timestamp": "2025-05-20T12:35:00Z"
 }
 ```
 
-#### Response
-
+**Validator Voted**
 ```json
 {
-  "intentId": "pi_1a2b3c4d5e6f",
-  "status": "requires_confirmation",
-  "amount": 19.99,
-  "currency": "USD",
-  "description": "Premium Vault Subscription - 1 Month",
-  "clientSecret": "pi_1a2b3c4d5e6f_secret_7h8j9k0l1m2n"
+  "type": "validator_voted",
+  "operationId": "op_xyz789",
+  "validator": "Arbitrum Validator",
+  "chainId": 1,
+  "status": "approved",
+  "timestamp": "2025-05-20T12:35:10Z"
 }
 ```
 
-### Confirm Payment Intent
-
-```
-POST /api/payments/intents/:intentId/confirm
-```
-
-Confirms a payment intent.
-
-#### Parameters
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| intentId | string | ID of the payment intent to confirm |
-
-#### Response
-
+**Consensus Reached**
 ```json
 {
-  "intentId": "pi_1a2b3c4d5e6f",
-  "status": "succeeded",
-  "amount": 19.99,
-  "currency": "USD",
-  "description": "Premium Vault Subscription - 1 Month",
-  "receipt": {
-    "url": "https://receipts.chronosvault.org/r/1a2b3c4d5e6f",
-    "number": "CVR-12345"
-  }
+  "type": "consensus_reached",
+  "operationId": "op_xyz789",
+  "votesReceived": 2,
+  "votesRequired": 2,
+  "timestamp": "2025-05-20T12:35:15Z"
 }
 ```
+
+**Operation Executed**
+```json
+{
+  "type": "operation_executed",
+  "operationId": "op_xyz789",
+  "vaultId": "v_abc123def456",
+  "status": "success",
+  "txHash": {
+    "arbitrum": "0xabc123...",
+    "solana": "SolanaTxId..."
+  },
+  "timestamp": "2025-05-20T12:35:20Z"
+}
+```
+
+---
 
 ## Error Handling
 
-All API errors follow a consistent format:
+### Error Response Format
 
 ```json
 {
   "error": {
-    "code": "RESOURCE_NOT_FOUND",
-    "message": "The requested vault does not exist",
-    "requestId": "req_7h8j9k0l1m2n",
-    "timestamp": "2025-05-20T13:00:00Z"
+    "code": "CONSENSUS_TIMEOUT",
+    "message": "Operation timed out waiting for 2-of-3 consensus",
+    "details": {
+      "operationId": "op_xyz789",
+      "votesReceived": 1,
+      "votesRequired": 2,
+      "expiresAt": "2025-05-20T13:35:00Z"
+    }
   }
 }
 ```
 
 ### Common Error Codes
 
-| Code | Description |
-|------|-------------|
-| AUTHENTICATION_REQUIRED | Authentication is required |
-| INVALID_CREDENTIALS | Invalid authentication credentials |
-| RESOURCE_NOT_FOUND | Requested resource not found |
-| PERMISSION_DENIED | Insufficient permissions |
-| VALIDATION_ERROR | Invalid request parameters |
-| RATE_LIMIT_EXCEEDED | API rate limit exceeded |
-| INTERNAL_SERVER_ERROR | Internal server error |
-| BLOCKCHAIN_ERROR | Error interacting with blockchain |
-| QUANTUM_SECURITY_ERROR | Error with quantum security features |
-| VAULT_LOCKED | Vault is currently locked |
-| INHERITANCE_ERROR | Error with inheritance configuration |
+| Code | HTTP Status | Meaning |
+|------|-------------|---------|
+| `OPERATION_NOT_FOUND` | 404 | Operation does not exist |
+| `VAULT_NOT_FOUND` | 404 | Vault does not exist |
+| `INSUFFICIENT_BALANCE` | 400 | Vault balance too low |
+| `CONSENSUS_TIMEOUT` | 408 | 2-of-3 consensus not reached in time |
+| `CONSENSUS_FAILED` | 400 | Validators rejected operation |
+| `INVALID_SIGNATURE` | 401 | Authentication signature invalid |
+| `RATE_LIMIT_EXCEEDED` | 429 | Too many operations (100 per 24h) |
+| `VAULT_PAUSED` | 403 | Vault paused by circuit breaker |
+| `INVALID_CHAIN` | 400 | Unsupported blockchain |
+
+---
 
 ## Rate Limiting
 
-API requests are limited to 120 requests per minute per authenticated user.
+**Requests:** 100 per minute per IP
+**Operations:** 100 per 24 hours per vault
+**Consensus Timeout:** 60 minutes (after which operation expires)
 
-Rate limit headers are included in all responses:
-
-```
-X-RateLimit-Limit: 120
-X-RateLimit-Remaining: 119
-X-RateLimit-Reset: 1716152182
-```
-
-## Webhook Notifications
-
-Chronos Vault can send webhook notifications for various events:
-
-### Configuration
+Response headers:
 
 ```
-POST /api/webhooks
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 95
+X-RateLimit-Reset: 1716159300
 ```
 
-#### Request Body
+---
 
-```json
-{
-  "url": "https://your-server.com/webhook",
-  "events": [
-    "vault.created",
-    "vault.updated",
-    "transaction.confirmed",
-    "security.alert"
-  ],
-  "secret": "your_webhook_secret"
-}
+## Examples
+
+### Complete Deposit Flow
+
+```javascript
+// Step 1: Authenticate
+const auth = await fetch('POST /api/auth/sign-message', {
+  walletAddress: userAddress,
+  chain: 'arbitrum'
+});
+const token = auth.token;
+
+// Step 2: Create deposit
+const deposit = await fetch('POST /api/vaults/abc123/deposit', {
+  headers: { 'Authorization': `Bearer ${token}` },
+  body: {
+    chain: 'arbitrum',
+    amount: '0.5'
+  }
+});
+
+// Step 3: Monitor consensus
+const ws = new WebSocket('wss://testnet.chronosvault.io/ws', {
+  headers: { 'Authorization': `Bearer ${token}` }
+});
+
+ws.onmessage = (event) => {
+  const msg = JSON.parse(event.data);
+  if (msg.type === 'consensus_reached') {
+    console.log('Deposit approved by 2-of-3 validators!');
+  }
+  if (msg.type === 'operation_executed') {
+    console.log('Deposit complete:', msg.txHash);
+  }
+};
+
+// Step 4: Wait for execution
+const operation = await fetch(`GET /api/operations/${deposit.operationId}`, {
+  headers: { 'Authorization': `Bearer ${token}` }
+});
+console.log('Status:', operation.status);
 ```
 
-#### Response
+---
 
-```json
-{
-  "webhookId": "wh_7h8j9k0l1m2n",
-  "status": "active",
-  "createdAt": "2025-05-20T13:00:00Z"
-}
-```
-
-### List Webhooks
-
-```
-GET /api/webhooks
-```
-
-Returns a list of configured webhooks.
-
-#### Response
-
-```json
-{
-  "webhooks": [
-    {
-      "webhookId": "wh_7h8j9k0l1m2n",
-      "url": "https://your-server.com/webhook",
-      "events": [
-        "vault.created",
-        "vault.updated",
-        "transaction.confirmed",
-        "security.alert"
-      ],
-      "status": "active",
-      "createdAt": "2025-05-20T13:00:00Z"
-    }
-  ]
-}
-```
-
-### Delete Webhook
-
-```
-DELETE /api/webhooks/:webhookId
-```
-
-Deletes a webhook configuration.
-
-#### Parameters
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| webhookId | string | ID of the webhook to delete |
-
-#### Response
-
-```json
-{
-  "success": true,
-  "message": "Webhook deleted successfully"
-}
-```
-
-## API Versioning
-
-The current API version is v1.
-
-API versioning is maintained through the URL path:
-
-```
-https://api.chronosvault.org/api/v1/...
-```
-
-## Support
-
-For API support, please contact us at api-support@chronosvault.org.
+**Trinity Protocol v3.5.20 API**  
+**Status:** Production-Ready (Testnet)  
+**Last Updated:** November 26, 2025
