@@ -1,6 +1,40 @@
-# Chronos Vault - Solana Program
+# Trinity Protocol v3.5.20 - Solana Programs
 
-This directory contains the implementation of the Chronos Vault program for the Solana blockchain.
+This directory contains the Solana programs for Trinity Protocol's cross-chain consensus verification.
+
+## Deployment Status: 🔄 PENDING
+
+**Network**: Solana Devnet (https://api.devnet.solana.com)
+
+### Deployment Wallet
+- **Address**: `J6p3JGBrw2U27EMEXzQjXQnJSeX8vib5TXRhGakJ9XMj`
+- **Balance**: 1.0 SOL
+
+### Programs to Deploy
+| Program | File | Purpose | Status |
+|---------|------|---------|--------|
+| TrinityValidator | `trinity_validator.rs` | 2-of-3 consensus verification | 🔄 Pending |
+| ChronosVault | `chronos_vault.rs` | Time-locked vaults | 🔄 Pending |
+| CVT Token | `cvt_token/` | **Native CVT SPL Token** | 🔄 Pending |
+| CVT Bridge | `cvt_bridge/` | Cross-chain CVT bridging | 🔄 Pending |
+| Vesting | `vesting_program/` | Token vesting schedules | 🔄 Pending |
+
+### Important: CVT Token Architecture
+**CVT Token is Solana-native** - This is the canonical source of CVT tokens.
+- All CVT operations originate from Solana
+- Cross-chain CVT transfers use HTLC bridges
+- TON and Arbitrum do NOT have native CVT tokens
+
+### Connected Ethereum Contracts (Arbitrum Sepolia)
+- TrinityConsensusVerifier: `0x59396D58Fa856025bD5249E342729d5550Be151C`
+- HTLCChronosBridge: `0xc0B9C6cfb6e39432977693d8f2EBd4F2B5f73824`
+
+### Validators (On-Chain)
+- Arbitrum (Chain ID 1): `0x3A92fD5b39Ec9598225DB5b9f15af0523445E3d8`
+- Solana (Chain ID 2): `0x2554324ae222673F4C36D1Ae0E58C19fFFf69cd5`
+- TON (Chain ID 3): `0x9662e22D1f037C7EB370DD0463c597C6cd69B4c4`
+
+---
 
 ## Overview
 
@@ -89,42 +123,3 @@ Integration is achieved through cross-chain links and verification proofs that c
 - Higher security levels require access keys for any operation
 - Early unlocking functionality requires both authority signature and access key
 - Verification proofs can be used to validate the vault's existence and state from other blockchains
-
----
-
-## 🎉 DEPLOYMENT STATUS - LIVE ON SOLANA DEVNET
-
-**Deployed:** October 13, 2025
-
-All Chronos Vault Solana contracts are now **operational on Solana Devnet**.
-
-### Deployed Components
-
-| Component | Program ID / Address | Status |
-|-----------|---------------------|--------|
-| **CVT Token** | `2yoF4qEN9unigg9Q79dMqnjXqfiQMk3votm68k1TuVjd` | ✅ Live |
-| **Bridge Program** | `6wo8Gso3uB8M6t9UGiritdGmc4UTPEtM5NhC6vbb9CdK` | ✅ Live |
-| **Vesting Program** | `3dxjcEGP8MurCtodLCJi1V6JBizdRRAYg91nZkhmX1sB` | ✅ Live |
-
-### CVT Token Details
-- **Name:** Chronos Vault Token
-- **Symbol:** CVT
-- **Total Supply:** 21,000,000 (Fixed)
-- **Decimals:** 9
-- **Metadata:** `CHr4fbo1gGbumCzp4gTVs49rc2oeyoxSeLHCGcRBHGwS`
-
-**Explorer:** [View on Solana Explorer](https://explorer.solana.com/address/2yoF4qEN9unigg9Q79dMqnjXqfiQMk3votm68k1TuVjd?cluster=devnet)
-
-### Quick Links
-- 📋 [Full Deployment Details](./DEPLOYMENT_STATUS.md)
-- 🚀 [Deployment Guide](./DEPLOYMENT_GUIDE.md)
-- 🪙 [CVT Token Info](./cvt_token/README.md)
-
-### Trinity Protocol Integration
-
-All three chains are now operational:
-- ✅ **Arbitrum:** ChronosVault.sol, CVTBridge.sol
-- ✅ **Solana:** CVT Token, Bridge, Vesting (this deployment)
-- ✅ **TON:** CVT Jetton, Bridge
-
-**Security:** 2-of-3 multi-chain consensus with mathematical proofs
