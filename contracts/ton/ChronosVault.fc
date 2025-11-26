@@ -1,4 +1,3 @@
-// Trinity Protocol v3.5.18 - Updated: 2025-11-25T19:34:29.631Z
 ;; ChronosVault.fc
 ;; TON Smart Contract for Chronos Vault - Implements backup and recovery functionality
 
@@ -113,7 +112,7 @@ int is_unlocked_by_time() method_id {
 
 ;; Verify cross-chain proof from Ethereum
 int verify_ethereum_proof(slice proof_data) method_id {
-    var ds = proof_data.begin_parse();
+    var ds = proof_data;
     var eth_block_hash = ds~load_uint(256);
     var eth_tx_hash = ds~load_uint(256);
     var eth_vault_id = ds~load_uint(64);
@@ -135,7 +134,7 @@ int verify_ethereum_proof(slice proof_data) method_id {
 
 ;; Verify cross-chain proof from Solana
 int verify_solana_proof(slice proof_data) method_id {
-    var ds = proof_data.begin_parse();
+    var ds = proof_data;
     var sol_slot = ds~load_uint(64);
     var sol_tx_id = ds~load_uint(256);
     var sol_vault_id = ds~load_uint(64);
