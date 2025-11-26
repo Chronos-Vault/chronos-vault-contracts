@@ -15,18 +15,62 @@ import { Connection, Keypair, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.j
 import fs from "fs";
 import path from "path";
 
-// Trinity Validator Program ID (update after deployment)
-const TRINITY_VALIDATOR_PROGRAM_ID = "TrNtyV4L1D4T0RSoLAN4C0nsENSuS1111111111111";
+// ============================================================================
+// DEPLOYED CONTRACT ADDRESSES (from deployment-v3.5.20-arbitrum-complete.json)
+// ============================================================================
+// Trinity Validator Program ID - MUST be set after program deployment
+const TRINITY_VALIDATOR_PROGRAM_ID = process.env.TRINITY_VALIDATOR_PROGRAM_ID || "TrNtyV4L1D4T0RSoLAN4C0nsENSuS1111111111111";
 
-// Ethereum CrossChainBridgeOptimized address (Arbitrum Sepolia)
-const ETHEREUM_BRIDGE_ADDRESS_TESTNET = "0x3E205dc9881Cf0E9377683aDd22bC1aBDBdF462D";
+// Arbitrum Sepolia - CrossChainMessageRelay is the bridge entry point
+const ETHEREUM_BRIDGE_ADDRESS_TESTNET = "0xC6F4f855fc690CB52159eE3B13C9d9Fb8D403E59";
 
-// Ethereum validator address (your Ethereum wallet)
-const VALIDATOR_ETHEREUM_ADDRESS = process.env.VALIDATOR_ETHEREUM_ADDRESS || "0x0000000000000000000000000000000000000000";
+// MAINNET: Must be set before mainnet deployment
+const ETHEREUM_BRIDGE_ADDRESS_MAINNET = process.env.MAINNET_BRIDGE_ADDRESS;
+
+// Ethereum validator address - SECURITY: Must be set, no default zero address
+const VALIDATOR_ETHEREUM_ADDRESS = process.env.VALIDATOR_ETHEREUM_ADDRESS;
 
 // Arbitrum RPC URLs
-const ARBITRUM_RPC_TESTNET = "https://arb-sepolia.g.alchemy.com/v2/YOUR_KEY";
-const ARBITRUM_RPC_MAINNET = "https://arb-mainnet.g.alchemy.com/v2/YOUR_KEY";
+const ARBITRUM_RPC_TESTNET = process.env.ARBITRUM_RPC_URL || "https://sepolia-rollup.arbitrum.io/rpc";
+const ARBITRUM_RPC_MAINNET = process.env.ARBITRUM_MAINNET_RPC_URL;
+
+// ============================================================================
+// SECURITY VALIDATION
+// ============================================================================
+function validateConfiguration(network: string): void {
+    // Validate validator Ethereum address
+    if (!VALIDATOR_ETHEREUM_ADDRESS) {
+        throw new Error(
+            "SECURITY ERROR: Validator Ethereum address not configured!\n" +
+            "Set VALIDATOR_ETHEREUM_ADDRESS environment variable.\n" +
+            "This should be the Ethereum wallet address for this validator."
+        );
+    }
+
+    // Check for zero address (common mistake)
+    if (VALIDATOR_ETHEREUM_ADDRESS === "0x0000000000000000000000000000000000000000") {
+        throw new Error(
+            "SECURITY ERROR: Validator address is zero address!\n" +
+            "Set VALIDATOR_ETHEREUM_ADDRESS to your actual validator wallet address."
+        );
+    }
+
+    // Validate program ID isn't placeholder for production
+    if (network === "mainnet" && TRINITY_VALIDATOR_PROGRAM_ID.includes("1111111111111")) {
+        throw new Error(
+            "SECURITY ERROR: Program ID appears to be a placeholder!\n" +
+            "Deploy the program first and set TRINITY_VALIDATOR_PROGRAM_ID."
+        );
+    }
+
+    // Validate mainnet bridge address
+    if (network === "mainnet" && !ETHEREUM_BRIDGE_ADDRESS_MAINNET) {
+        throw new Error(
+            "SECURITY ERROR: Mainnet bridge address not configured!\n" +
+            "Set MAINNET_BRIDGE_ADDRESS environment variable."
+        );
+    }
+}
 
 interface DeploymentConfig {
     network: "devnet" | "testnet" | "mainnet";
@@ -57,8 +101,8 @@ async function getConfig(): Promise<DeploymentConfig> {
             break;
         case "mainnet":
             endpoint = "https://api.mainnet-beta.solana.com";
-            ethereumBridgeAddress = "0xMAINNET_BRIDGE_ADDRESS"; // Update for mainnet
-            arbitrumRpcUrl = ARBITRUM_RPC_MAINNET;
+            ethereumBridgeAddress = ETHEREUM_BRIDGE_ADDRESS_MAINNET || "";
+            arbitrumRpcUrl = ARBITRUM_RPC_MAINNET || "";
             break;
         default:
             throw new Error(`Unknown network: ${network}`);
@@ -96,6 +140,13 @@ async function deployTrinityValidator() {
     const config = await getConfig();
     console.log(`📡 Network: ${config.network}`);
     console.log(`📡 RPC Endpoint: ${config.connection.rpcEndpoint}\n`);
+
+    // ================================================================
+    // SECURITY VALIDATION - Must pass before deployment proceeds
+    // ================================================================
+    console.log("🔐 Validating configuration...");
+    validateConfiguration(config.network);
+    console.log("✅ Configuration validated\n");
 
     // Load wallet
     const wallet = await loadWallet();
@@ -163,7 +214,7 @@ async function deployTrinityValidator() {
     );
 
     const validatorEthBytes = Buffer.from(
-        VALIDATOR_ETHEREUM_ADDRESS.replace("0x", ""),
+        VALIDATOR_ETHEREUM_ADDRESS!.replace("0x", ""),
         "hex"
     );
 
