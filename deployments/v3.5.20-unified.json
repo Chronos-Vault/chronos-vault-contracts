@@ -1,0 +1,98 @@
+{
+  "version": "v3.5.20",
+  "deployedAt": "2025-11-26",
+  "status": "COMPLETE",
+  "protocol": "Trinity Protocol",
+  "consensus": "2-of-3 Multi-Chain Validator",
+  "chains": {
+    "arbitrum": {
+      "network": "Arbitrum Sepolia",
+      "chainId": 421614,
+      "role": "PRIMARY",
+      "explorer": "https://sepolia.arbiscan.io",
+      "contracts": {
+        "TrinityConsensusVerifier": "0x59396D58Fa856025bD5249E342729d5550Be151C",
+        "EmergencyMultiSig": "0x066A39Af76b625c1074aE96ce9A111532950Fc41",
+        "TrinityKeeperRegistry": "0xAe9bd988011583D87d6bbc206C19e4a9Bda04830",
+        "TrinityGovernanceTimelock": "0xf6b9AB802b323f8Be35ca1C733e155D4BdcDb61b",
+        "CrossChainMessageRelay": "0xC6F4f855fc690CB52159eE3B13C9d9Fb8D403E59",
+        "TrinityExitGateway": "0xE6FeBd695e4b5681DCF274fDB47d786523796C04",
+        "TrinityFeeSplitter": "0x4F777c8c7D3Ea270c7c6D9Db8250ceBe1648A058",
+        "TrinityRelayerCoordinator": "0x4023B7307BF9e1098e0c34F7E8653a435b20e635",
+        "HTLCChronosBridge": "0xc0B9C6cfb6e39432977693d8f2EBd4F2B5f73824",
+        "HTLCArbToL1": "0xaDDAC5670941416063551c996e169b0fa569B8e1",
+        "ChronosVaultOptimized": "0xAE408eC592f0f865bA0012C480E8867e12B4F32D",
+        "TestERC20": "0x4567853BE0d5780099E3542Df2e00C5B633E0161"
+      },
+      "validators": {
+        "Arbitrum": "0x3A92fD5b39Ec9598225DB5b9f15af0523445E3d8",
+        "Solana": "0x2554324ae222673F4C36D1Ae0E58C19fFFf69cd5",
+        "TON": "0x9662e22D1f037C7EB370DD0463c597C6cd69B4c4"
+      }
+    },
+    "solana": {
+      "network": "Solana Devnet",
+      "chainId": 2,
+      "role": "MONITOR",
+      "explorer": "https://explorer.solana.com/?cluster=devnet",
+      "features": ["High-frequency monitoring (<5s)", "RPC failover", "Retry logic"],
+      "programs": {
+        "ChronosVault": "CYaDJYRqm35udQ8vkxoajSER8oaniQUcV8Vvw5BqJyo2",
+        "BridgeProgram": "6wo8Gso3uB8M6t9UGiritdGmc4UTPEtM5NhC6vbb9CdK",
+        "VestingProgram": "3dxjcEGP8MurCtodLCJi1V6JBizdRRAYg91nZkhmX1sB"
+      },
+      "tokens": {
+        "CVT": {
+          "mint": "5g3TkqFxyVe1ismrC5r2QD345CA1YdfWn6s6p4AYNmy4",
+          "metadata": "D5qLqXpJnWDrfpZoePauQv8g22DbM8CbeVZcjeBhdDgF",
+          "note": "CVT token exists ONLY on Solana as SPL token"
+        }
+      },
+      "wallets": {
+        "deploymentWallet": "AjWeKXXgLpb2Cy3LfmqPjms3UkN1nAi596qBi8fRdLLQ"
+      }
+    },
+    "ton": {
+      "network": "TON Testnet",
+      "chainId": 3,
+      "role": "BACKUP",
+      "explorer": "https://testnet.tonscan.org",
+      "features": ["Quantum-resistant recovery", "ML-KEM-1024", "CRYSTALS-Dilithium-5", "48-hour recovery delay"],
+      "contracts": {
+        "TrinityConsensus": {
+          "address": "EQeGlYzwupSROVWGucOmKyUDbSaKmPfIpHHP5mV73odL8",
+          "features": ["2-of-3 consensus", "Quantum recovery", "ML-KEM-1024", "Dilithium-5"],
+          "threshold": 2,
+          "recoveryThreshold": 3,
+          "recoveryDelay": 172800
+        },
+        "ChronosVault": {
+          "address": "EQjUVidQfn4m-Rougn0fol7ECCthba2HV0M6xz9zAfax4",
+          "features": ["Time-locked", "Per-vault accounting", "Trinity consensus"],
+          "trinityConsensus": "EQeGlYzwupSROVWGucOmKyUDbSaKmPfIpHHP5mV73odL8"
+        },
+        "CrossChainBridge": {
+          "address": "EQgWobA9D4u6Xem3B8e6Sde_NEFZYicyy7_5_XvOT18mA",
+          "features": ["HTLC atomic swaps", "2-of-3 signatures", "Replay protection"],
+          "trinityConsensus": "EQeGlYzwupSROVWGucOmKyUDbSaKmPfIpHHP5mV73odL8",
+          "bridgeFee": 50,
+          "minBridgeAmount": "1000000000"
+        }
+      },
+      "quantumKeys": {
+        "algorithm": "ML-KEM-1024 + CRYSTALS-Dilithium-5",
+        "entropyBits": 256
+      }
+    }
+  },
+  "crossChainConfiguration": {
+    "consensusThreshold": 2,
+    "totalValidators": 3,
+    "emergencyThreshold": 3,
+    "chainRoles": {
+      "arbitrum": "Primary security and consensus verification",
+      "solana": "High-frequency monitoring with <5s SLA",
+      "ton": "Emergency recovery with quantum-resistant cryptography"
+    }
+  }
+}
