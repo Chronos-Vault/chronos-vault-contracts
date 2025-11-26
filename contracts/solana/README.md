@@ -1,125 +1,276 @@
 # Trinity Protocol v3.5.20 - Solana Programs
 
-This directory contains the Solana programs for Trinity Protocol's cross-chain consensus verification.
+[![Deployed](https://img.shields.io/badge/status-DEPLOYED-green.svg)](https://explorer.solana.com/?cluster=devnet)
+[![Network](https://img.shields.io/badge/network-Solana%20Devnet-blue.svg)](https://explorer.solana.com/?cluster=devnet)
+[![Role](https://img.shields.io/badge/role-MONITOR-purple.svg)](https://explorer.solana.com/?cluster=devnet)
 
-## Deployment Status: 🔄 PENDING
+> **High-frequency validation layer** for Trinity Protocol's 2-of-3 multi-chain consensus system with <5 second SLA.
 
-**Network**: Solana Devnet (https://api.devnet.solana.com)
+## Deployment Status: ✅ DEPLOYED
 
-### Deployment Wallet
-- **Address**: `J6p3JGBrw2U27EMEXzQjXQnJSeX8vib5TXRhGakJ9XMj`
-- **Balance**: 1.0 SOL
-
-### Programs to Deploy
-| Program | File | Purpose | Status |
-|---------|------|---------|--------|
-| TrinityValidator | `trinity_validator.rs` | 2-of-3 consensus verification | 🔄 Pending |
-| ChronosVault | `chronos_vault.rs` | Time-locked vaults | 🔄 Pending |
-| CVT Token | `cvt_token/` | **Native CVT SPL Token** | 🔄 Pending |
-| CVT Bridge | `cvt_bridge/` | Cross-chain CVT bridging | 🔄 Pending |
-| Vesting | `vesting_program/` | Token vesting schedules | 🔄 Pending |
-
-### Important: CVT Token Architecture
-**CVT Token is Solana-native** - This is the canonical source of CVT tokens.
-- All CVT operations originate from Solana
-- Cross-chain CVT transfers use HTLC bridges
-- TON and Arbitrum do NOT have native CVT tokens
-
-### Connected Ethereum Contracts (Arbitrum Sepolia)
-- TrinityConsensusVerifier: `0x59396D58Fa856025bD5249E342729d5550Be151C`
-- HTLCChronosBridge: `0xc0B9C6cfb6e39432977693d8f2EBd4F2B5f73824`
-
-### Validators (On-Chain)
-- Arbitrum (Chain ID 1): `0x3A92fD5b39Ec9598225DB5b9f15af0523445E3d8`
-- Solana (Chain ID 2): `0x2554324ae222673F4C36D1Ae0E58C19fFFf69cd5`
-- TON (Chain ID 3): `0x9662e22D1f037C7EB370DD0463c597C6cd69B4c4`
+**Network:** Solana Devnet  
+**Deployed:** November 26, 2025  
+**Explorer:** [https://explorer.solana.com/?cluster=devnet](https://explorer.solana.com/?cluster=devnet)
 
 ---
 
-## Overview
+## Deployed Programs & Addresses
 
-The Chronos Vault Solana program provides time-locked vault functionality compatible with the multi-chain Chronos Vault platform. It allows users to create secure digital time capsules on Solana that can unlock at predetermined future dates, with cross-chain integration capabilities.
+### Programs
 
-## Features
+| Program | Address | Explorer |
+|---------|---------|----------|
+| **ChronosVault** | `CYaDJYRqm35udQ8vkxoajSER8oaniQUcV8Vvw5BqJyo2` | [View](https://explorer.solana.com/address/CYaDJYRqm35udQ8vkxoajSER8oaniQUcV8Vvw5BqJyo2?cluster=devnet) |
+| **Bridge Program** | `6wo8Gso3uB8M6t9UGiritdGmc4UTPEtM5NhC6vbb9CdK` | [View](https://explorer.solana.com/address/6wo8Gso3uB8M6t9UGiritdGmc4UTPEtM5NhC6vbb9CdK?cluster=devnet) |
+| **Vesting Program** | `3dxjcEGP8MurCtodLCJi1V6JBizdRRAYg91nZkhmX1sB` | [View](https://explorer.solana.com/address/3dxjcEGP8MurCtodLCJi1V6JBizdRRAYg91nZkhmX1sB?cluster=devnet) |
 
-- **Time-locked Vaults**: Create vaults that unlock at specific future dates
-- **Security Levels**: Multi-tier security system with optional access keys
-- **Cross-chain Links**: Connect vaults to other blockchain networks
-- **Multi-signature Support**: Add authorized withdrawers for collaborative access
-- **Metadata Management**: Add tags and descriptions to organize vaults
+### CVT Token (Solana-Native SPL Token)
 
-## Key Instructions
+| Token | Address | Explorer |
+|-------|---------|----------|
+| **CVT Mint** | `5g3TkqFxyVe1ismrC5r2QD345CA1YdfWn6s6p4AYNmy4` | [View](https://explorer.solana.com/address/5g3TkqFxyVe1ismrC5r2QD345CA1YdfWn6s6p4AYNmy4?cluster=devnet) |
+| **CVT Metadata** | `D5qLqXpJnWDrfpZoePauQv8g22DbM8CbeVZcjeBhdDgF` | [View](https://explorer.solana.com/address/D5qLqXpJnWDrfpZoePauQv8g22DbM8CbeVZcjeBhdDgF?cluster=devnet) |
+
+### Wallets
+
+| Wallet | Address | Purpose |
+|--------|---------|---------|
+| **Deployment Wallet** | `AjWeKXXgLpb2Cy3LfmqPjms3UkN1nAi596qBi8fRdLLQ` | Deployment authority |
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                   SOLANA MONITOR LAYER (<5s SLA)                    │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │               High-Frequency Validation Engine               │   │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐          │   │
+│  │  │ 2000+ TPS   │  │ <5s SLA     │  │ RPC         │          │   │
+│  │  │ Throughput  │  │ Monitoring  │  │ Failover    │          │   │
+│  │  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘          │   │
+│  │         │                │                │                  │   │
+│  └─────────┼────────────────┼────────────────┼──────────────────┘   │
+│            │                │                │                      │
+│            ▼                ▼                ▼                      │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │                      CVT TOKEN (SPL)                         │   │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐          │   │
+│  │  │ Mint        │  │ Metadata    │  │ Vesting     │          │   │
+│  │  │ 5g3Tkq...   │  │ D5qLqX...   │  │ Schedules   │          │   │
+│  │  └─────────────┘  └─────────────┘  └─────────────┘          │   │
+│  └─────────────────────────────────────────────────────────────┘   │
+│                                                                     │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐     │
+│  │ ChronosVault    │  │ Bridge Program  │  │ Trinity         │     │
+│  │ CYaDJY...       │  │ 6wo8Gs...       │  │ Validator       │     │
+│  │ - Time locks    │  │ - HTLC swaps    │  │ - Consensus     │     │
+│  │ - Multi-sig     │  │ - Cross-chain   │  │ - Signatures    │     │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘     │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## CVT Token Architecture
+
+### Important: CVT is Solana-Native
+
+**CVT Token exists ONLY on Solana as an SPL token.**
+
+| Property | Value |
+|----------|-------|
+| **Token Standard** | SPL (Solana Program Library) |
+| **Mint Address** | `5g3TkqFxyVe1ismrC5r2QD345CA1YdfWn6s6p4AYNmy4` |
+| **Decimals** | 9 |
+| **Total Supply** | 1,000,000,000 CVT |
+
+### Cross-Chain CVT Operations
+
+```
+┌──────────────┐     HTLC      ┌──────────────┐
+│   Arbitrum   │◄─────────────►│    Solana    │
+│  (No native  │               │  (CVT Mint)  │
+│   CVT token) │               │              │
+└──────────────┘               └──────────────┘
+                                      │
+                                      │ HTLC
+                                      ▼
+                               ┌──────────────┐
+                               │     TON      │
+                               │  (No native  │
+                               │   CVT token) │
+                               └──────────────┘
+```
+
+- All CVT operations originate from Solana
+- Cross-chain transfers use HTLC atomic swaps
+- Arbitrum and TON do NOT have native CVT tokens
+- Value transfer via locked/unlocked mechanisms
+
+---
+
+## Program Overview
+
+### ChronosVault Program
+**Address:** `CYaDJYRqm35udQ8vkxoajSER8oaniQUcV8Vvw5BqJyo2`
+
+Time-locked vault functionality:
 
 | Instruction | Description |
 |-------------|-------------|
 | `CreateVault` | Creates a new time-locked vault |
 | `Deposit` | Deposits funds into a vault |
-| `Withdraw` | Withdraws funds from an unlocked vault |
-| `AddCrossChainLink` | Links vault to contracts on other blockchains |
-| `AddAuthorizedWithdrawer` | Adds a collaborative withdrawer |
-| `UpdateMetadata` | Updates vault metadata and settings |
-| `UnlockEarly` | Allows early unlocking with appropriate authorization |
-| `GenerateVerificationProof` | Creates proof for cross-chain validation |
+| `Withdraw` | Withdraws funds from unlocked vault |
+| `AddCrossChainLink` | Links vault to other chains |
+| `AddAuthorizedWithdrawer` | Adds collaborative withdrawer |
+| `UpdateMetadata` | Updates vault metadata |
+| `UnlockEarly` | Early unlock with authorization |
+| `GenerateVerificationProof` | Creates cross-chain proof |
 
-## Development Environment
+### Bridge Program
+**Address:** `6wo8Gso3uB8M6t9UGiritdGmc4UTPEtM5NhC6vbb9CdK`
 
-The program is written in Rust using the Solana SDK and the Borsh serialization framework. For development and testing purposes, the project includes scripts that can simulate deployment without needing access to a live Solana cluster.
+Cross-chain HTLC operations:
 
-## Deployment
+| Feature | Description |
+|---------|-------------|
+| **HTLC Support** | Hash Time-Locked Contracts |
+| **Routes** | Solana ↔ Arbitrum, Solana ↔ TON |
+| **Signatures** | 2-of-3 Trinity consensus |
 
-### Development Mode
+### Vesting Program
+**Address:** `3dxjcEGP8MurCtodLCJi1V6JBizdRRAYg91nZkhmX1sB`
 
-To deploy in development mode (simulation):
+Token vesting schedules for CVT distribution.
+
+---
+
+## Connected Contracts
+
+### Arbitrum Sepolia (Chain ID: 1)
+| Contract | Address |
+|----------|---------|
+| TrinityConsensusVerifier | `0x59396D58Fa856025bD5249E342729d5550Be151C` |
+| HTLCChronosBridge | `0xc0B9C6cfb6e39432977693d8f2EBd4F2B5f73824` |
+| CrossChainMessageRelay | `0xC6F4f855fc690CB52159eE3B13C9d9Fb8D403E59` |
+
+### TON Testnet (Chain ID: 3)
+| Contract | Address |
+|----------|---------|
+| TrinityConsensus | `EQeGlYzwupSROVWGucOmKyUDbSaKmPfIpHHP5mV73odL8` |
+| CrossChainBridge | `EQgWobA9D4u6Xem3B8e6Sde_NEFZYicyy7_5_XvOT18mA` |
+
+---
+
+## Validators (On-Chain Registered)
+
+| Chain | Validator Address | Chain ID |
+|-------|-------------------|----------|
+| Arbitrum (PRIMARY) | `0x3A92fD5b39Ec9598225DB5b9f15af0523445E3d8` | 1 |
+| Solana (MONITOR) | `0x2554324ae222673F4C36D1Ae0E58C19fFFf69cd5` | 2 |
+| TON (BACKUP) | `0x9662e22D1f037C7EB370DD0463c597C6cd69B4c4` | 3 |
+
+---
+
+## Development
+
+### Prerequisites
+- Rust and Cargo
+- Solana CLI tools
+- Anchor framework (optional)
+
+### Environment Setup
 
 ```bash
-./scripts/solana/run.sh --dev
+# Install Solana CLI
+sh -c "$(curl -sSfL https://release.solana.com/v1.17.0/install)"
+
+# Configure for Devnet
+solana config set --url https://api.devnet.solana.com
+
+# Set wallet
+solana config set --keypair ~/.config/solana/id.json
 ```
 
-This will:
-1. Create placeholder compiled program files
-2. Simulate deployment
-3. Generate a mock program ID and deployment metadata
-
-### Production Mode
-
-For production deployment to the Solana mainnet or devnet:
+### Build Programs
 
 ```bash
-export SOLANA_PRIVATE_KEY=your_private_key
-export SOLANA_NETWORK=mainnet-beta # or devnet
-./scripts/solana/run.sh
+# Build with cargo
+cargo build-bpf
+
+# Or with Anchor
+anchor build
 ```
 
-This will:
-1. Compile the program with the Solana BPF toolchain
-2. Deploy to the specified network
-3. Generate deployment metadata
+### Deploy
 
-## Program State
+```bash
+# Deploy to Devnet
+solana program deploy target/deploy/chronos_vault.so
 
-The main vault state includes:
+# Deploy with specific program ID
+solana program deploy target/deploy/chronos_vault.so --program-id CYaDJYRqm35udQ8vkxoajSER8oaniQUcV8Vvw5BqJyo2
+```
 
-- Authority (creator) public key
-- Unlock time settings
-- Security level and access key hash
-- Vault metadata (name, description, tags)
-- Cross-chain links to other blockchain contracts
-- Authorized withdrawers list
-- Verification proof data
+---
 
-## Cross-Chain Compatibility
+## Files
 
-The program is designed to interoperate with the other blockchain contracts in the Chronos Vault ecosystem:
+| File | Type | Description |
+|------|------|-------------|
+| `chronos_vault.rs` | Rust | Main vault program |
+| `cross_chain_bridge.rs` | Rust | Bridge program |
+| `trinity_validator.rs` | Rust | Validator program |
+| `cvt_bridge_FIXED.rs` | Rust | Fixed CVT bridge |
+| `cvt_token/` | Directory | CVT SPL token program |
+| `vesting_program/` | Directory | Vesting schedules |
+| `deploy-trinity-validator.ts` | TypeScript | Deployment script |
 
-- TON (The Open Network)
-- Ethereum (via ERC-4626 Tokenized Vault Standard)
-- Other EVM-compatible chains
+---
 
-Integration is achieved through cross-chain links and verification proofs that can be validated across different blockchains.
+## Vault Security Levels
 
-## Security Considerations
+| Level | Name | Features |
+|-------|------|----------|
+| 1 | Basic | Time lock only |
+| 2 | Enhanced | + Access key required |
+| 3 | Multi-sig | + Multiple authorizers |
+| 4 | Institutional | + Full Trinity consensus |
+| 5 | Maximum | + All security features |
 
-- Security levels from 1 to 5 provide different protection mechanisms
-- Higher security levels require access keys for any operation
-- Early unlocking functionality requires both authority signature and access key
-- Verification proofs can be used to validate the vault's existence and state from other blockchains
+---
+
+## Cross-Chain Verification
+
+The program generates verification proofs that can be validated on other chains:
+
+```rust
+pub struct VerificationProof {
+    pub vault_id: Pubkey,
+    pub timestamp: i64,
+    pub merkle_root: [u8; 32],
+    pub signature: [u8; 64],
+    pub chain_id: u8,
+}
+```
+
+---
+
+## Performance
+
+| Metric | Value |
+|--------|-------|
+| **Throughput** | 2000+ TPS |
+| **Latency** | <5 seconds |
+| **Finality** | ~400ms |
+| **RPC Failover** | Automatic |
+
+---
+
+**Trinity Protocol - Solana Monitor Layer**  
+*High-Frequency Validation for Multi-Chain Security*
