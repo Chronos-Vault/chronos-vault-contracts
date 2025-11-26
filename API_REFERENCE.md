@@ -17,12 +17,12 @@ http://localhost:5000/api
 
 **Testnet:**
 ```
-https://testnet.chronosvault.io/api
+https://testnet.chronosvault.org/api
 ```
 
 **WebSocket Events (Real-time):**
 ```
-wss://testnet.chronosvault.io/ws
+wss://testnet.chronosvault.org/ws
 ```
 
 ---
@@ -532,7 +532,7 @@ Response:
 ### Connect to Events
 
 ```javascript
-const ws = new WebSocket('wss://testnet.chronosvault.io/ws?token=YOUR_AUTH_TOKEN');
+const ws = new WebSocket('wss://testnet.chronosvault.org/ws?token=YOUR_AUTH_TOKEN');
 
 ws.onmessage = (event) => {
   const message = JSON.parse(event.data);
