@@ -1,16 +1,30 @@
-// Trinity Protocol v3.5.18 - Updated: 2025-11-25T19:34:21.983Z
 ///! Trinity Protocol Validator for Solana
 ///! 
 ///! This program monitors Ethereum CrossChainBridgeOptimized events and submits
 ///! Merkle proofs back to Ethereum for 2-of-3 consensus verification.
 ///! 
 ///! Integration: Solana → Ethereum/Arbitrum L2
-///! Role: High-frequency monitoring and proof submission (<5 seconds)
+///! Role: HIGH-FREQUENCY MONITORING and proof submission (<5 seconds)
+///!
+///! ============================================================================
+///! SOLANA'S ROLE IN TRINITY PROTOCOL
+///! ============================================================================
+///! - Sub-5-second proof generation for cross-chain operations
+///! - Real-time vault monitoring with configurable intervals
+///! - High-throughput event processing (~400ms block times)
+///! - Parallel verification of multiple operations
+///! ============================================================================
 
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::keccak::hashv;
 
 declare_id!("TrNtyV4L1D4T0RSoLAN4C0nsENSuS1111111111111");
+
+/// High-frequency monitoring configuration constants
+pub const MIN_MONITORING_INTERVAL_MS: u64 = 400;       // Solana block time (~400ms)
+pub const DEFAULT_MONITORING_INTERVAL_MS: u64 = 1000;  // 1 second default
+pub const MAX_MONITORING_INTERVAL_MS: u64 = 60000;     // Max 1 minute
+pub const TARGET_PROOF_LATENCY_MS: u64 = 5000;         // Target <5 seconds
 
 #[program]
 pub mod trinity_validator {
@@ -186,6 +200,198 @@ pub mod trinity_validator {
         msg!("Validator configuration updated");
         Ok(())
     }
+    
+    // ========================================================================
+    // HIGH-FREQUENCY MONITORING SYSTEM (Solana's Role in Trinity Protocol)
+    // ========================================================================
+    
+    /// Initialize high-frequency monitoring configuration
+    /// Configures the monitoring interval and thresholds
+    pub fn initialize_monitoring(
+        ctx: Context<InitializeMonitoring>,
+        monitoring_interval_ms: u64,
+        max_latency_ms: u64,
+    ) -> Result<()> {
+        let monitor_config = &mut ctx.accounts.monitor_config;
+        let validator = &ctx.accounts.validator;
+        
+        require!(validator.is_active, TrinityError::ValidatorNotActive);
+        require!(
+            monitoring_interval_ms >= MIN_MONITORING_INTERVAL_MS,
+            TrinityError::MonitoringIntervalTooLow
+        );
+        require!(
+            monitoring_interval_ms <= MAX_MONITORING_INTERVAL_MS,
+            TrinityError::MonitoringIntervalTooHigh
+        );
+        
+        monitor_config.validator = validator.key();
+        monitor_config.monitoring_interval_ms = monitoring_interval_ms;
+        monitor_config.max_latency_ms = max_latency_ms;
+        monitor_config.last_check_timestamp = Clock::get()?.unix_timestamp as u64;
+        monitor_config.last_check_slot = Clock::get()?.slot;
+        monitor_config.total_checks = 0;
+        monitor_config.successful_proofs = 0;
+        monitor_config.failed_proofs = 0;
+        monitor_config.average_latency_ms = 0;
+        monitor_config.is_active = true;
+        monitor_config.bump = *ctx.bumps.get("monitor_config").unwrap();
+        
+        msg!("⚡ High-frequency monitoring initialized");
+        msg!("   Interval: {}ms", monitoring_interval_ms);
+        msg!("   Max Latency: {}ms", max_latency_ms);
+        
+        Ok(())
+    }
+    
+    /// Record a high-frequency monitoring check
+    /// Called by off-chain monitoring service at configured intervals
+    /// ENFORCES <5 second SLA and triggers alerts on breaches
+    pub fn record_monitoring_check(
+        ctx: Context<RecordMonitoringCheck>,
+        check_type: MonitoringCheckType,
+        latency_ms: u64,
+        operation_count: u32,
+        proof_generated: bool,
+    ) -> Result<()> {
+        let monitor_config = &mut ctx.accounts.monitor_config;
+        let validator = &ctx.accounts.validator;
+        
+        require!(validator.is_active, TrinityError::ValidatorNotActive);
+        require!(monitor_config.is_active, TrinityError::MonitoringNotActive);
+        
+        let current_timestamp = Clock::get()?.unix_timestamp as u64;
+        let current_slot = Clock::get()?.slot;
+        
+        // Calculate slot difference (Solana ~400ms per slot)
+        let slot_diff = current_slot.saturating_sub(monitor_config.last_check_slot);
+        
+        // Update monitoring stats with OVERFLOW PROTECTION
+        monitor_config.last_check_timestamp = current_timestamp;
+        monitor_config.last_check_slot = current_slot;
+        
+        // Saturating add to prevent overflow
+        monitor_config.total_checks = monitor_config.total_checks.saturating_add(1);
+        
+        if proof_generated {
+            monitor_config.successful_proofs = monitor_config.successful_proofs.saturating_add(1);
+        } else if operation_count > 0 {
+            monitor_config.failed_proofs = monitor_config.failed_proofs.saturating_add(1);
+        }
+        
+        // ROLLING AVERAGE with overflow protection
+        // Use exponential moving average to prevent unbounded growth
+        // New average = (old_avg * 7 + new_value * 1) / 8 (12.5% weight for new values)
+        let old_avg = monitor_config.average_latency_ms;
+        let weighted_old = old_avg.saturating_mul(7);
+        let weighted_new = latency_ms;
+        monitor_config.average_latency_ms = weighted_old.saturating_add(weighted_new) / 8;
+        
+        // ================================================================
+        // ENFORCE <5 SECOND SLA
+        // ================================================================
+        let sla_breached = latency_ms > TARGET_PROOF_LATENCY_MS;
+        let critical_breach = latency_ms > TARGET_PROOF_LATENCY_MS * 2; // >10 seconds is critical
+        
+        // Emit standard monitoring event
+        emit!(MonitoringCheckRecorded {
+            validator: validator.key(),
+            check_type: check_type.clone(),
+            timestamp: current_timestamp,
+            slot: current_slot,
+            latency_ms,
+            operation_count,
+            proof_generated,
+            slots_since_last_check: slot_diff,
+        });
+        
+        // EMIT ALERT on SLA breach
+        if sla_breached {
+            emit!(SlaBreachAlert {
+                validator: validator.key(),
+                latency_ms,
+                target_latency_ms: TARGET_PROOF_LATENCY_MS,
+                breach_severity: if critical_breach { 2 } else { 1 },
+                timestamp: current_timestamp,
+                slot: current_slot,
+            });
+            
+            if critical_breach {
+                msg!("🚨 CRITICAL: Latency {}ms exceeds 2x target ({}ms)", latency_ms, TARGET_PROOF_LATENCY_MS * 2);
+            } else {
+                msg!("⚠️  SLA BREACH: Latency {}ms exceeds target {}ms", latency_ms, TARGET_PROOF_LATENCY_MS);
+            }
+        } else {
+            msg!("✅ Monitoring check passed: {}ms latency (target: {}ms)", latency_ms, TARGET_PROOF_LATENCY_MS);
+        }
+        
+        Ok(())
+    }
+    
+    /// Fast-path verification for urgent operations
+    /// Bypasses normal queue for time-critical proofs
+    pub fn fast_verify_operation(
+        ctx: Context<FastVerifyOperation>,
+        vault_id: u64,
+        operation_hash: [u8; 32],
+        urgency_level: u8,
+    ) -> Result<()> {
+        let validator = &ctx.accounts.validator;
+        let fast_proof = &mut ctx.accounts.fast_proof;
+        
+        require!(validator.is_active, TrinityError::ValidatorNotActive);
+        require!(urgency_level > 0 && urgency_level <= 3, TrinityError::InvalidUrgencyLevel);
+        
+        let current_timestamp = Clock::get()?.unix_timestamp as u64;
+        let current_slot = Clock::get()?.slot;
+        
+        // Generate fast verification proof
+        let verification_hash = hashv(&[
+            &vault_id.to_le_bytes(),
+            &operation_hash,
+            &current_timestamp.to_le_bytes(),
+            &[urgency_level],
+        ]);
+        
+        fast_proof.vault_id = vault_id;
+        fast_proof.operation_hash = operation_hash;
+        fast_proof.verification_hash = verification_hash.0;
+        fast_proof.urgency_level = urgency_level;
+        fast_proof.timestamp = current_timestamp;
+        fast_proof.slot = current_slot;
+        fast_proof.validator = validator.key();
+        fast_proof.submitted_to_ethereum = false;
+        
+        emit!(FastProofGenerated {
+            vault_id,
+            operation_hash,
+            verification_hash: verification_hash.0,
+            urgency_level,
+            timestamp: current_timestamp,
+            slot: current_slot,
+        });
+        
+        msg!("🚀 Fast-path verification generated");
+        msg!("   Vault ID: {}", vault_id);
+        msg!("   Urgency Level: {}", urgency_level);
+        msg!("   Slot: {}", current_slot);
+        
+        Ok(())
+    }
+    
+    /// Get monitoring statistics
+    pub fn get_monitoring_stats(ctx: Context<GetMonitoringStats>) -> Result<MonitoringStats> {
+        let monitor_config = &ctx.accounts.monitor_config;
+        
+        Ok(MonitoringStats {
+            total_checks: monitor_config.total_checks,
+            successful_proofs: monitor_config.successful_proofs,
+            failed_proofs: monitor_config.failed_proofs,
+            average_latency_ms: monitor_config.average_latency_ms,
+            last_check_timestamp: monitor_config.last_check_timestamp,
+            is_active: monitor_config.is_active,
+        })
+    }
 }
 
 // ============================================================================
@@ -282,6 +488,76 @@ pub struct UpdateValidator<'info> {
 }
 
 // ============================================================================
+// HIGH-FREQUENCY MONITORING Account Structures
+// ============================================================================
+
+#[derive(Accounts)]
+pub struct InitializeMonitoring<'info> {
+    #[account(seeds = [b"trinity_validator"], bump = validator.bump)]
+    pub validator: Account<'info, TrinityValidator>,
+    
+    #[account(
+        init,
+        payer = authority,
+        space = 8 + MonitorConfig::INIT_SPACE,
+        seeds = [b"monitor_config", validator.key().as_ref()],
+        bump
+    )]
+    pub monitor_config: Account<'info, MonitorConfig>,
+    
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct RecordMonitoringCheck<'info> {
+    #[account(seeds = [b"trinity_validator"], bump = validator.bump)]
+    pub validator: Account<'info, TrinityValidator>,
+    
+    #[account(
+        mut,
+        seeds = [b"monitor_config", validator.key().as_ref()],
+        bump = monitor_config.bump
+    )]
+    pub monitor_config: Account<'info, MonitorConfig>,
+    
+    #[account(mut)]
+    pub authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
+#[instruction(vault_id: u64, operation_hash: [u8; 32])]
+pub struct FastVerifyOperation<'info> {
+    #[account(seeds = [b"trinity_validator"], bump = validator.bump)]
+    pub validator: Account<'info, TrinityValidator>,
+    
+    #[account(
+        init,
+        payer = authority,
+        space = 8 + FastProof::INIT_SPACE,
+        seeds = [b"fast_proof", &vault_id.to_le_bytes(), operation_hash.as_ref()],
+        bump
+    )]
+    pub fast_proof: Account<'info, FastProof>,
+    
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct GetMonitoringStats<'info> {
+    #[account(seeds = [b"trinity_validator"], bump)]
+    pub validator: Account<'info, TrinityValidator>,
+    
+    #[account(seeds = [b"monitor_config", validator.key().as_ref()], bump = monitor_config.bump)]
+    pub monitor_config: Account<'info, MonitorConfig>,
+}
+
+// ============================================================================
 // State Structures
 // ============================================================================
 
@@ -329,6 +605,50 @@ pub struct VaultVerification {
 }
 
 // ============================================================================
+// HIGH-FREQUENCY MONITORING State Structures
+// ============================================================================
+
+#[account]
+#[derive(InitSpace)]
+pub struct MonitorConfig {
+    pub validator: Pubkey,                          // Associated validator
+    pub monitoring_interval_ms: u64,                // Monitoring check interval in ms
+    pub max_latency_ms: u64,                        // Maximum acceptable proof latency
+    pub last_check_timestamp: u64,                  // Unix timestamp of last check
+    pub last_check_slot: u64,                       // Solana slot of last check
+    pub total_checks: u64,                          // Total monitoring checks performed
+    pub successful_proofs: u64,                     // Number of successful proofs
+    pub failed_proofs: u64,                         // Number of failed proofs
+    pub average_latency_ms: u64,                    // Rolling average latency
+    pub is_active: bool,                            // Monitoring active status
+    pub bump: u8,                                   // PDA bump
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct FastProof {
+    pub vault_id: u64,                              // Vault identifier
+    pub operation_hash: [u8; 32],                   // Operation hash
+    pub verification_hash: [u8; 32],                // Fast verification hash
+    pub urgency_level: u8,                          // 1=normal, 2=urgent, 3=critical
+    pub timestamp: u64,                             // Proof generation timestamp
+    pub slot: u64,                                  // Solana slot number
+    pub validator: Pubkey,                          // Validator that generated
+    pub submitted_to_ethereum: bool,                // Submission status
+}
+
+/// Return type for get_monitoring_stats
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug)]
+pub struct MonitoringStats {
+    pub total_checks: u64,
+    pub successful_proofs: u64,
+    pub failed_proofs: u64,
+    pub average_latency_ms: u64,
+    pub last_check_timestamp: u64,
+    pub is_active: bool,
+}
+
+// ============================================================================
 // Enums
 // ============================================================================
 
@@ -338,6 +658,15 @@ pub enum OperationType {
     HTLCSwap,
     EmergencyRecovery,
     CrossChainTransfer,
+}
+
+/// High-frequency monitoring check types
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, InitSpace, Debug)]
+pub enum MonitoringCheckType {
+    PeriodicScan,           // Regular interval scan
+    EventTriggered,         // Triggered by cross-chain event
+    FastPath,               // Urgent fast-path verification
+    RecoveryCheck,          // Emergency recovery monitoring
 }
 
 // ============================================================================
@@ -361,6 +690,40 @@ pub struct OperationVerified {
     pub amount: u64,
     pub user: Pubkey,
     pub verification_hash: [u8; 32],
+}
+
+// High-frequency monitoring events
+#[event]
+pub struct MonitoringCheckRecorded {
+    pub validator: Pubkey,
+    pub check_type: MonitoringCheckType,
+    pub timestamp: u64,
+    pub slot: u64,
+    pub latency_ms: u64,
+    pub operation_count: u32,
+    pub proof_generated: bool,
+    pub slots_since_last_check: u64,
+}
+
+#[event]
+pub struct FastProofGenerated {
+    pub vault_id: u64,
+    pub operation_hash: [u8; 32],
+    pub verification_hash: [u8; 32],
+    pub urgency_level: u8,
+    pub timestamp: u64,
+    pub slot: u64,
+}
+
+/// SLA breach alert - emitted when latency exceeds target
+#[event]
+pub struct SlaBreachAlert {
+    pub validator: Pubkey,
+    pub latency_ms: u64,
+    pub target_latency_ms: u64,
+    pub breach_severity: u8,  // 1 = warning (>5s), 2 = critical (>10s)
+    pub timestamp: u64,
+    pub slot: u64,
 }
 
 // ============================================================================
@@ -408,4 +771,17 @@ pub enum TrinityError {
     
     #[msg("Vault not initialized (owned by System program)")]
     VaultNotInitialized,
+    
+    // High-frequency monitoring errors
+    #[msg("Monitoring interval too low (minimum 400ms)")]
+    MonitoringIntervalTooLow,
+    
+    #[msg("Monitoring interval too high (maximum 60000ms)")]
+    MonitoringIntervalTooHigh,
+    
+    #[msg("Monitoring is not active")]
+    MonitoringNotActive,
+    
+    #[msg("Invalid urgency level (must be 1-3)")]
+    InvalidUrgencyLevel,
 }
