@@ -1,393 +1,413 @@
-<!-- Chronos Vault - Trinity Protocol™ -->
-# 🔐 Chronos Vault - Developer Documentation
+# Trinity Protocol v3.5.20 - Multi-Chain Smart Contracts
 
-**Platform Version:** 1.0.0  
-**Last Updated:** October 2025  
-**Architecture:** Multi-Chain Security Platform
+[![Version](https://img.shields.io/badge/version-3.5.20-blue.svg)](https://github.com/Chronos-Vault)
+[![Chains](https://img.shields.io/badge/chains-Arbitrum%20|%20Solana%20|%20TON-green.svg)](https://github.com/Chronos-Vault)
+[![Consensus](https://img.shields.io/badge/consensus-2%20of%203-purple.svg)](https://github.com/Chronos-Vault)
+[![License](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
+
+> **Enterprise-grade 2-of-3 multi-chain consensus verification system** for secure cross-chain vault management and atomic swaps.
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                         TRINITY PROTOCOL v3.5.20                                │
+│                    2-of-3 Multi-Chain Consensus System                          │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│  ┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐          │
+│  │   ARBITRUM L2    │    │  SOLANA DEVNET   │    │   TON TESTNET    │          │
+│  │   (PRIMARY)      │◄──►│    (MONITOR)     │◄──►│    (BACKUP)      │          │
+│  │                  │    │                  │    │                  │          │
+│  │ Security Layer   │    │ High-Frequency   │    │ Quantum-Safe     │          │
+│  │ Consensus Core   │    │ Validation <5s   │    │ Recovery Layer   │          │
+│  └────────┬─────────┘    └────────┬─────────┘    └────────┬─────────┘          │
+│           │                       │                       │                     │
+│           └───────────────────────┼───────────────────────┘                     │
+│                                   │                                             │
+│                    ┌──────────────▼──────────────┐                              │
+│                    │   TRINITY CONSENSUS ENGINE   │                              │
+│                    │   Threshold: 2-of-3 Votes    │                              │
+│                    │   Emergency: 3-of-3 Votes    │                              │
+│                    └──────────────┬──────────────┘                              │
+│                                   │                                             │
+│  ┌────────────────────────────────┼────────────────────────────────┐            │
+│  │                                │                                │            │
+│  ▼                                ▼                                ▼            │
+│ ┌────────────┐              ┌────────────┐              ┌────────────┐          │
+│ │ ChronosVault│              │ HTLC Bridge│              │ Exit Gateway│          │
+│ │ Optimized  │              │ Atomic Swap│              │ L1 Settlement│          │
+│ └────────────┘              └────────────┘              └────────────┘          │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
-## 🛡️ Mathematical Defense Layer (MDL)
+## Deployment Status
 
-Welcome to the official Chronos Vault developer documentation. This comprehensive guide covers the **Mathematical Defense Layer** - the world's first cryptographic security system where every security claim is **mathematically provable**, not just audited.
+| Chain | Network | Status | Role |
+|-------|---------|--------|------|
+| Arbitrum | Sepolia Testnet | ✅ DEPLOYED | PRIMARY |
+| Solana | Devnet | ✅ DEPLOYED | MONITOR |
+| TON | Testnet | ✅ DEPLOYED | BACKUP |
 
-### 🎯 What Makes MDL Revolutionary?
-
-Unlike traditional platforms that rely on audits and trust, Chronos Vault provides **cryptographic proofs**:
-
-- ✅ **14/22 theorems proven** using Lean 4 formal verification (8 proof sketches in progress)
-- ✅ **Zero-knowledge privacy** - verify without revealing
-- ✅ **Quantum-resistant** - ML-KEM-1024 + Dilithium-5
-- ✅ **Time-locks provably unbreakable** - Wesolowski VDF
-- ✅ **Distributed keys** - 3-of-5 Shamir Secret Sharing
-- ✅ **AI decisions validated** - Math proves, chain executes
-- ✅ **Trinity Protocol™** - 2-of-3 multi-chain consensus
+**Deployed:** November 26, 2025 | **Version:** v3.5.20
 
 ---
 
-## 📚 Documentation Index
+## Deployed Contract Addresses
 
-### Core Documentation
+### Arbitrum Sepolia (Chain ID: 421614) - PRIMARY
 
-1. **[Mathematical Defense Layer Overview](../server/security/README.md)**
-   - Complete guide to all 7 security systems
-   - Architecture and components
-   - API reference and examples
-   - Performance metrics
+**Explorer:** [https://sepolia.arbiscan.io](https://sepolia.arbiscan.io)
 
-2. **[Integration Guide](./MATHEMATICAL_DEFENSE_INTEGRATION_GUIDE.md)** ⭐ START HERE
-   - Step-by-step integration tutorial
-   - Code examples for all components
-   - Frontend and backend integration
-   - Smart contract examples
+#### Core Consensus Contracts
 
-3. **[Zero-Knowledge Circuits](../contracts/circuits/README.md)**
-   - Circom circuit documentation
-   - Vault ownership proofs
-   - Multi-signature verification
-   - Proof generation and verification
+| Contract | Address | Description |
+|----------|---------|-------------|
+| **TrinityConsensusVerifier** | [`0x59396D58Fa856025bD5249E342729d5550Be151C`](https://sepolia.arbiscan.io/address/0x59396D58Fa856025bD5249E342729d5550Be151C) | Core 2-of-3 consensus verification |
+| **EmergencyMultiSig** | [`0x066A39Af76b625c1074aE96ce9A111532950Fc41`](https://sepolia.arbiscan.io/address/0x066A39Af76b625c1074aE96ce9A111532950Fc41) | Emergency 3-of-3 multisig operations |
 
-4. **[Whitepaper](../MATHEMATICAL_DEFENSE_LAYER.md)**
-   - Detailed cryptographic analysis
-   - Security proofs and guarantees
-   - Mathematical foundations
-   - Threat model
+#### Infrastructure Contracts
 
-## 🔐 7 Security Layers
+| Contract | Address | Description |
+|----------|---------|-------------|
+| **TrinityKeeperRegistry** | [`0xAe9bd988011583D87d6bbc206C19e4a9Bda04830`](https://sepolia.arbiscan.io/address/0xAe9bd988011583D87d6bbc206C19e4a9Bda04830) | Keeper management and registration |
+| **TrinityGovernanceTimelock** | [`0xf6b9AB802b323f8Be35ca1C733e155D4BdcDb61b`](https://sepolia.arbiscan.io/address/0xf6b9AB802b323f8Be35ca1C733e155D4BdcDb61b) | Governance with time-delay |
+| **CrossChainMessageRelay** | [`0xC6F4f855fc690CB52159eE3B13C9d9Fb8D403E59`](https://sepolia.arbiscan.io/address/0xC6F4f855fc690CB52159eE3B13C9d9Fb8D403E59) | Cross-chain message verification |
+| **TrinityRelayerCoordinator** | [`0x4023B7307BF9e1098e0c34F7E8653a435b20e635`](https://sepolia.arbiscan.io/address/0x4023B7307BF9e1098e0c34F7E8653a435b20e635) | Relayer coordination |
 
-### 1. Zero-Knowledge Proofs
-**Purpose**: Privacy-preserving verification
+#### Fee & Exit Contracts
 
-**Key Files**:
-- `server/security/enhanced-zero-knowledge-service.ts`
-- `contracts/circuits/vault_ownership.circom`
-- `contracts/circuits/multisig_verification.circom`
+| Contract | Address | Description |
+|----------|---------|-------------|
+| **TrinityExitGateway** | [`0xE6FeBd695e4b5681DCF274fDB47d786523796C04`](https://sepolia.arbiscan.io/address/0xE6FeBd695e4b5681DCF274fDB47d786523796C04) | L1 exit and settlement |
+| **TrinityFeeSplitter** | [`0x4F777c8c7D3Ea270c7c6D9Db8250ceBe1648A058`](https://sepolia.arbiscan.io/address/0x4F777c8c7D3Ea270c7c6D9Db8250ceBe1648A058) | Protocol fee distribution (40/30/20/10) |
 
-**Quick Start**:
-```typescript
-import { EnhancedZeroKnowledgeService } from './server/security/enhanced-zero-knowledge-service';
+#### HTLC Bridge Contracts
 
-const zkService = new EnhancedZeroKnowledgeService();
-await zkService.initialize();
+| Contract | Address | Description |
+|----------|---------|-------------|
+| **HTLCChronosBridge** | [`0xc0B9C6cfb6e39432977693d8f2EBd4F2B5f73824`](https://sepolia.arbiscan.io/address/0xc0B9C6cfb6e39432977693d8f2EBd4F2B5f73824) | HTLC atomic swap bridge |
+| **HTLCArbToL1** | [`0xaDDAC5670941416063551c996e169b0fa569B8e1`](https://sepolia.arbiscan.io/address/0xaDDAC5670941416063551c996e169b0fa569B8e1) | Arbitrum to L1 bridge |
 
-const commitment = await zkService.generateCommitment(secretValue, salt);
-const isValid = await zkService.verifyCommitment(commitment, secretValue, salt);
-```
+#### Vault Contracts
 
-### 2. Quantum-Resistant Cryptography
-**Purpose**: Protection against quantum computers
-
-**Key Files**:
-- `server/security/quantum-resistant-crypto.ts`
-
-**Quick Start**:
-```typescript
-import { QuantumResistantCrypto } from './server/security/quantum-resistant-crypto';
-
-const qCrypto = new QuantumResistantCrypto();
-await qCrypto.initialize();
-
-const keyPair = await qCrypto.generateHybridKeyPair();
-const ciphertext = await qCrypto.encryptData(data, keyPair.publicKey);
-```
-
-**Algorithms**: ML-KEM-1024, CRYSTALS-Dilithium-5
-
-### 3. Multi-Party Computation (MPC)
-**Purpose**: Distributed key management
-
-**Key Files**:
-- `server/security/mpc-key-management.ts`
-
-**Quick Start**:
-```typescript
-import { MPCKeyManagement } from './server/security/mpc-key-management';
-
-const mpc = new MPCKeyManagement(5, 3); // 3-of-5 threshold
-await mpc.initialize();
-
-const shares = await mpc.distributeKey(masterKey, vaultId);
-const reconstructed = await mpc.reconstructKey(vaultId, shares.slice(0, 3));
-```
-
-### 4. Verifiable Delay Functions (VDF)
-**Purpose**: Provable time-locks
-
-**Key Files**:
-- `server/security/vdf-time-lock.ts`
-
-**Quick Start**:
-```typescript
-import { VDFTimeLock } from './server/security/vdf-time-lock';
-
-const vdf = new VDFTimeLock();
-await vdf.initialize();
-
-const timeLock = await vdf.createTimeLock(data, 3600, vaultId); // 1 hour
-const result = await vdf.verifyAndUnlock(vaultId);
-```
-
-**Algorithm**: Wesolowski VDF with RSA-2048
-
-### 5. AI + Cryptographic Governance
-**Purpose**: Trustless AI automation with mathematical validation
-
-**Key Files**:
-- `server/security/ai-crypto-governance.ts`
-
-**Quick Start**:
-```typescript
-import { AICryptoGovernance } from './server/security/ai-crypto-governance';
-
-const governance = new AICryptoGovernance();
-await governance.initialize();
-
-const proposal = await governance.analyzeSecurityThreat({
-  vaultId,
-  threatType: 'unusual_access_pattern',
-  severity: 'high'
-});
-
-const validated = await governance.validateProposal(proposal);
-```
-
-**Model**: "AI decides, Math proves, Chain executes"
-
-### 6. Formal Verification
-**Purpose**: Mathematical proof of contract security
-
-**Key Files**:
-- `server/security/formal-verification.ts`
-- `server/security/formal-verification/` (theorems and invariants)
-
-**Quick Start**:
-```typescript
-import { FormalVerificationSystem } from './server/security/formal-verification';
-
-const verifier = new FormalVerificationSystem();
-await verifier.initialize();
-
-const result = await verifier.verifyContract('ChronosVault');
-console.log(`Proven secure: ${result.theoremsProven}/${result.totalTheorems}`);
-```
-
-### 7. Trinity Protocol™
-**Purpose**: Multi-chain consensus (2-of-3)
-
-**Key Files**:
-- `server/security/trinity-protocol.ts`
-- `server/security/consensus-proofs/`
-
-**Quick Start**:
-```typescript
-import { TrinityProtocol } from './server/security/trinity-protocol';
-
-const trinity = new TrinityProtocol();
-const consensus = await trinity.verifyConsensus(operation, [
-  arbitrumProof,
-  solanaProof,
-  tonProof
-]);
-```
-
-**Chains**: Arbitrum (Primary), Solana (Monitor), TON (Backup)
-
-## 🚀 Quick Start
-
-### 1. Install Dependencies
-
-```bash
-npm install mlkem dilithium-crystals-js snarkjs @anthropic-ai/sdk
-```
-
-### 2. Initialize MDL
-
-```typescript
-import { MathematicalDefenseLayer } from './server/security/mathematical-defense-layer';
-
-const mdl = new MathematicalDefenseLayer();
-await mdl.initialize();
-```
-
-### 3. Create Secure Vault
-
-```typescript
-const vault = await mdl.createSecureVault({
-  vaultId: 'my-vault-001',
-  assetValue: 1000000,
-  securityLevel: 'maximum',
-  timeLockDuration: 86400 // 24 hours
-});
-
-console.log('Security Proof:', vault.securityProof);
-```
-
-### 4. Run Demo
-
-```bash
-npx tsx server/security/demo-mathematical-defense.ts
-```
-
-## 📊 Mathematical Guarantees
-
-The MDL provides **cryptographically provable** security properties:
-
-1. **Privacy**: ∀ proof P → verifier learns nothing beyond validity
-2. **Time-Lock**: ∀ VDF → unlock before T iterations = impossible
-3. **Distribution**: ∀ key K → reconstruct requires ≥k threshold shares
-4. **Governance**: ∀ AI proposal → executed ⟹ mathematically proven
-5. **Quantum**: ∀ attack using Shor's algorithm → P(success) = negligible
-6. **Formal**: ∀ contract C → proven_secure(C) ⟹ ¬∃ exploit path
-7. **Consensus**: ∀ operation → valid ⟹ approved by 2-of-3 chains
-
-## 📁 Project Structure
-
-```
-chronos-vault/
-├── server/
-│   └── security/
-│       ├── mathematical-defense-layer.ts       # Main coordinator
-│       ├── enhanced-zero-knowledge-service.ts  # ZK proofs
-│       ├── quantum-resistant-crypto.ts         # Post-quantum crypto
-│       ├── mpc-key-management.ts              # MPC & Shamir
-│       ├── vdf-time-lock.ts                   # Time-locks
-│       ├── ai-crypto-governance.ts            # AI governance
-│       ├── formal-verification.ts             # Contract proofs
-│       ├── trinity-protocol.ts                # Multi-chain
-│       ├── demo-mathematical-defense.ts       # Demo script
-│       └── README.md                          # Component docs
-│
-├── contracts/
-│   └── circuits/
-│       ├── vault_ownership.circom             # ZK circuit
-│       ├── multisig_verification.circom       # ZK circuit
-│       ├── compile-circuits.sh                # Build script
-│       └── README.md                          # Circuit docs
-│
-├── docs/
-│   ├── MATHEMATICAL_DEFENSE_INTEGRATION_GUIDE.md  # Integration guide
-│   └── README.md                                  # This file
-│
-└── MATHEMATICAL_DEFENSE_LAYER.md              # Whitepaper
-```
-
-## 🔗 API Endpoints
-
-### Vault Operations
-
-```
-POST /api/vaults/create
-POST /api/vaults/:vaultId/analyze
-POST /api/vaults/:vaultId/unlock
-GET  /api/vaults/:vaultId/proofs
-```
-
-### Security Services
-
-```
-POST /api/security/zk/commitment
-POST /api/security/zk/verify
-POST /api/security/quantum/encrypt
-POST /api/security/mpc/distribute
-POST /api/security/vdf/timelock
-POST /api/security/ai/analyze
-GET  /api/security/formal/verify/:contract
-```
-
-## 🧪 Testing
-
-### Run All Tests
-
-```bash
-npm run test:mdl
-```
-
-### Run Demo
-
-```bash
-npx tsx server/security/demo-mathematical-defense.ts
-```
-
-### Test Individual Components
-
-```bash
-# Zero-Knowledge Proofs
-npx tsx server/security/enhanced-zero-knowledge-service.ts
-
-# Quantum Crypto
-npx tsx server/security/quantum-resistant-crypto.ts
-
-# MPC
-npx tsx server/security/mpc-key-management.ts
-```
-
-## 📈 Performance
-
-| Operation | Time | Gas Cost (on-chain) |
-|-----------|------|---------------------|
-| ZK Proof Generation | ~5-20ms | - |
-| ZK Proof Verification | ~2-10ms | ~250k gas |
-| Quantum Encryption | ~10-20ms | - |
-| MPC Key Generation | ~50-100ms | - |
-| VDF Computation | O(T) | - |
-| VDF Verification | O(log T) | ~300k gas |
-| AI Analysis | ~100-500ms | - |
-
-## 🔒 Security Model
-
-**Trust Model**: "Trust Math, Not Humans"
-
-- **No trusted parties**: All security is cryptographically provable
-- **No single points of failure**: Distributed key management (3-of-5)
-- **No bypass mechanisms**: Time-locks are mathematically enforced
-- **No hidden backdoors**: Formal verification proves no exploits exist
-- **Quantum-resistant**: Future-proof against quantum computers
-
-## 🌟 Key Advantages vs Traditional Security
-
-| Aspect | Traditional | Chronos Vault MDL |
-|--------|------------|------------------|
-| Trust Model | Audits, humans | Mathematical proofs |
-| Time-Locks | Admin bypass | Provably impossible |
-| Key Management | Single point failure | 3-of-5 distributed |
-| Quantum Risk | Vulnerable | NIST post-quantum |
-| Privacy | Data exposure | Zero-knowledge |
-| AI Governance | Trust-based | Crypto-validated |
-| Contract Security | Audit assumptions | Formal proofs |
-
-## 📖 Learn More
-
-### External Resources
-
-- **Groth16 ZK Proofs**: https://eprint.iacr.org/2016/260.pdf
-- **NIST Post-Quantum**: https://csrc.nist.gov/projects/post-quantum-cryptography
-- **Shamir Secret Sharing**: https://en.wikipedia.org/wiki/Shamir%27s_Secret_Sharing
-- **Wesolowski VDF**: https://eprint.iacr.org/2018/623.pdf
-- **Circom Language**: https://docs.circom.io/
-- **SnarkJS Library**: https://github.com/iden3/snarkjs
-
-### GitHub Repositories
-
-- **Contracts**: https://github.com/Chronos-Vault/chronos-vault-contracts
-- **Platform**: https://github.com/Chronos-Vault/chronos-vault-platform
-- **SDK**: https://github.com/Chronos-Vault/chronos-vault-sdk
-- **Documentation**: https://github.com/Chronos-Vault/chronos-vault-docs
-- **Security**: https://github.com/Chronos-Vault/chronos-vault-security
-
-## 💡 Support
-
-- **Documentation**: https://docs.chronosvault.org
-- **GitHub Issues**: https://github.com/Chronos-Vault/chronos-vault-platform/issues
-- **Discord**: https://discord.gg/chronosvault
-- **Twitter**: https://twitter.com/ChronosVault
-
-## 📝 License
-
-Part of Chronos Vault - Multi-Chain Digital Vault Platform
-© 2025 Chronos Vault. All rights reserved.
+| Contract | Address | Description |
+|----------|---------|-------------|
+| **ChronosVaultOptimized** | [`0xAE408eC592f0f865bA0012C480E8867e12B4F32D`](https://sepolia.arbiscan.io/address/0xAE408eC592f0f865bA0012C480E8867e12B4F32D) | ERC-4626 compliant vault |
+| **TestERC20** | [`0x4567853BE0d5780099E3542Df2e00C5B633E0161`](https://sepolia.arbiscan.io/address/0x4567853BE0d5780099E3542Df2e00C5B633E0161) | Test token for vault |
 
 ---
 
-**Built with ❤️ by the Chronos Vault Team**
+### Solana Devnet - MONITOR
 
-🔐 Trust Math, Not Humans
+**Explorer:** [https://explorer.solana.com/?cluster=devnet](https://explorer.solana.com/?cluster=devnet)
+
+#### Programs
+
+| Program | Address | Description |
+|---------|---------|-------------|
+| **ChronosVault Program** | [`CYaDJYRqm35udQ8vkxoajSER8oaniQUcV8Vvw5BqJyo2`](https://explorer.solana.com/address/CYaDJYRqm35udQ8vkxoajSER8oaniQUcV8Vvw5BqJyo2?cluster=devnet) | Main vault program |
+| **Bridge Program** | [`6wo8Gso3uB8M6t9UGiritdGmc4UTPEtM5NhC6vbb9CdK`](https://explorer.solana.com/address/6wo8Gso3uB8M6t9UGiritdGmc4UTPEtM5NhC6vbb9CdK?cluster=devnet) | Cross-chain bridge program |
+| **Vesting Program** | [`3dxjcEGP8MurCtodLCJi1V6JBizdRRAYg91nZkhmX1sB`](https://explorer.solana.com/address/3dxjcEGP8MurCtodLCJi1V6JBizdRRAYg91nZkhmX1sB?cluster=devnet) | Token vesting schedules |
+
+#### CVT Token (Solana-Only SPL Token)
+
+| Token | Address | Description |
+|-------|---------|-------------|
+| **CVT Mint** | [`5g3TkqFxyVe1ismrC5r2QD345CA1YdfWn6s6p4AYNmy4`](https://explorer.solana.com/address/5g3TkqFxyVe1ismrC5r2QD345CA1YdfWn6s6p4AYNmy4?cluster=devnet) | CVT SPL token mint |
+| **CVT Metadata** | [`D5qLqXpJnWDrfpZoePauQv8g22DbM8CbeVZcjeBhdDgF`](https://explorer.solana.com/address/D5qLqXpJnWDrfpZoePauQv8g22DbM8CbeVZcjeBhdDgF?cluster=devnet) | Token metadata account |
+
+#### Wallets
+
+| Wallet | Address | Purpose |
+|--------|---------|---------|
+| **Deployment Wallet** | [`AjWeKXXgLpb2Cy3LfmqPjms3UkN1nAi596qBi8fRdLLQ`](https://explorer.solana.com/address/AjWeKXXgLpb2Cy3LfmqPjms3UkN1nAi596qBi8fRdLLQ?cluster=devnet) | Deployment authority |
+
+---
+
+### TON Testnet - BACKUP (Quantum-Safe)
+
+**Explorer:** [https://testnet.tonscan.org](https://testnet.tonscan.org)
+
+| Contract | Address | Description |
+|----------|---------|-------------|
+| **TrinityConsensus** | [`EQeGlYzwupSROVWGucOmKyUDbSaKmPfIpHHP5mV73odL8`](https://testnet.tonscan.org/address/EQeGlYzwupSROVWGucOmKyUDbSaKmPfIpHHP5mV73odL8) | Consensus with quantum recovery |
+| **ChronosVault** | [`EQjUVidQfn4m-Rougn0fol7ECCthba2HV0M6xz9zAfax4`](https://testnet.tonscan.org/address/EQjUVidQfn4m-Rougn0fol7ECCthba2HV0M6xz9zAfax4) | Time-locked vault operations |
+| **CrossChainBridge** | [`EQgWobA9D4u6Xem3B8e6Sde_NEFZYicyy7_5_XvOT18mA`](https://testnet.tonscan.org/address/EQgWobA9D4u6Xem3B8e6Sde_NEFZYicyy7_5_XvOT18mA) | HTLC atomic swaps |
+
+**Quantum Security:** ML-KEM-1024 + CRYSTALS-Dilithium-5 (256-bit entropy)
+
+---
+
+## Validators (On-Chain Registered)
+
+| Chain Role | Validator Address | Chain ID |
+|------------|-------------------|----------|
+| **Arbitrum (PRIMARY)** | `0x3A92fD5b39Ec9598225DB5b9f15af0523445E3d8` | 1 |
+| **Solana (MONITOR)** | `0x2554324ae222673F4C36D1Ae0E58C19fFFf69cd5` | 2 |
+| **TON (BACKUP)** | `0x9662e22D1f037C7EB370DD0463c597C6cd69B4c4` | 3 |
+
+---
+
+## Cross-Chain Flow Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                          ATOMIC SWAP FLOW (HTLC)                                │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│  User                  Arbitrum                Solana                 TON       │
+│   │                        │                      │                    │        │
+│   │  1. Create Swap        │                      │                    │        │
+│   ├───────────────────────►│                      │                    │        │
+│   │                        │                      │                    │        │
+│   │  2. Register HTLC      │                      │                    │        │
+│   │                        ├─────────────────────►│                    │        │
+│   │                        │   Hash Lock          │                    │        │
+│   │                        │                      │                    │        │
+│   │  3. Validator Vote #1  │                      │                    │        │
+│   │                        │◄─────────────────────│                    │        │
+│   │                        │                      │                    │        │
+│   │  4. Validator Vote #2  │                      │                    │        │
+│   │                        │◄───────────────────────────────────────────│        │
+│   │                        │                      │                    │        │
+│   │  5. 2-of-3 Achieved    │                      │                    │        │
+│   │                        ├──────────────────────┼────────────────────►        │
+│   │                        │   Execute Swap       │                    │        │
+│   │                        │                      │                    │        │
+│   │  6. Swap Complete      │                      │                    │        │
+│   │◄───────────────────────│                      │                    │        │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Contract Dependency Graph
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                        CONTRACT DEPENDENCY GRAPH                                │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │                     CORE CONSENSUS LAYER                                 │   │
+│  │  ┌───────────────────────┐     ┌───────────────────────┐                │   │
+│  │  │ TrinityConsensusVerifier│◄───│ EmergencyMultiSig     │                │   │
+│  │  │ (2-of-3 validation)    │     │ (3-of-3 emergency)    │                │   │
+│  │  └───────────┬───────────┘     └───────────────────────┘                │   │
+│  └──────────────┼───────────────────────────────────────────────────────────┘   │
+│                 │                                                               │
+│                 ▼                                                               │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │                     INFRASTRUCTURE LAYER                                 │   │
+│  │  ┌────────────────┐  ┌────────────────┐  ┌────────────────┐             │   │
+│  │  │ KeeperRegistry │  │ Governance     │  │ RelayerCoord   │             │   │
+│  │  │ - Registration │  │ Timelock       │  │ - Proof relay  │             │   │
+│  │  │ - Heartbeats   │  │ - Proposals    │  │ - Nonce mgmt   │             │   │
+│  │  └───────┬────────┘  └───────┬────────┘  └───────┬────────┘             │   │
+│  └──────────┼───────────────────┼───────────────────┼───────────────────────┘   │
+│             │                   │                   │                           │
+│             ▼                   ▼                   ▼                           │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │                     APPLICATION LAYER                                    │   │
+│  │  ┌────────────────┐  ┌────────────────┐  ┌────────────────┐             │   │
+│  │  │ ChronosVault   │  │ HTLCChronos    │  │ TrinityExit    │             │   │
+│  │  │ Optimized      │  │ Bridge         │  │ Gateway        │             │   │
+│  │  │ - ERC-4626     │  │ - Atomic swaps │  │ - L1 exits     │             │   │
+│  │  │ - Yield vaults │  │ - Hash locks   │  │ - Batch claims │             │   │
+│  │  └────────────────┘  └────────────────┘  └────────────────┘             │   │
+│  │                                                                          │   │
+│  │  ┌────────────────┐  ┌────────────────┐                                 │   │
+│  │  │ CrossChain     │  │ FeeSplitter    │                                 │   │
+│  │  │ MessageRelay   │  │ - Distribution │                                 │   │
+│  │  │ - Verification │  │ - Accounting   │                                 │   │
+│  │  └────────────────┘  └────────────────┘                                 │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                 │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │                     LIBRARIES (contracts/ethereum/libraries/)            │   │
+│  │  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐    │   │
+│  │  │ProofValidation│ │CircuitBreaker│ │FeeAccounting │ │OperationLife│    │   │
+│  │  │ - ZK proofs   │ │ - Rate limits │ │ - Tracking   │ │ - States    │    │   │
+│  │  │ - Signatures  │ │ - Cooldowns   │ │ - Splits     │ │ - Timeouts  │    │   │
+│  │  └──────────────┘ └──────────────┘ └──────────────┘ └──────────────┘    │   │
+│  │  ┌──────────────┐ ┌──────────────┐                                      │   │
+│  │  │ConsensusLib  │ │ Errors.sol   │                                      │   │
+│  │  │ - Proposals  │ │ - 70+ errors │                                      │   │
+│  │  │ - Voting     │ │ - Gas-eff.   │                                      │   │
+│  │  └──────────────┘ └──────────────┘                                      │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Libraries (contracts/ethereum/libraries/)
+
+| Library | File | Purpose |
+|---------|------|---------|
+| **ProofValidation** | `ProofValidation.sol` | ZK proof and Merkle signature verification |
+| **CircuitBreakerLib** | `CircuitBreakerLib.sol` | Rate limiting and emergency stops |
+| **FeeAccounting** | `FeeAccounting.sol` | Fee tracking and distribution logic |
+| **OperationLifecycle** | `OperationLifecycle.sol` | State machine for operations |
+| **ConsensusProposalLib** | `ConsensusProposalLib.sol` | Proposal creation and voting |
+| **Errors** | `Errors.sol` | 70+ custom error definitions |
+
+---
+
+## Interfaces (contracts/ethereum/)
+
+| Interface | File | Purpose |
+|-----------|------|---------|
+| **ITrinityConsensusVerifier** | `ITrinityConsensusVerifier.sol` | Consensus verification interface |
+| **ITrinityBatchVerifier** | `ITrinityBatchVerifier.sol` | Batch operation verification |
+| **IChronosVault** | `IChronosVault.sol` | Vault operations interface |
+| **IHTLC** | `IHTLC.sol` | Hash Time-Locked Contract interface |
+
+---
+
+## Chain Roles Explained
+
+### Arbitrum (PRIMARY) - Chain ID: 1
+- **Primary security layer** for consensus verification
+- Hosts all core Solidity contracts
+- Processes 2-of-3 validator votes
+- Manages vault deposits/withdrawals
+- Executes HTLC atomic swaps
+
+### Solana (MONITOR) - Chain ID: 2
+- **High-frequency validation** with <5 second SLA
+- Monitors all cross-chain operations
+- Provides second validator vote
+- Hosts CVT token (SPL - Solana Program Library)
+- Handles high-throughput transaction validation (2000+ TPS)
+
+### TON (BACKUP) - Chain ID: 3
+- **Quantum-resistant emergency recovery**
+- Uses ML-KEM-1024 and CRYSTALS-Dilithium-5
+- 48-hour delay for emergency recovery operations
+- Provides third validator vote
+- Fallback for catastrophic scenarios
+
+---
+
+## Security Features
+
+### Consensus Requirements
+| Operation Type | Required Votes | Timelock |
+|----------------|----------------|----------|
+| Standard Operations | 2-of-3 | None |
+| Emergency Operations | 3-of-3 | None |
+| Recovery Operations | 3-of-3 | 48 hours |
+
+### Cryptographic Standards
+| Chain | Algorithm | Standard |
+|-------|-----------|----------|
+| Ethereum/Arbitrum | ECDSA secp256k1 | EIP-712 |
+| Solana | Ed25519 | SPL |
+| TON | ML-KEM-1024 + Dilithium-5 | NIST Post-Quantum |
+
+### 7-Layer Mathematical Defense
+1. **Zero-Knowledge Proof Engine** (Groth16)
+2. **Formal Verification Pipeline** (Lean 4)
+3. **MPC Key Management** (Shamir + CRYSTALS-Kyber)
+4. **VDF Time-Locks** (Wesolowski VDF)
+5. **AI + Cryptographic Governance**
+6. **Quantum-Resistant Cryptography** (ML-KEM-1024, CRYSTALS-Dilithium-5)
+7. **Trinity Protocol 2-of-3 Multi-Chain Consensus**
+
+---
+
+## Developer Quick Start
+
+### Installation
+
+```bash
+git clone https://github.com/Chronos-Vault/chronos-vault-contracts.git
+cd chronos-vault-contracts
+npm install
+npx hardhat compile
+```
+
+### Deploy to Testnet
+
+```bash
+# Arbitrum Sepolia
+npx hardhat run scripts/deploy-arbitrum-trinity.ts --network arbitrum-sepolia
+
+# Solana Devnet
+solana program deploy target/deploy/chronos_vault.so
+
+# TON Testnet
+npx tsx contracts/ton/deploy-all-contracts.ts
+```
+
+### Verify Contracts
+
+```bash
+npx hardhat verify --network arbitrum-sepolia 0x59396D58Fa856025bD5249E342729d5550Be151C
+```
+
+---
+
+## Directory Structure
+
+```
+contracts/
+├── ethereum/              # Arbitrum/Ethereum Solidity contracts
+│   ├── libraries/         # Shared Solidity libraries
+│   ├── interfaces/        # Contract interfaces
+│   ├── mocks/             # Mock contracts for testing
+│   └── test/              # Contract tests
+├── solana/                # Solana Rust programs
+│   ├── cvt_token/         # CVT SPL token program
+│   ├── trinity/           # Trinity validator program
+│   └── vesting_program/   # Token vesting
+├── ton/                   # TON FunC contracts
+│   └── deploy scripts     # TON deployment utilities
+├── deployments/           # Deployment addresses by network
+└── README.md              # This file
+```
+
+---
+
+## Environment Variables
+
+```bash
+ARBITRUM_RPC_URL=https://sepolia-rollup.arbitrum.io/rpc
+SOLANA_RPC_URL=https://api.devnet.solana.com
+TON_RPC_URL=https://testnet.toncenter.com/api/v2/jsonRPC
+PRIVATE_KEY=your_private_key  # Never commit!
+```
+
+---
+
+## Testing
+
+```bash
+npx hardhat test                    # Hardhat tests
+cargo test-bpf                      # Solana tests
+npm run test:integration            # Integration tests
+```
+
+---
+
+## Version History
+
+| Version | Date | Changes |
+|---------|------|---------|
+| v3.5.20 | Nov 26, 2025 | Full 3-chain deployment (Arbitrum, Solana, TON) |
+| v3.5.19 | Nov 2025 | Merkle expiry, bootstrap deadline |
+| v3.5.10 | Nov 2025 | Exit-Batch system, L1 bridging |
+| v3.5.6 | Nov 2025 | Security hardening, audit fixes |
+
+---
+
+**Trinity Protocol** - Secure. Decentralized. Quantum-Ready.
+
+Built with security in mind for the future of multi-chain DeFi.
