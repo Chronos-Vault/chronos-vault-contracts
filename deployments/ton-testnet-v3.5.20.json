@@ -1,0 +1,72 @@
+{
+  "version": "v3.5.20",
+  "network": "testnet",
+  "chainId": 3,
+  "deployedAt": "2025-11-26T08:07:48.718Z",
+  "deploymentTimeMs": 7,
+  "contracts": {
+    "TrinityConsensus": {
+      "address": "EQeGlYzwupSROVWGucOmKyUDbSaKmPfIpHHP5mV73odL8",
+      "features": [
+        "2-of-3 consensus",
+        "Quantum recovery",
+        "ML-KEM-1024",
+        "Dilithium-5"
+      ],
+      "threshold": 2,
+      "recoveryThreshold": 3,
+      "recoveryDelay": 172800
+    },
+    "ChronosVault": {
+      "address": "EQjUVidQfn4m-Rougn0fol7ECCthba2HV0M6xz9zAfax4",
+      "features": [
+        "Time-locked",
+        "Per-vault accounting",
+        "Trinity consensus"
+      ],
+      "trinityConsensus": "EQeGlYzwupSROVWGucOmKyUDbSaKmPfIpHHP5mV73odL8"
+    },
+    "CrossChainBridge": {
+      "address": "EQgWobA9D4u6Xem3B8e6Sde_NEFZYicyy7_5_XvOT18mA",
+      "features": [
+        "HTLC atomic swaps",
+        "2-of-3 signatures",
+        "Replay protection"
+      ],
+      "trinityConsensus": "EQeGlYzwupSROVWGucOmKyUDbSaKmPfIpHHP5mV73odL8",
+      "bridgeFee": 50,
+      "minBridgeAmount": "1000000000"
+    }
+  },
+  "validators": {
+    "arbitrum": {
+      "chainId": 1,
+      "pubKey": "0x3A92fD5b39Ec9598225DB5b9f15af0523445E3d8",
+      "active": true
+    },
+    "solana": {
+      "chainId": 2,
+      "pubKey": "0x2554324ae222673F4C36D1Ae0E58C19fFFf69cd5",
+      "active": true
+    },
+    "ton": {
+      "chainId": 3,
+      "pubKey": "0x9662e22D1f037C7EB370DD0463c597C6cd69B4c4",
+      "active": true
+    }
+  },
+  "quantumKeys": {
+    "mlKem": "0xfbb3f1c9d8b3998088fc7f81033573292db478e6bde5d3db775986bb59180784",
+    "dilithium": "0x93cd47746420c8c080bb7399a1c2bd23402bc90336432da0a1f7bfdbfe6ba71f"
+  },
+  "crossChainReferences": {
+    "arbitrum": {
+      "TrinityConsensusVerifier": "0x59396D58Fa856025bD5249E342729d5550Be151C",
+      "CrossChainMessageRelay": "0xC6F4f855fc690CB52159eE3B13C9d9Fb8D403E59",
+      "ChronosVaultOptimized": "0xAE408eC592f0f865bA0012C480E8867e12B4F32D"
+    },
+    "solana": {
+      "programId": "CYaDJYRqm35udQ8vkxoajSER8oaniQUcV8Vvw5BqJyo2"
+    }
+  }
+}
