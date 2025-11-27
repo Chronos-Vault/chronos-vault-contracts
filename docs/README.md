@@ -1,4 +1,4 @@
-# Trinity Protocol v3.5.20 - Multi-Chain Smart Contracts
+# Trinity Protocol v3.5.20  Multi-Chain Smart Contracts
 
 [![Version](https://img.shields.io/badge/version-3.5.20-blue.svg)](https://github.com/Chronos-Vault)
 [![Chains](https://img.shields.io/badge/chains-Arbitrum%20|%20Solana%20|%20TON-green.svg)](https://github.com/Chronos-Vault)
