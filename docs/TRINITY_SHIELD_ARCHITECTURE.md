@@ -373,10 +373,10 @@ Trinity Shield will be released under MIT license:
 
 ---
 
-*Trinity Shield™ Layer 8 of the Mathematical Defense Layer*  
+*Trinity Shield™ — Layer 8 of the Mathematical Defense Layer*  
 *"Mathematically Proven. Hardware Protected."*
 
 ---
 
 **Trinity Protocol™ v3.5.20**  
-**ChronosVault Enterprise-Grade Multi-Chain Security**
+**ChronosVault — Enterprise-Grade Multi-Chain Security**
