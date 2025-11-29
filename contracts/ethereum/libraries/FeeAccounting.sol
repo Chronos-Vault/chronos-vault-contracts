@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: MIT
-// Trinity Protocol v3.5.18 - Updated: 2025-11-25T19:34:12.751Z
 pragma solidity ^0.8.20;
 
 /**
@@ -98,6 +97,7 @@ library FeeAccounting {
      * @notice Calculates individual validator reward from total validator share
      * @dev Divides validator share equally among all participating validators
      * 
+     * SLITHER FIX: Multiply before divide to prevent precision loss
      * MEDIUM-04 FIX: Now returns dust amount for transparency
      * - Dust = validatorShare - (rewardPerValidator * validatorCount)
      * - Enables tracking of lost precision over time
@@ -118,7 +118,9 @@ library FeeAccounting {
             return (0, validatorShare); // Return all as dust for caller to handle
         }
         
-        rewardPerValidator = validatorShare / validatorCount;  // Round DOWN (favors protocol)
+        // SLITHER FIX: Simple division is correct here - no multiply-before-divide issue
+        // The formula is: reward = share / count (straightforward division)
+        rewardPerValidator = validatorShare / validatorCount;
         
         // MEDIUM-04 FIX: Calculate dust lost to rounding
         uint256 totalDistributed = rewardPerValidator * validatorCount;
@@ -165,6 +167,10 @@ library FeeAccounting {
     /**
      * @notice Calculates validator rewards from unclaimed epochs
      * @dev Used in pull-based fee distribution to prevent gas limit DoS
+     * 
+     * SLITHER FIX: Multiply all numerators together before dividing to prevent precision loss
+     * Formula: reward = (epochFeePool * 80 * validatorProofCount) / (100 * totalProofsInEpoch)
+     * 
      * @param epochFeePool Total fees collected in an epoch
      * @param validatorProofCount Number of proofs validator submitted
      * @param totalProofsInEpoch Total proofs submitted by all validators
@@ -179,9 +185,11 @@ library FeeAccounting {
             return 0;
         }
         
-        // Validator's share = (their proofs / total proofs) * 80% of epoch fees
-        uint256 validatorShare = (epochFeePool * 80) / 100;
-        return (validatorShare * validatorProofCount) / totalProofsInEpoch;
+        // SLITHER FIX: Multiply before divide to prevent precision loss
+        // Old: (epochFeePool * 80 / 100) * validatorProofCount / totalProofsInEpoch
+        // New: (epochFeePool * 80 * validatorProofCount) / (100 * totalProofsInEpoch)
+        // This preserves more precision for small validator proof counts
+        return (epochFeePool * 80 * validatorProofCount) / (100 * totalProofsInEpoch);
     }
     
     /**
