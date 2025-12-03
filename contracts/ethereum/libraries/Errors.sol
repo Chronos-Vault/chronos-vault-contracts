@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: MIT
-// Trinity Protocol v3.5.18 - Updated: 2025-11-25T19:34:11.904Z
 pragma solidity 0.8.20;
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -160,4 +159,15 @@ library Errors {
     error CannotConfirmOwnProposal(); // v3.5.2: HIGH FIX - Prevent validator self-confirmation
     error ChainIdMismatch(uint8 proposalChainId, uint8 providedChainId); // v3.5.5: HIGH FIX H-3 - Merkle update validation
     error BalanceInvariantViolated(uint256 balance, uint256 required); // v3.5.5: CRITICAL FIX C-2 - Fund safety
+    
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // 🛡️ TRINITY SHIELD ERRORS (3) - NEW IN v3.5.21
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    
+    error ValidatorNotAttested(address validator); // v3.5.21: Trinity Shield TEE attestation required
+    error ShieldVerifierNotSet(); // v3.5.21: Shield verifier address must be configured
+    error AttestationExpired(address validator, uint256 expiredAt); // v3.5.21: TEE attestation expired
+    error CannotRenounceWhilePaused(); // v3.5.21: Audit L-04 - Prevent ownership renounce during pause
+    error ZeroValueTransfer(); // v3.5.21: Audit M-01 - Some ERC20 revert on zero transfer
+    error ProofAlreadyUsed(bytes32 proofHash); // v3.5.21: Enhanced replay protection - txHash already used
 }
