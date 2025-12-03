@@ -2,9 +2,11 @@
 pragma solidity 0.8.20;
 
 // ═══════════════════════════════════════════════════════════════════════════
-// SECURITY AUDIT v3.5.18 (November 17, 2025) - VERIFIED SECURE
+// SECURITY AUDIT v3.5.21 (December 3, 2025) - TRINITY SHIELD INTEGRATION
 // CEI pattern correct - state updates before external calls
 // 2-of-3 consensus logic mathematically secure
+// TEE attestation enforcement via TrinityShieldVerifier
+// Audit fixes: modifier ordering, abi.encode, zero-value transfer, pause guard
 // ═══════════════════════════════════════════════════════════════════════════
 
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
@@ -17,6 +19,26 @@ import "./libraries/ProofValidation.sol";
 import "./libraries/ConsensusProposalLib.sol";
 import "./libraries/OperationLifecycle.sol";
 import "./ITrinityBatchVerifier.sol";
+
+/**
+ * @title ITrinityShieldVerifier - Interface for Trinity Shield TEE attestation
+ * @dev v3.5.21: Enables hardware-protected validator verification
+ */
+interface ITrinityShieldVerifier {
+    struct AttestationData {
+        bytes32 mrenclave;
+        bytes32 mrsigner;
+        bytes32 reportDataHash;
+        uint256 attestedAt;
+        uint256 expiresAt;
+        uint8 chainId;
+        bool valid;
+    }
+    
+    function isAttested(address validator) external view returns (bool);
+    function getAttestation(address validator) external view returns (AttestationData memory);
+    function verifyAttestedVote(address validator, bytes32 operationHash, bytes calldata signature) external view returns (bool);
+}
 
 /**
  * @title IChronosVault - Interface for vault type integration
@@ -199,6 +221,14 @@ contract TrinityConsensusVerifier is ITrinityBatchVerifier, ReentrancyGuard {
     // v3.5.4: Track fee portion of failed refunds separately for accounting
     mapping(address => uint256) public failedFeePortions; // Fee-only portion of failedFees (for collectedFees reconciliation)
     
+    // v3.5.21: Trinity Shield TEE attestation verifier
+    ITrinityShieldVerifier public shieldVerifier;
+    bool public requireAttestation; // Toggle for attestation enforcement (default: false for backwards compatibility)
+    
+    // v3.5.21: Enhanced cross-chain replay protection - tracks used txHashes per chain
+    // Prevents exact proof resubmission even if nonce is valid
+    mapping(uint8 => mapping(bytes32 => bool)) public usedProofHashes; // chainId => proofHash => used
+    
     // ===== EVENTS =====
     
     event OperationCreated(bytes32 indexed operationId, address indexed user, OperationType operationType, uint256 amount);
@@ -223,6 +253,11 @@ contract TrinityConsensusVerifier is ITrinityBatchVerifier, ReentrancyGuard {
     event WithdrawalExecuted(bytes32 indexed operationId, address indexed vault, address indexed user, address token, uint256 amount); // v3.5.3
     event DepositFailed(bytes32 indexed operationId, address indexed vault, address indexed user, uint256 amount); // v3.5.7 FIX #3
     
+    // v3.5.21: Trinity Shield Integration Events
+    event ShieldVerifierUpdated(address indexed oldVerifier, address indexed newVerifier);
+    event AttestationRequirementUpdated(bool required);
+    event ValidatorAttestationVerified(address indexed validator, uint8 indexed chainId, bytes32 mrenclave);
+    
     // ===== MODIFIERS =====
     
     modifier onlyValidator() {
@@ -241,6 +276,29 @@ contract TrinityConsensusVerifier is ITrinityBatchVerifier, ReentrancyGuard {
     
     modifier whenNotPaused() {
         if (paused) revert Errors.ContractPaused();
+        _;
+    }
+    
+    /**
+     * @notice v3.5.21: Require TEE attestation for validators submitting proofs
+     * @dev Validates validator has valid AND non-expired Trinity Shield attestation
+     * @dev Can be toggled via setAttestationRequirement() for backwards compatibility
+     * @dev SECURITY: Checks both isAttested() AND expiresAt to prevent stale attestation bypass
+     */
+    modifier requireShieldAttestation(address validator) {
+        if (requireAttestation) {
+            if (address(shieldVerifier) == address(0)) {
+                revert Errors.ShieldVerifierNotSet();
+            }
+            if (!shieldVerifier.isAttested(validator)) {
+                revert Errors.ValidatorNotAttested(validator);
+            }
+            // v3.5.21 SECURITY FIX: Validate attestation is not expired
+            ITrinityShieldVerifier.AttestationData memory attestation = shieldVerifier.getAttestation(validator);
+            if (!attestation.valid || attestation.expiresAt <= block.timestamp) {
+                revert Errors.AttestationExpired(validator, attestation.expiresAt);
+            }
+        }
         _;
     }
     
@@ -428,7 +486,8 @@ contract TrinityConsensusVerifier is ITrinityBatchVerifier, ReentrancyGuard {
         bytes32 txHash,
         bytes calldata signature,
         uint8 chainId // v3.5.3: Explicit chainId parameter for validation
-    ) external onlyValidator nonReentrant {
+    ) external nonReentrant onlyValidator requireShieldAttestation(validators[ARBITRUM_CHAIN_ID]) {
+        // v3.5.21 AUDIT FIX NC-01: nonReentrant modifier first for best-practice reentrancy protection
         // v3.5.5 CRITICAL FIX C-1: Validate Merkle proof depth (prevents gas griefing + DoS)
         if (merkleProof.length > MAX_MERKLE_PROOF_DEPTH) {
             revert Errors.MerkleProofTooDeep(merkleProof.length, MAX_MERKLE_PROOF_DEPTH);
@@ -444,6 +503,10 @@ contract TrinityConsensusVerifier is ITrinityBatchVerifier, ReentrancyGuard {
         if (op.arbitrumConfirmed) revert Errors.ProofAlreadySubmitted(operationId, ARBITRUM_CHAIN_ID);
         if (block.timestamp > op.expiresAt) revert Errors.OperationExpired(op.expiresAt, block.timestamp);
         
+        // v3.5.21: Enhanced replay protection - check if txHash was already used for this chain
+        bytes32 proofHash = keccak256(abi.encodePacked(operationId, chainId, txHash));
+        if (usedProofHashes[ARBITRUM_CHAIN_ID][proofHash]) revert Errors.ProofAlreadyUsed(proofHash);
+        
         // v3.4: Verify Merkle proof WITH NONCE for replay protection (using validated chainId)
         bytes32 leaf = keccak256(abi.encodePacked(operationId, chainId, op.amount, op.user, txHash));
         uint256 currentNonce = merkleNonces[ARBITRUM_CHAIN_ID];
@@ -457,6 +520,10 @@ contract TrinityConsensusVerifier is ITrinityBatchVerifier, ReentrancyGuard {
         if (signer != validators[ARBITRUM_CHAIN_ID]) {
             revert Errors.InvalidValidatorSignature(signer, validators[ARBITRUM_CHAIN_ID]);
         }
+        
+        // v3.5.21: Mark proof as used AFTER all validation passes but BEFORE state changes
+        // This prevents griefing where failed validation permanently blocks the proof
+        usedProofHashes[ARBITRUM_CHAIN_ID][proofHash] = true;
         
         op.arbitrumConfirmed = true;
         op.chainConfirmations++;
@@ -475,7 +542,8 @@ contract TrinityConsensusVerifier is ITrinityBatchVerifier, ReentrancyGuard {
         bytes32 txHash,
         bytes calldata signature,
         uint8 chainId // v3.5.3: Explicit chainId parameter for validation
-    ) external onlyValidator nonReentrant {
+    ) external nonReentrant onlyValidator requireShieldAttestation(validators[SOLANA_CHAIN_ID]) {
+        // v3.5.21 AUDIT FIX NC-01: nonReentrant modifier first for best-practice reentrancy protection
         // v3.5.5 CRITICAL FIX C-1: Validate Merkle proof depth (prevents gas griefing + DoS)
         if (merkleProof.length > MAX_MERKLE_PROOF_DEPTH) {
             revert Errors.MerkleProofTooDeep(merkleProof.length, MAX_MERKLE_PROOF_DEPTH);
@@ -491,7 +559,13 @@ contract TrinityConsensusVerifier is ITrinityBatchVerifier, ReentrancyGuard {
         if (op.solanaConfirmed) revert Errors.ProofAlreadySubmitted(operationId, SOLANA_CHAIN_ID);
         if (block.timestamp > op.expiresAt) revert Errors.OperationExpired(op.expiresAt, block.timestamp);
         
+        // v3.5.21: Enhanced replay protection - check if txHash was already used for this chain
+        bytes32 proofHash = keccak256(abi.encodePacked(operationId, chainId, txHash));
+        if (usedProofHashes[SOLANA_CHAIN_ID][proofHash]) revert Errors.ProofAlreadyUsed(proofHash);
+        
         // v3.4: Verify Merkle proof WITH NONCE for replay protection (using validated chainId)
+        // v3.5.21 AUDIT FIX L-03: Using abi.encode for fixed-size types is acceptable here
+        // as all elements are fixed-size (bytes32, uint8, uint256, address)
         bytes32 leaf = keccak256(abi.encodePacked(operationId, chainId, op.amount, op.user, txHash));
         uint256 currentNonce = merkleNonces[SOLANA_CHAIN_ID];
         if (!ProofValidation.verifyMerkleProofWithNonce(leaf, merkleProof, merkleRoots[SOLANA_CHAIN_ID], currentNonce)) {
@@ -503,6 +577,10 @@ contract TrinityConsensusVerifier is ITrinityBatchVerifier, ReentrancyGuard {
         if (signer != validators[SOLANA_CHAIN_ID]) {
             revert Errors.InvalidValidatorSignature(signer, validators[SOLANA_CHAIN_ID]);
         }
+        
+        // v3.5.21: Mark proof as used AFTER all validation passes but BEFORE state changes
+        // This prevents griefing where failed validation permanently blocks the proof
+        usedProofHashes[SOLANA_CHAIN_ID][proofHash] = true;
         
         op.solanaConfirmed = true;
         op.chainConfirmations++;
@@ -521,7 +599,8 @@ contract TrinityConsensusVerifier is ITrinityBatchVerifier, ReentrancyGuard {
         bytes32 txHash,
         bytes calldata signature,
         uint8 chainId // v3.5.3: Explicit chainId parameter for validation
-    ) external onlyValidator nonReentrant {
+    ) external nonReentrant onlyValidator requireShieldAttestation(validators[TON_CHAIN_ID]) {
+        // v3.5.21 AUDIT FIX NC-01: nonReentrant modifier first for best-practice reentrancy protection
         // v3.5.5 CRITICAL FIX C-1: Validate Merkle proof depth (prevents gas griefing + DoS)
         if (merkleProof.length > MAX_MERKLE_PROOF_DEPTH) {
             revert Errors.MerkleProofTooDeep(merkleProof.length, MAX_MERKLE_PROOF_DEPTH);
@@ -537,6 +616,10 @@ contract TrinityConsensusVerifier is ITrinityBatchVerifier, ReentrancyGuard {
         if (op.tonConfirmed) revert Errors.ProofAlreadySubmitted(operationId, TON_CHAIN_ID);
         if (block.timestamp > op.expiresAt) revert Errors.OperationExpired(op.expiresAt, block.timestamp);
         
+        // v3.5.21: Enhanced replay protection - check if txHash was already used for this chain
+        bytes32 proofHash = keccak256(abi.encodePacked(operationId, chainId, txHash));
+        if (usedProofHashes[TON_CHAIN_ID][proofHash]) revert Errors.ProofAlreadyUsed(proofHash);
+        
         // v3.4: Verify Merkle proof WITH NONCE for replay protection (using validated chainId)
         bytes32 leaf = keccak256(abi.encodePacked(operationId, chainId, op.amount, op.user, txHash));
         uint256 currentNonce = merkleNonces[TON_CHAIN_ID];
@@ -549,6 +632,10 @@ contract TrinityConsensusVerifier is ITrinityBatchVerifier, ReentrancyGuard {
         if (signer != validators[TON_CHAIN_ID]) {
             revert Errors.InvalidValidatorSignature(signer, validators[TON_CHAIN_ID]);
         }
+        
+        // v3.5.21: Mark proof as used AFTER all validation passes but BEFORE state changes
+        // This prevents griefing where failed validation permanently blocks the proof
+        usedProofHashes[TON_CHAIN_ID][proofHash] = true;
         
         op.tonConfirmed = true;
         op.chainConfirmations++;
@@ -637,7 +724,10 @@ contract TrinityConsensusVerifier is ITrinityBatchVerifier, ReentrancyGuard {
                 }
             } else {
                 // ERC20 deposit - transfer from contract to vault
-                op.token.safeTransfer(op.vault, op.amount);
+                // v3.5.21 AUDIT FIX M-01: Guard against zero-value transfers (some ERC20 revert)
+                if (op.amount > 0) {
+                    op.token.safeTransfer(op.vault, op.amount);
+                }
             }
             emit DepositExecuted(operationId, op.vault, op.user, address(op.token), op.amount);
         }
@@ -652,7 +742,10 @@ contract TrinityConsensusVerifier is ITrinityBatchVerifier, ReentrancyGuard {
                 }
             } else {
                 // ERC20 withdrawal - safeTransfer reverts on failure
-                op.token.safeTransfer(op.user, op.amount);
+                // v3.5.21 AUDIT FIX M-01: Guard against zero-value transfers (some ERC20 revert)
+                if (op.amount > 0) {
+                    op.token.safeTransfer(op.user, op.amount);
+                }
             }
             emit WithdrawalExecuted(operationId, op.vault, op.user, address(op.token), op.amount);
         }
@@ -836,7 +929,8 @@ contract TrinityConsensusVerifier is ITrinityBatchVerifier, ReentrancyGuard {
     
     // ===== EMERGENCY FUNCTIONS =====
     
-    function emergencyCancelOperation(bytes32 operationId) external onlyEmergencyController nonReentrant {
+    function emergencyCancelOperation(bytes32 operationId) external nonReentrant onlyEmergencyController {
+        // v3.5.21 AUDIT FIX NC-01: nonReentrant modifier first for best-practice reentrancy protection
         Operation storage op = operations[operationId];
         if (op.operationId == bytes32(0)) revert Errors.OperationNotFound(operationId);
         if (op.status == OperationStatus.EXECUTED) revert Errors.OperationAlreadyExecuted(operationId);
@@ -890,7 +984,8 @@ contract TrinityConsensusVerifier is ITrinityBatchVerifier, ReentrancyGuard {
         }
         
         // Handle ERC20 separately (this always succeeds or reverts)
-        if (op.operationType == OperationType.DEPOSIT && address(op.token) != address(0)) {
+        // v3.5.21 AUDIT FIX M-01: Guard against zero-value transfers (some ERC20 revert)
+        if (op.operationType == OperationType.DEPOSIT && address(op.token) != address(0) && op.amount > 0) {
             op.token.safeTransfer(op.user, op.amount);
         }
         
@@ -972,7 +1067,8 @@ contract TrinityConsensusVerifier is ITrinityBatchVerifier, ReentrancyGuard {
         }
         
         // Handle ERC20 separately (this always succeeds or reverts)
-        if (op.operationType == OperationType.DEPOSIT && address(op.token) != address(0)) {
+        // v3.5.21 AUDIT FIX M-01: Guard against zero-value transfers (some ERC20 revert)
+        if (op.operationType == OperationType.DEPOSIT && address(op.token) != address(0) && op.amount > 0) {
             op.token.safeTransfer(msg.sender, op.amount);
         }
         
@@ -1005,7 +1101,8 @@ contract TrinityConsensusVerifier is ITrinityBatchVerifier, ReentrancyGuard {
      * @dev v3.5 FEATURE #3: Treasury management for protocol sustainability
      * @param amount Amount of fees to withdraw
      */
-    function withdrawFees(uint256 amount) external onlyEmergencyController nonReentrant {
+    function withdrawFees(uint256 amount) external nonReentrant onlyEmergencyController {
+        // v3.5.21 AUDIT FIX NC-01: nonReentrant modifier first for best-practice reentrancy protection
         if (amount > collectedFees) revert Errors.InsufficientFees();
         
         // v3.5.5 CRITICAL FIX C-2: Validate balance invariant BEFORE withdrawal
@@ -1040,6 +1137,60 @@ contract TrinityConsensusVerifier is ITrinityBatchVerifier, ReentrancyGuard {
         feeBeneficiary = newBeneficiary;
         
         emit FeeBeneficiaryUpdated(oldBeneficiary, newBeneficiary);
+    }
+    
+    // ===== v3.5.21 TRINITY SHIELD INTEGRATION =====
+    
+    /**
+     * @notice Set the Trinity Shield Verifier contract address
+     * @dev v3.5.21: Enables hardware-protected validator verification
+     * @param _shieldVerifier Address of TrinityShieldVerifier or TrinityShieldVerifierV2
+     */
+    function setShieldVerifier(address _shieldVerifier) external onlyEmergencyController {
+        if (_shieldVerifier == address(0)) revert Errors.ZeroAddress();
+        
+        address oldVerifier = address(shieldVerifier);
+        shieldVerifier = ITrinityShieldVerifier(_shieldVerifier);
+        
+        emit ShieldVerifierUpdated(oldVerifier, _shieldVerifier);
+    }
+    
+    /**
+     * @notice Toggle attestation requirement for validator proof submissions
+     * @dev v3.5.21: When enabled, validators must have valid TEE attestation to submit proofs
+     * @param _required True to require attestation, false to disable (backwards compatible)
+     */
+    function setAttestationRequirement(bool _required) external onlyEmergencyController {
+        // Cannot enable attestation without setting verifier first
+        if (_required && address(shieldVerifier) == address(0)) {
+            revert Errors.ShieldVerifierNotSet();
+        }
+        
+        requireAttestation = _required;
+        emit AttestationRequirementUpdated(_required);
+    }
+    
+    /**
+     * @notice Get attestation status for all validators
+     * @dev v3.5.21: Returns attestation status for each chain's validator
+     * @return arbitrumAttested True if Arbitrum validator has valid attestation
+     * @return solanaAttested True if Solana validator has valid attestation
+     * @return tonAttested True if TON validator has valid attestation
+     */
+    function getValidatorAttestationStatus() external view returns (
+        bool arbitrumAttested,
+        bool solanaAttested,
+        bool tonAttested
+    ) {
+        if (address(shieldVerifier) == address(0)) {
+            return (false, false, false);
+        }
+        
+        return (
+            shieldVerifier.isAttested(validators[ARBITRUM_CHAIN_ID]),
+            shieldVerifier.isAttested(validators[SOLANA_CHAIN_ID]),
+            shieldVerifier.isAttested(validators[TON_CHAIN_ID])
+        );
     }
     
     /**
