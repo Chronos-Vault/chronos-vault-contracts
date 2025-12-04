@@ -1,9 +1,8 @@
 ---
-title: "Trinity Protocol: How We Built 2-of-3 Multi-Chain Consensus with Hardware TEE"
-published: true
-description: "An open-source security system achieving 10^-50 attack probability using Arbitrum, Solana, TON validators and Intel SGX/AMD SEV enclaves."
-tags: blockchain, rust, security, web3
-cover_image: https://chronosvault.org/images/trinity-cover.png
+ # Trinity Protocol: How We Built 2-of-3 Multi-Chain Consensus with Hardware TEE"
+
+An open-source security system achieving 10^-50 attack probability using Arbitrum, Solana, TON validators and Intel SGX/AMD SEV enclaves."
+
 ---
 
 # Trinity Protocol: 2-of-3 Multi-Chain Consensus with Hardware TEE
