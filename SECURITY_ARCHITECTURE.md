@@ -1,4 +1,4 @@
-# Trinity Protocol v3.5.20 — Security Architecture
+# Trinity Protocol v3.5.20  Security Architecture
 
 Enterprise-grade security architecture for multi-chain consensus verification system across Arbitrum, Solana, and TON.
 
