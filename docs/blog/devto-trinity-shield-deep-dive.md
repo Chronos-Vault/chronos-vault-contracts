@@ -1,7 +1,6 @@
----
-title: "Building Trinity Shield: Our Custom TEE Solution for Multi-Chain Security"
-published: true
-description: "A deep dive into how we built Trinity Shield - the Layer 8 hardware security that connects our Rust enclaves to Solidity smart contracts for vault and HTLC protection."
+ "Building Trinity Shield: Our Custom TEE Solution for Multi-Chain Security"
+
+"A deep dive into how we built Trinity Shield the Layer 8 hardware security that connects our Rust enclaves to Solidity smart contracts for vault and HTLC protection."
 tags: rust, blockchain, security, solidity
 series: trinity-protocol
 ---
