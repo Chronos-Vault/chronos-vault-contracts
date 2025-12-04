@@ -5,8 +5,6 @@ An open-source security system achieving 10^-50 attack probability using Arbitru
 
 ---
 
-# Trinity Protocol: 2-of-3 Multi-Chain Consensus with Hardware TEE
-
 *Open-source cross-chain security for vaults and atomic swaps*
 
 ---
