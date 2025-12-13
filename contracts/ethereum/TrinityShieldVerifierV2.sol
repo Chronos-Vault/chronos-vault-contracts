@@ -7,16 +7,18 @@ import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 
 /**
- * @title TrinityShieldVerifier V2
+ * @title TrinityShieldVerifier V2.1
  * @author ChronosVault (chronosvault.org)
  * @notice Extended attestation verifier supporting both Intel SGX and AMD SEV-SNP
  * @dev Phase 4: Multi-TEE support for Trinity Protocol validators
  * 
- * NEW FEATURES (V2):
- * - AMD SEV-SNP attestation support for quantum-resistant TON validator
- * - Unified attestation interface for both TEE types
- * - TEE-specific measurement validation (MRENCLAVE vs MEASUREMENT)
- * - Hybrid quantum-classical key support
+ * V2.1 Security Fixes:
+ * - Cross-chain replay protection (quoteHash + chainId)
+ * - Constructor initialization for approved values
+ * - Missing event for SevIdKeyDigestApproval
+ * - Batch operations for approvals
+ * - Updateable consensus verifier
+ * - Zero address validation
  */
 contract TrinityShieldVerifierV2 is AccessControl, ReentrancyGuard {
     using ECDSA for bytes32;
@@ -30,17 +32,16 @@ contract TrinityShieldVerifierV2 is AccessControl, ReentrancyGuard {
     enum TEEType { SGX, SEV_SNP }
 
     // Attestation data structure
-    // v3.5.21: Added chainId, mrsigner, expiresAt for interface compatibility with ITrinityShieldVerifier
     struct Attestation {
         TEEType teeType;
         bool isValid;
         uint256 attestedAt;
-        uint256 expiresAt;        // v3.5.21: Precomputed expiry for gas efficiency
-        bytes32 measurement;      // MRENCLAVE for SGX, MEASUREMENT for SEV
-        bytes32 mrsigner;         // v3.5.21: MRSIGNER for SGX, zeros for SEV (enclave identity binding)
-        bytes32 reportData;       // First 32 bytes of report data (validator binding)
-        uint8 chainId;            // v3.5.21: Chain ID for multi-chain binding
-        bytes attestationReport;  // Raw attestation report
+        uint256 expiresAt;
+        bytes32 measurement;
+        bytes32 mrsigner;
+        bytes32 reportData;
+        uint8 chainId;
+        bytes attestationReport;
     }
 
     // SGX-specific approved values
@@ -54,14 +55,15 @@ contract TrinityShieldVerifierV2 is AccessControl, ReentrancyGuard {
     // Validator attestations
     mapping(address => Attestation) public validatorAttestations;
     
-    // Quote hash tracking for replay protection
-    mapping(bytes32 => bool) public usedQuoteHashes;
+    // Quote hash tracking for replay protection (v2.1: includes chainId)
+    mapping(bytes32 => mapping(uint8 => bool)) public usedQuoteHashes;
 
     // Configuration
     uint256 public attestationValidityPeriod = 24 hours;
     uint256 public constant MAX_QUOTE_AGE = 10 minutes;
+    uint256 public constant GRACE_PERIOD = 5 minutes; // v2.1: Grace period for re-attestation
 
-    // Linked consensus verifier
+    // Linked consensus verifier (v2.1: now updateable)
     address public trinityConsensusVerifier;
 
     // Events
@@ -73,23 +75,50 @@ contract TrinityShieldVerifierV2 is AccessControl, ReentrancyGuard {
     );
     event AttestationExpired(address indexed validator, uint256 timestamp);
     event MrenclaveApproved(bytes32 indexed mrenclave, bool approved);
+    event MrsignerApproved(bytes32 indexed mrsigner, bool approved); // v2.1: Added
     event SevMeasurementApproved(bytes32 indexed measurement, bool approved);
+    event SevIdKeyDigestApproved(bytes32 indexed idKeyDigest, bool approved); // v2.1: Added
     event TeeTypeUpdated(address indexed validator, TEEType oldType, TEEType newType);
+    event ConsensusVerifierUpdated(address indexed oldVerifier, address indexed newVerifier); // v2.1: Added
 
-    constructor(address _consensusVerifier) {
+    /**
+     * @notice Constructor with initialization for approved values
+     * @param _consensusVerifier Address of the Trinity Consensus Verifier contract
+     * @param initialMrenclaves Initial approved MRENCLAVE values
+     * @param initialMrsigners Initial approved MRSIGNER values
+     */
+    constructor(
+        address _consensusVerifier,
+        bytes32[] memory initialMrenclaves,
+        bytes32[] memory initialMrsigners
+    ) {
+        require(_consensusVerifier != address(0), "Invalid consensus verifier");
+        
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(TEE_ADMIN_ROLE, msg.sender);
         trinityConsensusVerifier = _consensusVerifier;
+        
+        // Initialize approved MRENCLAVE values
+        for (uint i = 0; i < initialMrenclaves.length; i++) {
+            approvedMrenclave[initialMrenclaves[i]] = true;
+            emit MrenclaveApproved(initialMrenclaves[i], true);
+        }
+        
+        // Initialize approved MRSIGNER values
+        for (uint i = 0; i < initialMrsigners.length; i++) {
+            approvedMrsigner[initialMrsigners[i]] = true;
+            emit MrsignerApproved(initialMrsigners[i], true);
+        }
     }
 
-    // ========== SGX ATTESTATION (Same as V1) ==========
+    // ========== SGX ATTESTATION ==========
 
     /**
      * @notice Submit SGX attestation via trusted relayer
      * @param validator Validator address being attested
      * @param quoteHash Hash of the DCAP quote
      * @param mrenclave MRENCLAVE value from quote
-     * @param mrsigner MRSIGNER value from quote (enclave signer identity)
+     * @param mrsigner MRSIGNER value from quote
      * @param reportData First 32 bytes of report data
      * @param timestamp Quote generation timestamp
      * @param chainId Chain ID for multi-chain binding (1=Arbitrum, 2=Solana, 3=TON)
@@ -106,15 +135,16 @@ contract TrinityShieldVerifierV2 is AccessControl, ReentrancyGuard {
         bytes calldata relayerSignature
     ) external nonReentrant {
         require(hasRole(TRUSTED_RELAYER_ROLE, msg.sender), "Not authorized relayer");
-        require(!usedQuoteHashes[quoteHash], "Quote already used");
+        // v2.1: Cross-chain replay protection
+        require(!usedQuoteHashes[quoteHash][chainId], "Quote already used on this chain");
         require(block.timestamp - timestamp <= MAX_QUOTE_AGE, "Quote too old");
         require(approvedMrenclave[mrenclave], "MRENCLAVE not approved");
         require(approvedMrsigner[mrsigner], "MRSIGNER not approved");
         
-        // Verify report data contains validator address
+        // Verify report data contains validator address (lower 160 bits)
         require(bytes32(uint256(uint160(validator))) == reportData, "Report data mismatch");
         
-        // Verify relayer signature (v3.5.21: includes mrsigner and chainId)
+        // Verify relayer signature
         bytes32 messageHash = keccak256(abi.encodePacked(
             validator,
             quoteHash,
@@ -128,8 +158,8 @@ contract TrinityShieldVerifierV2 is AccessControl, ReentrancyGuard {
         address signer = messageHash.toEthSignedMessageHash().recover(relayerSignature);
         require(hasRole(TRUSTED_RELAYER_ROLE, signer), "Invalid relayer signature");
         
-        // Record attestation with full interface compatibility (v3.5.21)
-        usedQuoteHashes[quoteHash] = true;
+        // Record attestation (v2.1: mark used per chainId)
+        usedQuoteHashes[quoteHash][chainId] = true;
         validatorAttestations[validator] = Attestation({
             teeType: TEEType.SGX,
             isValid: true,
@@ -145,19 +175,10 @@ contract TrinityShieldVerifierV2 is AccessControl, ReentrancyGuard {
         emit ValidatorAttested(validator, TEEType.SGX, mrenclave, block.timestamp);
     }
 
-    // ========== AMD SEV-SNP ATTESTATION (NEW IN V2) ==========
+    // ========== AMD SEV-SNP ATTESTATION ==========
 
     /**
      * @notice Submit AMD SEV-SNP attestation via trusted relayer
-     * @dev SEV-SNP attestation structure differs from SGX
-     * @param validator Validator address being attested
-     * @param reportHash Hash of the attestation report
-     * @param measurement SEV MEASUREMENT value
-     * @param hostData Host data binding (equivalent to report data)
-     * @param timestamp Report generation timestamp
-     * @param idKeyDigest ID key digest for platform verification
-     * @param chainId Chain ID for multi-chain binding (1=Arbitrum, 2=Solana, 3=TON)
-     * @param relayerSignature Relayer's signature
      */
     function submitSEVAttestation(
         address validator,
@@ -170,7 +191,8 @@ contract TrinityShieldVerifierV2 is AccessControl, ReentrancyGuard {
         bytes calldata relayerSignature
     ) external nonReentrant {
         require(hasRole(TRUSTED_RELAYER_ROLE, msg.sender), "Not authorized relayer");
-        require(!usedQuoteHashes[reportHash], "Report already used");
+        // v2.1: Cross-chain replay protection
+        require(!usedQuoteHashes[reportHash][chainId], "Report already used on this chain");
         require(block.timestamp - timestamp <= MAX_QUOTE_AGE, "Report too old");
         require(approvedSevMeasurement[measurement], "MEASUREMENT not approved");
         require(approvedSevIdKeyDigest[idKeyDigest], "ID key digest not approved");
@@ -178,7 +200,7 @@ contract TrinityShieldVerifierV2 is AccessControl, ReentrancyGuard {
         // Verify host data contains validator address
         require(bytes32(uint256(uint160(validator))) == hostData, "Host data mismatch");
         
-        // Verify relayer signature (v3.5.21: includes chainId for symmetry with SGX)
+        // Verify relayer signature
         bytes32 messageHash = keccak256(abi.encodePacked(
             validator,
             reportHash,
@@ -192,15 +214,15 @@ contract TrinityShieldVerifierV2 is AccessControl, ReentrancyGuard {
         address signer = messageHash.toEthSignedMessageHash().recover(relayerSignature);
         require(hasRole(TRUSTED_RELAYER_ROLE, signer), "Invalid relayer signature");
         
-        // Record attestation with full interface compatibility (v3.5.21)
-        usedQuoteHashes[reportHash] = true;
+        // Record attestation (v2.1: mark used per chainId)
+        usedQuoteHashes[reportHash][chainId] = true;
         validatorAttestations[validator] = Attestation({
             teeType: TEEType.SEV_SNP,
             isValid: true,
             attestedAt: block.timestamp,
             expiresAt: block.timestamp + attestationValidityPeriod,
             measurement: measurement,
-            mrsigner: bytes32(0), // SEV-SNP doesn't use mrsigner concept
+            mrsigner: bytes32(0),
             reportData: hostData,
             chainId: chainId,
             attestationReport: ""
@@ -213,20 +235,16 @@ contract TrinityShieldVerifierV2 is AccessControl, ReentrancyGuard {
 
     /**
      * @notice Check if validator has valid attestation (any TEE type)
-     * @param validator Address to check
-     * @return True if attestation is valid and not expired
-     * @dev v3.5.21: Uses stored expiresAt for consistency
+     * @dev v2.1: Includes grace period for re-attestation race conditions
      */
     function checkAttestationValid(address validator) external view returns (bool) {
         Attestation storage att = validatorAttestations[validator];
         if (!att.isValid) return false;
-        return block.timestamp <= att.expiresAt;
+        return block.timestamp <= att.expiresAt + GRACE_PERIOD;
     }
 
     /**
      * @notice Get validator attestation details
-     * @param validator Address to query
-     * @dev v3.5.21: Uses stored expiresAt for consistency
      */
     function getValidatorAttestation(address validator) external view returns (
         TEEType teeType,
@@ -242,17 +260,16 @@ contract TrinityShieldVerifierV2 is AccessControl, ReentrancyGuard {
             valid,
             att.attestedAt,
             att.measurement,
-            att.expiresAt // v3.5.21: Use stored expiresAt for consistency
+            att.expiresAt
         );
     }
 
     /**
      * @notice Count attested validators for consensus check
-     * @param validators Array of validator addresses
-     * @return count Number of validators with valid attestations
-     * @dev v3.5.21: Uses stored expiresAt for consistency with other functions
+     * @dev v2.1: Added bounds check recommendation - use with reasonable array sizes
      */
     function countAttestedValidators(address[] calldata validators) external view returns (uint256 count) {
+        require(validators.length <= 100, "Too many validators"); // v2.1: Gas protection
         for (uint i = 0; i < validators.length; i++) {
             Attestation storage att = validatorAttestations[validators[i]];
             if (att.isValid && block.timestamp <= att.expiresAt) {
@@ -275,6 +292,17 @@ contract TrinityShieldVerifierV2 is AccessControl, ReentrancyGuard {
     }
 
     /**
+     * @notice Approve/revoke SGX MRSIGNER value
+     */
+    function setMrsignerApproval(bytes32 mrsigner, bool approved) 
+        external 
+        onlyRole(TEE_ADMIN_ROLE) 
+    {
+        approvedMrsigner[mrsigner] = approved;
+        emit MrsignerApproved(mrsigner, approved);
+    }
+
+    /**
      * @notice Approve/revoke AMD SEV MEASUREMENT value
      */
     function setSevMeasurementApproval(bytes32 measurement, bool approved)
@@ -287,12 +315,71 @@ contract TrinityShieldVerifierV2 is AccessControl, ReentrancyGuard {
 
     /**
      * @notice Approve/revoke AMD SEV ID key digest
+     * @dev v2.1: Added missing event emission
      */
     function setSevIdKeyDigestApproval(bytes32 idKeyDigest, bool approved)
         external
         onlyRole(TEE_ADMIN_ROLE)
     {
         approvedSevIdKeyDigest[idKeyDigest] = approved;
+        emit SevIdKeyDigestApproved(idKeyDigest, approved);
+    }
+
+    // ========== BATCH OPERATIONS (v2.1) ==========
+
+    /**
+     * @notice Batch approve/revoke MRENCLAVE values
+     */
+    function batchSetMrenclaveApproval(bytes32[] calldata mrenclaves, bool approved)
+        external
+        onlyRole(TEE_ADMIN_ROLE)
+    {
+        for (uint i = 0; i < mrenclaves.length; i++) {
+            approvedMrenclave[mrenclaves[i]] = approved;
+            emit MrenclaveApproved(mrenclaves[i], approved);
+        }
+    }
+
+    /**
+     * @notice Batch approve/revoke MRSIGNER values
+     */
+    function batchSetMrsignerApproval(bytes32[] calldata mrsigners, bool approved)
+        external
+        onlyRole(TEE_ADMIN_ROLE)
+    {
+        for (uint i = 0; i < mrsigners.length; i++) {
+            approvedMrsigner[mrsigners[i]] = approved;
+            emit MrsignerApproved(mrsigners[i], approved);
+        }
+    }
+
+    /**
+     * @notice Batch approve/revoke SEV measurements
+     */
+    function batchSetSevMeasurementApproval(bytes32[] calldata measurements, bool approved)
+        external
+        onlyRole(TEE_ADMIN_ROLE)
+    {
+        for (uint i = 0; i < measurements.length; i++) {
+            approvedSevMeasurement[measurements[i]] = approved;
+            emit SevMeasurementApproved(measurements[i], approved);
+        }
+    }
+
+    // ========== CONFIGURATION (v2.1) ==========
+
+    /**
+     * @notice Update consensus verifier address
+     * @dev v2.1: Allows upgrading without contract redeployment
+     */
+    function updateConsensusVerifier(address newVerifier) 
+        external 
+        onlyRole(DEFAULT_ADMIN_ROLE) 
+    {
+        require(newVerifier != address(0), "Invalid verifier address");
+        address oldVerifier = trinityConsensusVerifier;
+        trinityConsensusVerifier = newVerifier;
+        emit ConsensusVerifierUpdated(oldVerifier, newVerifier);
     }
 
     /**
@@ -310,6 +397,7 @@ contract TrinityShieldVerifierV2 is AccessControl, ReentrancyGuard {
      * @notice Add trusted relayer
      */
     function addTrustedRelayer(address relayer) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(relayer != address(0), "Invalid relayer address");
         _grantRole(TRUSTED_RELAYER_ROLE, relayer);
     }
 
@@ -331,9 +419,8 @@ contract TrinityShieldVerifierV2 is AccessControl, ReentrancyGuard {
         emit AttestationExpired(validator, block.timestamp);
     }
     
-    // ========== INTERFACE COMPATIBILITY (v3.5.21) ==========
+    // ========== INTERFACE COMPATIBILITY ==========
     
-    /// @notice Attestation data structure compatible with ITrinityShieldVerifier
     struct AttestationData {
         bytes32 mrenclave;
         bytes32 mrsigner;
@@ -345,10 +432,7 @@ contract TrinityShieldVerifierV2 is AccessControl, ReentrancyGuard {
     }
     
     /**
-     * @notice Check if validator has valid attestation (ITrinityShieldVerifier interface)
-     * @param validator Validator address to check
-     * @return True if validator has valid, non-expired attestation
-     * @dev v3.5.21: Uses stored expiresAt instead of computing from attestedAt + validity
+     * @notice Check if validator has valid attestation
      */
     function isAttested(address validator) external view returns (bool) {
         Attestation storage att = validatorAttestations[validator];
@@ -356,16 +440,13 @@ contract TrinityShieldVerifierV2 is AccessControl, ReentrancyGuard {
     }
     
     /**
-     * @notice Get attestation data (ITrinityShieldVerifier interface)
-     * @dev v3.5.21: Returns stored chainId and expiresAt for full interface compatibility
-     * @param validator Validator address
-     * @return data AttestationData struct with normalized fields
+     * @notice Get attestation data
      */
     function getAttestation(address validator) external view returns (AttestationData memory data) {
         Attestation storage att = validatorAttestations[validator];
         return AttestationData({
             mrenclave: att.measurement,
-            mrsigner: att.mrsigner, // v3.5.21: Return stored mrsigner for full interface compliance
+            mrsigner: att.mrsigner,
             reportDataHash: att.reportData,
             attestedAt: att.attestedAt,
             expiresAt: att.expiresAt,
@@ -375,21 +456,14 @@ contract TrinityShieldVerifierV2 is AccessControl, ReentrancyGuard {
     }
     
     /**
-     * @notice Verify attested vote signature (ITrinityShieldVerifier interface)
-     * @dev v3.5.21: Uses stored expiresAt for consistency
-     * @param validator Validator address
-     * @param operationHash Hash of the operation being voted on
-     * @param signature Validator's signature
-     * @return True if validator is attested and signature is valid
+     * @notice Verify attested vote signature
      */
     function verifyAttestedVote(address validator, bytes32 operationHash, bytes calldata signature) external view returns (bool) {
-        // Check attestation validity using stored expiresAt
         Attestation storage att = validatorAttestations[validator];
         if (!att.isValid || block.timestamp > att.expiresAt) {
             return false;
         }
         
-        // Verify signature
         address signer = operationHash.toEthSignedMessageHash().recover(signature);
         return signer == validator;
     }
