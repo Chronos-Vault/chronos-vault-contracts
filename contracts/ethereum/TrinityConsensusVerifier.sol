@@ -2,11 +2,17 @@
 pragma solidity 0.8.20;
 
 // ═══════════════════════════════════════════════════════════════════════════
-// SECURITY AUDIT v3.5.21 (December 3, 2025) - TRINITY SHIELD INTEGRATION
+// SECURITY AUDIT v3.5.24 (December 13, 2025) - COMPREHENSIVE AUDIT FIXES
 // CEI pattern correct - state updates before external calls
 // 2-of-3 consensus logic mathematically secure
 // TEE attestation enforcement via TrinityShieldVerifier
-// Audit fixes: modifier ordering, abi.encode, zero-value transfer, pause guard
+// v3.5.24 AUDIT FIXES:
+//   C-1: Single getAttestation() call in attestation modifier (no V1/V2 mismatch)
+//   C-3: Refund deposit + fee on failed deposits, decrement collectedFees
+//   H-1: Attestation check in validator rotation
+//   H-2: Empty merkle proof fails batch verification
+//   H-01: Removed double-decrement in claimFailedFee() (revenue freeze fix)
+//   M-4: withdrawFees now requires whenNotPaused
 // ═══════════════════════════════════════════════════════════════════════════
 
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
@@ -283,19 +289,21 @@ contract TrinityConsensusVerifier is ITrinityBatchVerifier, ReentrancyGuard {
      * @notice v3.5.21: Require TEE attestation for validators submitting proofs
      * @dev Validates validator has valid AND non-expired Trinity Shield attestation
      * @dev Can be toggled via setAttestationRequirement() for backwards compatibility
-     * @dev SECURITY: Checks both isAttested() AND expiresAt to prevent stale attestation bypass
+     * @dev SECURITY FIX C-1 v3.5.24: Single getAttestation() call - removes redundant isAttested() check
+     *      to prevent V1/V2 mismatch where isAttested() and getAttestation() could return inconsistent values
      */
     modifier requireShieldAttestation(address validator) {
         if (requireAttestation) {
             if (address(shieldVerifier) == address(0)) {
                 revert Errors.ShieldVerifierNotSet();
             }
-            if (!shieldVerifier.isAttested(validator)) {
+            // v3.5.24 SECURITY FIX C-1: Single source of truth - only call getAttestation() once
+            // Removes redundant isAttested() call that could have V1/V2 mismatch issues
+            ITrinityShieldVerifier.AttestationData memory attestation = shieldVerifier.getAttestation(validator);
+            if (!attestation.valid) {
                 revert Errors.ValidatorNotAttested(validator);
             }
-            // v3.5.21 SECURITY FIX: Validate attestation is not expired
-            ITrinityShieldVerifier.AttestationData memory attestation = shieldVerifier.getAttestation(validator);
-            if (!attestation.valid || attestation.expiresAt <= block.timestamp) {
+            if (attestation.expiresAt <= block.timestamp) {
                 revert Errors.AttestationExpired(validator, attestation.expiresAt);
             }
         }
@@ -710,13 +718,21 @@ contract TrinityConsensusVerifier is ITrinityBatchVerifier, ReentrancyGuard {
                     // Vault rejected ETH - mark operation as FAILED (don't revert)
                     op.status = OperationStatus.FAILED;
                     
-                    // Refund deposit to user (fee already paid, non-refundable for failed operations)
-                    (bool refunded,) = payable(op.user).call{value: op.amount}("");
+                    // v3.5.24 SECURITY FIX C-3: Refund BOTH deposit + fee when deposit fails
+                    // User should not lose fee for vault rejection outside their control
+                    uint256 totalRefund = op.amount + op.fee;
+                    
+                    // v3.5.24 SECURITY FIX C-3: Decrement collectedFees to maintain accounting invariant
+                    collectedFees -= op.fee;
+                    
+                    (bool refunded,) = payable(op.user).call{value: totalRefund}("");
                     if (!refunded) {
-                        // Track as failed fee for user to claim
-                        failedFees[op.user] += op.amount;
-                        totalFailedFees += op.amount;
-                        emit FailedFeeRecorded(op.user, op.amount);
+                        // Track as failed fee for user to claim (includes both deposit + fee)
+                        failedFees[op.user] += totalRefund;
+                        totalFailedFees += totalRefund;
+                        // v3.5.24: Track fee portion separately for claimFailedFee accounting
+                        failedFeePortions[op.user] += op.fee;
+                        emit FailedFeeRecorded(op.user, totalRefund);
                     }
                     
                     emit DepositFailed(operationId, op.vault, op.user, op.amount);
@@ -818,6 +834,15 @@ contract TrinityConsensusVerifier is ITrinityBatchVerifier, ReentrancyGuard {
         // v3.5.5 HIGH FIX H-2: Check expiry BEFORE execution
         if (ConsensusProposalLib.isRotationProposalExpired(proposal.proposedAt, block.timestamp)) {
             revert Errors.ProposalExpired(proposal.proposedAt);
+        }
+        
+        // v3.5.24 SECURITY FIX H-1: Require new validator to have valid TEE attestation
+        // Prevents rotating to an unattested validator that bypasses hardware security
+        if (requireAttestation && address(shieldVerifier) != address(0)) {
+            ITrinityShieldVerifier.AttestationData memory attestation = shieldVerifier.getAttestation(proposal.newValidator);
+            if (!attestation.valid || attestation.expiresAt <= block.timestamp) {
+                revert Errors.ValidatorNotAttested(proposal.newValidator);
+            }
         }
         
         // v3.5.5 HIGH FIX H-4: Validate uniqueness BEFORE setting executed=true
@@ -1099,9 +1124,10 @@ contract TrinityConsensusVerifier is ITrinityBatchVerifier, ReentrancyGuard {
     /**
      * @notice Withdraw collected fees to treasury
      * @dev v3.5 FEATURE #3: Treasury management for protocol sustainability
+     * @dev v3.5.24 SECURITY FIX M-4: Added whenNotPaused to prevent fee withdrawal during incidents
      * @param amount Amount of fees to withdraw
      */
-    function withdrawFees(uint256 amount) external nonReentrant onlyEmergencyController {
+    function withdrawFees(uint256 amount) external nonReentrant whenNotPaused onlyEmergencyController {
         // v3.5.21 AUDIT FIX NC-01: nonReentrant modifier first for best-practice reentrancy protection
         if (amount > collectedFees) revert Errors.InsufficientFees();
         
@@ -1213,7 +1239,9 @@ contract TrinityConsensusVerifier is ITrinityBatchVerifier, ReentrancyGuard {
         uint256 claimAmount = failedFees[msg.sender];
         if (claimAmount == 0) revert Errors.NoFeesToClaim();
         
-        // v3.5.4: Get fee portion for collectedFees reconciliation
+        // v3.5.24 SECURITY FIX H-01: Get fee portion for tracking only, NOT for collectedFees decrement
+        // Fee was already decremented from collectedFees in cancelOperation/emergencyCancelOperation
+        // Double-decrementing here caused Protocol Revenue Freeze bug
         uint256 feePortion = failedFeePortions[msg.sender];
         
         // v3.5.1 SECURITY FIX: Effects before Interactions (no state restoration after call)
@@ -1221,10 +1249,10 @@ contract TrinityConsensusVerifier is ITrinityBatchVerifier, ReentrancyGuard {
         totalFailedFees -= claimAmount;
         failedFeePortions[msg.sender] = 0;
         
-        // v3.5.4 MEDIUM FIX: Decrement collectedFees by fee portion to maintain accounting invariant
-        if (feePortion > 0) {
-            collectedFees -= feePortion;
-        }
+        // v3.5.24 SECURITY FIX H-01: REMOVED double-decrement of collectedFees
+        // The fee portion was already subtracted from collectedFees when the operation was cancelled
+        // Decrementing again here would cause accounting underflow and freeze protocol revenue
+        // feePortion is kept in storage for audit trail but not used for accounting
         
         // v3.5.6 CRITICAL FIX C-2: Validate invariant after accounting changes
         _validateBalanceInvariant();
@@ -1372,21 +1400,25 @@ contract TrinityConsensusVerifier is ITrinityBatchVerifier, ReentrancyGuard {
             return false;
         }
         
+        // v3.5.24 SECURITY FIX H-2: Empty merkle proof must fail verification
+        // Empty proof bypassed verification allowing unauthorized batch execution
+        if (merkleProof.length == 0) {
+            return false;
+        }
+        
         // SECURITY CHECK #4: Merkle proof validation
         // Verify merkleProof matches one of the stored merkle roots
         // This ensures the batch was approved by at least 2 of the 3 chains
-        if (merkleProof.length > 0) {
-            bool validProof = false;
-            for (uint8 chainId = 1; chainId <= 3; chainId++) {
-                bytes32 root = merkleRoots[chainId];
-                if (root != bytes32(0) && _verifyMerkleProof(merkleProof, root, batchDataHash)) {
-                    validProof = true;
-                    break;
-                }
+        bool validProof = false;
+        for (uint8 chainId = 1; chainId <= 3; chainId++) {
+            bytes32 root = merkleRoots[chainId];
+            if (root != bytes32(0) && _verifyMerkleProof(merkleProof, root, batchDataHash)) {
+                validProof = true;
+                break;
             }
-            if (!validProof) {
-                return false;
-            }
+        }
+        if (!validProof) {
+            return false;
         }
         
         return true;
