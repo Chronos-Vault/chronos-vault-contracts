@@ -7,10 +7,15 @@ import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 
 /**
- * @title TrinityShieldVerifier V2.1
+ * @title TrinityShieldVerifier V2.2
  * @author ChronosVault (chronosvault.org)
  * @notice Extended attestation verifier supporting both Intel SGX and AMD SEV-SNP
  * @dev Phase 4: Multi-TEE support for Trinity Protocol validators
+ * 
+ * V2.2 Security Fixes:
+ * - H-01/H-02: Fixed attestation hijack via secure keccak256(validator, chainId) binding
+ * - M-01: Renamed checkAttestationValid to checkAttestationValidForRenewal
+ * - L-01: Added chainId validation in verifyAttestedVote
  * 
  * V2.1 Security Fixes:
  * - Cross-chain replay protection (quoteHash + chainId)
@@ -141,8 +146,11 @@ contract TrinityShieldVerifierV2 is AccessControl, ReentrancyGuard {
         require(approvedMrenclave[mrenclave], "MRENCLAVE not approved");
         require(approvedMrsigner[mrsigner], "MRSIGNER not approved");
         
-        // Verify report data contains validator address (lower 160 bits)
-        require(bytes32(uint256(uint160(validator))) == reportData, "Report data mismatch");
+        // V2.2 FIX (H-01): Secure binding using keccak256 hash of validator + chainId
+        // This prevents attestation hijack by ensuring the TEE signed a commitment 
+        // that includes both the validator identity AND the target chain
+        bytes32 expectedReportData = keccak256(abi.encodePacked(validator, chainId));
+        require(expectedReportData == reportData, "Report data binding mismatch");
         
         // Verify relayer signature
         bytes32 messageHash = keccak256(abi.encodePacked(
@@ -197,8 +205,11 @@ contract TrinityShieldVerifierV2 is AccessControl, ReentrancyGuard {
         require(approvedSevMeasurement[measurement], "MEASUREMENT not approved");
         require(approvedSevIdKeyDigest[idKeyDigest], "ID key digest not approved");
         
-        // Verify host data contains validator address
-        require(bytes32(uint256(uint160(validator))) == hostData, "Host data mismatch");
+        // V2.2 FIX (H-02): Secure binding using keccak256 hash of validator + chainId
+        // This prevents attestation hijack by ensuring the TEE signed a commitment 
+        // that includes both the validator identity AND the target chain
+        bytes32 expectedHostData = keccak256(abi.encodePacked(validator, chainId));
+        require(expectedHostData == hostData, "Host data binding mismatch");
         
         // Verify relayer signature
         bytes32 messageHash = keccak256(abi.encodePacked(
@@ -234,10 +245,12 @@ contract TrinityShieldVerifierV2 is AccessControl, ReentrancyGuard {
     // ========== UNIFIED VALIDATION ==========
 
     /**
-     * @notice Check if validator has valid attestation (any TEE type)
-     * @dev v2.1: Includes grace period for re-attestation race conditions
+     * @notice Check if validator can submit a renewal attestation (includes grace period)
+     * @dev V2.2 FIX (M-01): Renamed from checkAttestationValid to clarify purpose
+     * @dev This function should ONLY be used for determining renewal eligibility,
+     *      NOT for consensus voting validation. Use isAttested() for voting checks.
      */
-    function checkAttestationValid(address validator) external view returns (bool) {
+    function checkAttestationValidForRenewal(address validator) external view returns (bool) {
         Attestation storage att = validatorAttestations[validator];
         if (!att.isValid) return false;
         return block.timestamp <= att.expiresAt + GRACE_PERIOD;
@@ -456,9 +469,42 @@ contract TrinityShieldVerifierV2 is AccessControl, ReentrancyGuard {
     }
     
     /**
-     * @notice Verify attested vote signature
+     * @notice Verify attested vote signature with chain scope validation
+     * @dev V2.2 FIX (L-01): Added chainId parameter to enforce attestation scope
+     * @param validator The validator address
+     * @param operationHash The hash of the operation being voted on
+     * @param signature The validator's signature
+     * @param expectedChainId The chain ID where this vote should be valid (1=Arbitrum, 2=Solana, 3=TON)
      */
-    function verifyAttestedVote(address validator, bytes32 operationHash, bytes calldata signature) external view returns (bool) {
+    function verifyAttestedVote(
+        address validator, 
+        bytes32 operationHash, 
+        bytes calldata signature,
+        uint8 expectedChainId
+    ) external view returns (bool) {
+        Attestation storage att = validatorAttestations[validator];
+        if (!att.isValid || block.timestamp > att.expiresAt) {
+            return false;
+        }
+        
+        // V2.2 FIX (L-01): Ensure attestation is scoped to the correct chain
+        if (att.chainId != expectedChainId) {
+            return false;
+        }
+        
+        address signer = operationHash.toEthSignedMessageHash().recover(signature);
+        return signer == validator;
+    }
+    
+    /**
+     * @notice Legacy vote verification without chain scope (for backward compatibility)
+     * @dev DEPRECATED: Use verifyAttestedVote with chainId parameter instead
+     */
+    function verifyAttestedVoteLegacy(
+        address validator, 
+        bytes32 operationHash, 
+        bytes calldata signature
+    ) external view returns (bool) {
         Attestation storage att = validatorAttestations[validator];
         if (!att.isValid || block.timestamp > att.expiresAt) {
             return false;
