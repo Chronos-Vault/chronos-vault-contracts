@@ -11,6 +11,22 @@ import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
  * @notice Layer 8 of the Mathematical Defense Layer (MDL)
  * @dev Verifies SGX/TDX attestation reports for Trinity Shield enclaves
  * 
+ * ============================================================================
+ * ⚠️  DEPRECATED - DO NOT USE FOR NEW DEPLOYMENTS
+ * ============================================================================
+ * This contract is deprecated as of December 13, 2025.
+ * Use TrinityShieldVerifierV2 instead, which includes:
+ * - Multi-TEE support (Intel SGX + AMD SEV-SNP)
+ * - Secure attestation binding (keccak256 hash of validator + chainId)
+ * - Chain-scoped vote verification
+ * - Role-based access control
+ * 
+ * Known Vulnerabilities in V1.1 (fixed in V2.2):
+ * - C-01: isQuoteUsed() function has incorrect return type
+ * - H-01: Stale Quote Attack via submitDirectAttestation
+ * - M-01: Missing chainId validation in verifyAttestedVote
+ * ============================================================================
+ * 
  * V1.1 Security Fixes:
  * - Cross-chain replay protection (quoteHash + chainId per-chain mapping)
  * 
