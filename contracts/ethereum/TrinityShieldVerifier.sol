@@ -6,16 +6,27 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 /**
- * @title TrinityShieldVerifier
- * @author Trinity Protocol Team
+ * @title TrinityShieldVerifier V1.1
+ * @author ChronosVault (chronosvault.org)
  * @notice Layer 8 of the Mathematical Defense Layer (MDL)
  * @dev Verifies SGX/TDX attestation reports for Trinity Shield enclaves
+ * 
+ * V1.1 Security Fixes:
+ * - Cross-chain replay protection (quoteHash + chainId per-chain mapping)
  * 
  * Security Model:
  * - DCAP quotes are verified off-chain by trusted relayers
  * - On-chain verification validates relayer signatures and quote hashes
  * - This hybrid approach balances gas costs with security
  * - Full DCAP verification happens off-chain with on-chain commitment
+ * 
+ * SECURITY ASSUMPTIONS:
+ * 1. Trusted relayers perform full DCAP verification including:
+ *    - Intel root CA signature chain validation
+ *    - QE identity verification
+ *    - TCB status checking
+ * 2. Approved MRENCLAVE values are from audited enclave builds
+ * 3. Quote freshness is validated by relayers
  */
 contract TrinityShieldVerifier is Ownable, ReentrancyGuard {
     using ECDSA for bytes32;
@@ -74,7 +85,8 @@ contract TrinityShieldVerifier is Ownable, ReentrancyGuard {
     mapping(address => bool) public trustedRelayers;
 
     /// @notice Used quote hashes (prevent replay)
-    mapping(bytes32 => bool) public usedQuoteHashes;
+    /// @dev V1.1: Changed to per-chain mapping for cross-chain replay protection
+    mapping(bytes32 => mapping(uint8 => bool)) public usedQuoteHashes;
 
     /// @notice Intel Root CA public key hash for verification
     bytes32 public intelRootCAHash;
@@ -218,8 +230,8 @@ contract TrinityShieldVerifier is Ownable, ReentrancyGuard {
             revert NonceMismatch();
         }
         
-        // Verify quote hasn't been used before
-        if (usedQuoteHashes[attestation.quoteHash]) revert QuoteAlreadyUsed();
+        // Verify quote hasn't been used before on this chain (V1.1: cross-chain replay protection)
+        if (usedQuoteHashes[attestation.quoteHash][attestation.chainId]) revert QuoteAlreadyUsed();
         
         // Verify quote freshness (must be recent)
         if (block.timestamp > attestation.quoteTimestamp + MAX_QUOTE_AGE) {
@@ -260,8 +272,8 @@ contract TrinityShieldVerifier is Ownable, ReentrancyGuard {
             revert InvalidReportData();
         }
         
-        // Mark quote as used
-        usedQuoteHashes[attestation.quoteHash] = true;
+        // Mark quote as used on this chain (V1.1: cross-chain replay protection)
+        usedQuoteHashes[attestation.quoteHash][attestation.chainId] = true;
         
         // Update attestation record
         attestations[attestation.validator] = AttestationData({
@@ -289,8 +301,10 @@ contract TrinityShieldVerifier is Ownable, ReentrancyGuard {
 
     /**
      * @notice Direct quote submission with on-chain parsing
-     * @dev PRODUCTION NOTE: Use submitRelayerAttestation for production. 
-     *      Direct submission requires trusted timestamp oracle integration.
+     * @dev CRITICAL SECURITY WARNING: This function lacks timestamp validation!
+     *      Use submitRelayerAttestation for production deployments.
+     *      Direct submission requires trusted timestamp oracle integration
+     *      or removal of this function to prevent stale quote attacks.
      * @param validator Address of the validator being attested
      * @param quote Raw DCAP quote from SGX Quoting Enclave
      * @param chainId Chain identifier (1=Arbitrum, 2=Solana, 3=TON)
@@ -313,9 +327,9 @@ contract TrinityShieldVerifier is Ownable, ReentrancyGuard {
         // Verify quote version (must be v3 or higher for DCAP)
         if (parsed.version < 3) revert InvalidQuoteVersion();
         
-        // Compute quote hash for replay protection
+        // Compute quote hash for replay protection (V1.1: includes chainId)
         bytes32 quoteHash = keccak256(quote);
-        if (usedQuoteHashes[quoteHash]) revert QuoteAlreadyUsed();
+        if (usedQuoteHashes[quoteHash][chainId]) revert QuoteAlreadyUsed();
         
         // Verify enclave identity is approved
         if (!approvedEnclaves[parsed.mrenclave]) revert EnclaveNotApproved();
@@ -328,8 +342,8 @@ contract TrinityShieldVerifier is Ownable, ReentrancyGuard {
             revert InvalidReportData();
         }
         
-        // Mark quote as used
-        usedQuoteHashes[quoteHash] = true;
+        // Mark quote as used on this chain (V1.1: cross-chain replay protection)
+        usedQuoteHashes[quoteHash][chainId] = true;
         
         // Update attestation record
         attestations[validator] = AttestationData({
