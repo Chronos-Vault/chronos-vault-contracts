@@ -345,13 +345,14 @@ contract HTLCChronosBridge is IHTLC, IChronosVault, ReentrancyGuard, Pausable, O
         
         IERC20 token = tokenAddress == address(0) ? IERC20(address(0)) : IERC20(tokenAddress);
         
-        // SECURITY FIX v3.5.10: Set amount = 0 for Trinity (consensus-only mode)
+        // SECURITY FIX v3.5.23: Pass actual amount for Trinity validation
+        // TrinityConsensusVerifier requires amount > 0 (line 375: revert if amount == 0)
         // Trinity validates 2-of-3 consensus but doesn't custody funds (HTLC manages custody)
-        // This prevents Trinity from attempting to transfer funds it doesn't hold
+        // The amount is validated against MIN_HTLC_AMOUNT and MAX_OPERATION_AMOUNT bounds
         operationId = trinityBridge.createOperation{value: TRINITY_FEE}(
             address(this),                              // vault (this HTLC contract)
             ITrinityConsensusVerifier.OperationType.TRANSFER,
-            0,                                          // amount = 0 (consensus-only, no custody)
+            amount,                                     // actual swap amount for validation
             token,
             timelock                                    // deadline matches HTLC timelock
         );
@@ -635,15 +636,21 @@ contract HTLCChronosBridge is IHTLC, IChronosVault, ReentrancyGuard, Pausable, O
     }
 
     /**
-     * @notice Check if user is authorized (has ACTIVE swaps)
+     * @notice Check if user is authorized (has ACTIVE swaps or is the contract itself)
      * @param user Address to check
-     * @return authorized True if user has active (LOCKED) swaps
+     * @return authorized True if user has active (LOCKED) swaps or is this contract
      * 
      * @dev SECURITY FIX: Only users with ACTIVE swaps are authorized
      * @dev Authorization is automatically revoked when swap completes (executed or refunded)
      * @dev This prevents permanent authorization from minimal historical swaps
+     * @dev v3.5.22 FIX: Contract itself is always authorized for Trinity operations
+     *      When HTLCChronosBridge calls TrinityConsensusVerifier.createOperation(),
+     *      msg.sender is this contract, so it needs self-authorization
      */
     function isAuthorized(address user) external view override returns (bool) {
+        if (user == address(this)) {
+            return true;
+        }
         return activeSwapCount[user] > 0;
     }
 
