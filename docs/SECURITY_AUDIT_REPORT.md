@@ -206,7 +206,8 @@ The following contracts are test/mock contracts and were excluded from productio
 
 ## TrinityShieldVerifier Specific Analysis
 
-**Contract:** `0x2971c0c3139F89808F87b2445e53E5Fb83b6A002`
+**Contract (V2.2):** `0x5E1EE00E5DFa54488AC5052C747B97c7564872F9`
+**Contract (V1 DEPRECATED):** `0x2971c0c3139F89808F87b2445e53E5Fb83b6A002`
 
 ### Attestation Security
 - ✅ DCAP quote parsing with proper bounds checking
