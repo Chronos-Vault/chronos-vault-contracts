@@ -186,19 +186,19 @@ USE_SECURE_CERT=TRUE
 # Generate attestation quote
 ./trinity-shield attest --chain arbitrum --output quote.bin
 
-# Submit to chain
+# Submit to chain (use V2.2 contract)
 ./trinity-shield submit-attestation \
     --chain arbitrum \
     --quote quote.bin \
-    --contract 0x2971c0c3139F89808F87b2445e53E5Fb83b6A002
+    --contract 0x5E1EE00E5DFa54488AC5052C747B97c7564872F9
 ```
 
 ### 3. Verify On-Chain
 
 ```bash
-# Check attestation status
-cast call 0x2971c0c3139F89808F87b2445e53E5Fb83b6A002 \
-    "checkAttestationValid(address)(bool)" \
+# Check attestation status (use V2.2 contract)
+cast call 0x5E1EE00E5DFa54488AC5052C747B97c7564872F9 \
+    "checkAttestationValidForRenewal(address,uint8)(bool)" \
     0x3A92fD5b39Ec9598225DB5b9f15af0523445E3d8 \
     --rpc-url https://sepolia-rollup.arbitrum.io/rpc
 
