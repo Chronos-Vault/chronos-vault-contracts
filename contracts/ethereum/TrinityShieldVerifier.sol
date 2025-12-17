@@ -557,8 +557,14 @@ contract TrinityShieldVerifier is Ownable, ReentrancyGuard {
         return trustedRelayers[relayer];
     }
 
-    function isQuoteUsed(bytes32 quoteHash) external view returns (bool) {
-        return usedQuoteHashes[quoteHash];
+    /**
+     * @notice Check if a quote hash has been used on a specific chain
+     * @dev C-01 FIX: Updated signature to include chainId parameter
+     * @param quoteHash The hash of the attestation quote
+     * @param chainId The chain ID to check (1=Arbitrum, 2=Solana, 3=TON)
+     */
+    function isQuoteUsed(bytes32 quoteHash, uint8 chainId) external view returns (bool) {
+        return usedQuoteHashes[quoteHash][chainId];
     }
 
     function timeUntilExpiration(address validator) external view returns (uint256) {
